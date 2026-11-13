@@ -6,13 +6,7 @@ import { exec } from "../exec.ts";
 import { dependentFiles } from "../graph/graph.ts";
 import { redactProcess } from "../logs/redact.ts";
 import { isGeneratedLockfile } from "../policy/paths.ts";
-import {
-  checkoutPolicy,
-  SANDBOXED_ENV,
-  sandboxArgv,
-  sandboxEnabled,
-  seatbeltProfile,
-} from "../policy/sandbox.ts";
+import { checkoutPolicy, sandboxArgv, sandboxEnabled, seatbeltProfile } from "../policy/sandbox.ts";
 import { agentProcessEnv } from "../runtime/credentials.ts";
 import { opencodeGlobRegExp } from "../tasks/glob.ts";
 import { changedFiles } from "./affected.ts";
@@ -107,15 +101,12 @@ function staleLockfileNote(paths: readonly string[]): string {
 async function runOne(input: RunGatesInput, gate: ResolvedGate): Promise<GateResult> {
   const before = await snapshot(input.worktree);
   const bins = gate.binDirs.map((b) => join(input.worktree, b));
-  const sandbox = sandboxEnabled(input.config.security.sandbox);
   // Gates run code the agents wrote: no credentials, pushes blocked, sandboxed where possible.
   const env = {
     ...agentProcessEnv(),
     ...cacheEnv(input.root, input.repo.name),
     ...QUIET_ENV,
     ...(gate.env ?? {}),
-    // Nested runs (this suite's own gates, a CLI started by one) must not wrap again.
-    ...(sandbox ? { [SANDBOXED_ENV]: "1" } : {}),
     PATH: [...bins, process.env.PATH ?? ""].join(delimiter),
   };
   const argv = [
@@ -124,7 +115,7 @@ async function runOne(input: RunGatesInput, gate: ResolvedGate): Promise<GateRes
     gate.setup === undefined ? gate.command : `set -e\n${gate.setup}\n${gate.command}`,
   ];
   const res = await exec(
-    sandbox
+    sandboxEnabled(input.config.security.sandbox)
       ? sandboxArgv(
           seatbeltProfile(
             checkoutPolicy(input.root, input.worktree, [join(input.root, ".factory", "cache")]),

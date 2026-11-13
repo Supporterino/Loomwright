@@ -1,7 +1,6 @@
 # ADR-0041: This workspace runs gates and shells unsandboxed
 
 **Context.** ADR-0026 made `security.sandbox: "auto"` the default: agent shells and gates run under a macOS Seatbelt profile, so writes outside the session's own directories are refused by the kernel rather than by the policy layer. Two facts make that profile unusable in this checkout:
-
 - macOS cannot start a sandbox inside a profile that has deny rules: `sandbox_apply` returns `EPERM`. Nesting is not supported, so a wrapped command must not wrap again.
 - This repository's own suite tests the profile (`test/sandbox.test.ts` spawns `sandbox-exec`), and the factory runs it as the `test` gate. With `"auto"` the gate is already wrapped, the suite's own `sandbox-exec` calls fail, and the `test` gate cannot pass.
 
@@ -11,7 +10,7 @@ The workspace config therefore carries `security.sandbox: "off"` (`factory.confi
 - **One checkout, one exception.** This checkout — the product's own factory workspace — is configured with `security.sandbox: "off"`. There is no per-repo or per-role override, and none is added: the setting is read where it always was, and every other workspace still defaults to `"auto"`.
 - **The guarantee of the code is unchanged.** The Seatbelt profile, the paths it protects and the tests that pin it are untouched. The product keeps refusing to run unsandboxed where it can run sandboxed; only this workspace's own runs are unwrapped, and the config comment names the reason next to the setting.
 - **The policy layer still applies.** Agent shells and gates here keep the shell parser, the edit-scope check, the protected-path list, the credential scrub and git's push blocking. What is lost is the kernel backstop for writes the parser does not foresee.
-- **Re-enable is a one-line follow-up.** A command the factory already wrapped can be marked (an environment variable set by the gate runner and by the plugin's shell hook), and `sandboxEnabled` returns false when it sees that marker. With that in place `"auto"` works here again and this ADR is superseded. The implementation was written during the rebrand change but is its own change: it alters the sandbox policy code, which a rename must not.
+- **Re-enable is a one-line follow-up.** A command the factory already wrapped can be marked (an environment variable set by the gate runner and by the plugin's shell hook), and `sandboxEnabled` returns false when it sees that marker. With that in place `"auto"` works here again and this ADR is superseded. That guard is a separate change: it alters the sandbox policy code, which a rename must not, so this workspace keeps `"off"` until it lands.
 
 **Consequences.**
 - `loomwright doctor` and the config schema are unchanged; no migration, no new key.

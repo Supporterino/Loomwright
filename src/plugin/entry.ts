@@ -18,10 +18,8 @@ import { isSecretPath } from "../policy/paths.ts";
 import { realPathOf } from "../policy/realpath.ts";
 import {
   checkoutPolicy,
-  SANDBOXED_ENV,
   type SandboxPolicy,
   sandboxCommand,
-  sandboxNested,
   seatbeltProfile,
 } from "../policy/sandbox.ts";
 import {
@@ -314,7 +312,7 @@ function onShellCreate(workspace: string, event: ShellCreateEvent): void {
     for (const name of ["OPENCODE_PASSWORD", "OPENCODE_SERVER_PASSWORD", ...scrub])
       delete event.env[name];
   }
-  if (process.env.AI_FACTORY_SANDBOX === "seatbelt" && !sandboxNested()) {
+  if (process.env.AI_FACTORY_SANDBOX === "seatbelt") {
     const shell =
       typeof event.shell === "string" && event.shell.startsWith("/") ? event.shell : "/bin/bash";
     event.command = sandboxCommand(
@@ -322,8 +320,6 @@ function onShellCreate(workspace: string, event: ShellCreateEvent): void {
       shell,
       event.command,
     );
-    // A factory CLI or test runnable from this shell must not nest another profile.
-    if (event.env !== undefined) event.env[SANDBOXED_ENV] = "1";
   }
 }
 
