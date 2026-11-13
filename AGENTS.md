@@ -15,7 +15,7 @@ rename lands.
 | --- | --- |
 | Install | `bun install` |
 | Full gate (what CI runs, minus the build) | `bun run check` |
-| Tests | `bun test --timeout 60000` |
+| Tests | `bun run test` (parallel; `bun run test:serial` to debug, `bun run test:fast` skips the integration-heavy files) |
 | One suite | `bun test test/gates-resolve.test.ts` |
 | Types | `bun run typecheck` |
 | Lint / format check / format | `bun run lint`, `bun run format:check`, `bun run format` |

@@ -243,5 +243,6 @@ test("gate scripts keep their exact definitions", () => {
   expect(pkg.scripts["format:check"]).toBe("biome format .");
   expect(pkg.scripts.lint).toBe("biome check .");
   expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
-  expect(pkg.scripts.test).toBe("bun test --timeout 60000");
+  expect(pkg.scripts.test).toBe("bun test --timeout 60000 --parallel");
+  expect(pkg.scripts["test:serial"]).toBe("bun test --timeout 60000");
 });

@@ -33,14 +33,17 @@ export function findConfigRoot(start: string): string | undefined {
 export async function findWorkspaceRoot(start: string): Promise<string | undefined> {
   const configRoot = findConfigRoot(start);
   if (configRoot) return configRoot;
-  const top = await git(["rev-parse", "--show-toplevel"], { cwd: start });
-  if (top.code !== 0) return undefined;
-  let root = top.stdout.trim();
-  for (;;) {
-    const sup = await git(["rev-parse", "--show-superproject-working-tree"], { cwd: root });
-    const parent = sup.stdout.trim();
-    if (sup.code !== 0 || parent === "") return root;
-    root = parent;
+  // One call per level: rev-parse prints the top level and the enclosing superproject.
+  let root: string | undefined;
+  for (let cwd = start; ; ) {
+    const res = await git(["rev-parse", "--show-toplevel", "--show-superproject-working-tree"], {
+      cwd,
+    });
+    if (res.code !== 0) return root;
+    const [top = "", parent = ""] = res.stdout.split("\n").map((line) => line.trim());
+    if (top !== "") root = top;
+    if (parent === "") return root;
+    cwd = parent;
   }
 }
 

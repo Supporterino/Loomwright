@@ -23,19 +23,32 @@ export interface Snapshot {
 
 const MISSING = "missing";
 
-async function dirtyPaths(worktree: string): Promise<string[]> {
-  // Untrimmed output: the leading status column can be a space.
+/**
+ * One `git status` for both halves of a snapshot: porcelain v2 carries the branch oid in its
+ * header, so a gate run costs two processes instead of four (status + rev-parse, before and
+ * after) — and gate-heavy tests run hundreds of them.
+ */
+async function state(worktree: string): Promise<{ head: string; paths: string[] }> {
   const res = await git(
-    ["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all"],
-    {
-      cwd: worktree,
-    },
+    ["status", "--porcelain=v2", "-z", "--branch", "--no-renames", "--untracked-files=all"],
+    { cwd: worktree },
   );
   if (res.code !== 0) throw new Error(`git status failed in ${worktree}: ${res.stderr.trim()}`);
-  return res.stdout
-    .split("\0")
-    .filter((e) => e.length > 3)
-    .map((e) => e.slice(3));
+  const records = res.stdout.split("\0");
+  const paths: string[] = [];
+  let head = "";
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i] ?? "";
+    if (record.startsWith("# branch.oid ")) head = record.slice("# branch.oid ".length);
+    else if (record.startsWith("? ")) paths.push(record.slice(2));
+    else if (record.startsWith("1 ")) paths.push(record.split(" ").slice(8).join(" "));
+    else if (record.startsWith("u ")) paths.push(record.split(" ").slice(10).join(" "));
+    else if (record.startsWith("2 ")) {
+      paths.push(record.split(" ").slice(9).join(" "));
+      i++; // the original path is its own NUL-terminated record
+    }
+  }
+  return { head, paths };
 }
 
 function hashFile(abs: string): { hash: string; content?: Buffer } {
@@ -45,9 +58,10 @@ function hashFile(abs: string): { hash: string; content?: Buffer } {
 }
 
 export async function snapshot(worktree: string): Promise<Snapshot> {
+  const { head, paths } = await state(worktree);
   const entries = new Map<string, Entry>();
-  for (const path of await dirtyPaths(worktree)) entries.set(path, hashFile(join(worktree, path)));
-  return { worktree, head: await gitOk(["rev-parse", "HEAD"], { cwd: worktree }), entries };
+  for (const path of paths) entries.set(path, hashFile(join(worktree, path)));
+  return { worktree, head, entries };
 }
 
 /** Paths whose state differs from the snapshot (including a moved HEAD). */
