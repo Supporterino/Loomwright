@@ -6,7 +6,11 @@
     "includes": [
       "**",
       "!.changeset",
+      "!.opencode",
+      "!AGENTS.md",
       "!docs/research/notes",
+      "!factory.config.jsonc",
+      "!openspec",
       "!templates/addons/ponytail",
       "!test/fixtures/install-*.json"
     ]
