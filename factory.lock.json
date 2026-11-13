@@ -100,50 +100,50 @@
       "template": "agents/architect",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "50e425f627a1a73d89c4a867d32fe9740315fe2c1cc57b13bedf4ceea9fdd47b",
-      "blob": "b4342dc7b0d97b634700e65ef58d60bdf703eba7"
+      "sha256": "4b7d2a08bb9afecbb9c5a9804e5487bbc168793939f8837b118cbe33b829e13d",
+      "blob": "847cd0842e3dfdee3f0f5fa9acef29694b478bb7"
     },
     ".opencode/agents/contract-reviewer.md": {
       "template": "agents/contract-reviewer",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "02e552d729fc5c8292db19108a60479c4ace5449d3dbc8222a6196434884d6a6",
-      "blob": "d578d8ddb7d97b69cc559da9008278b2e5f559b5"
+      "sha256": "6b76b95c8d79edfc73b7180d7a83559764fbd2bfd444cd88a02c04f01354b544",
+      "blob": "c92185b4ccba6aba77f4590e62eb1bcbaa0795c1"
     },
     ".opencode/agents/explorer.md": {
       "template": "agents/explorer",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "80cc579c704312cdee4e4985feeb026ef52a7f616bee2894daef3d0f59163108",
-      "blob": "7205eab8bfa046e9b434ae7f811c4495e7eed1dd"
+      "sha256": "33bad5c570d83a2d2952eac2f15b93776c0d1f9b55c53d328d99990ad70a04f5",
+      "blob": "dd3af456541278bb961c9dce766d5511cfb76168"
     },
     ".opencode/agents/implementer-loomwright.md": {
       "template": "agents/implementer",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "6f0586adeed76e6c657172feab5603d6dd715d8654001ed00677a00246f74b2c",
-      "blob": "4743bbea95032025fedd6a9935f240edc9f9f3f2"
+      "sha256": "beb60f14633741b85f5c1950f93f4c39e77b30083abbb3bc678a70601682ffa7",
+      "blob": "3fa3a3e67cf730f494a7b79453c9c8671f52f26d"
     },
     ".opencode/agents/orchestrator.md": {
       "template": "agents/orchestrator",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "674bf18425cb9dd4b5af5d6d6669fd8f54403c19fb4feea04d6442a2d2e59896",
-      "blob": "00cb0812cc617659f3279d9810b548102dee7eff"
+      "sha256": "c9303f53b05b84612aa4cca2fe81bacfb236c464afcc6041c11d3ee150c96c11",
+      "blob": "51eb9b66a78d5e3c1a169068b9881f6609c20d13"
     },
     ".opencode/agents/reviewer.md": {
       "template": "agents/reviewer",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "4215e2e566eca9ae16802a9dfb1fe4944d469a35520865c5c0fcdec6e43f33a7",
-      "blob": "32ba52d5a41914ed2836ac0a1f8a06d2b23ed4e6"
+      "sha256": "df706ab4953697b321e8fbbd2820d49c39db846f30d4e309fd1d71e97432a7cf",
+      "blob": "20508d5c3ad82eb51c833c6cf54abe854839d2ae"
     },
     ".opencode/agents/tester.md": {
       "template": "agents/tester",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "28a30479445c54dbf8e5fe147ad63e324e7670d569175b41efdda1cee502299f",
-      "blob": "164cfa249ac7933d38aabaaf7163634290f13930"
+      "sha256": "2b85fee67c5e98cefd2a58aa36108dd12a835cc4f9b5496bd88b61620bb980af",
+      "blob": "e76606b091f0fcd590d19a93262b7291b72592a1"
     },
     ".opencode/commands/opsx-apply.md": {
       "template": "openspec-tools",

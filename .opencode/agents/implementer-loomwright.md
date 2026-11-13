@@ -1,7 +1,7 @@
 ---
 description: ai-factory implementer for loomwright (.; typescript).
 mode: primary
-model: opencode/claude-sonnet-5-5
+model: deepseek/deepseek-flash
 permissions:
   - { action: read, resource: "*", effect: deny }
   - { action: glob, resource: "*", effect: deny }

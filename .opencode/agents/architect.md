@@ -1,7 +1,7 @@
 ---
 description: "ai-factory architect: writes the OpenSpec change and context packs."
 mode: primary
-model: opencode/claude-opus-5-5
+model: deepseek/deepseek-flash
 permissions:
   - { action: read, resource: "*", effect: deny }
   - { action: glob, resource: "*", effect: deny }
