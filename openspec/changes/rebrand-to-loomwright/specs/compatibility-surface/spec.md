@@ -31,7 +31,7 @@ The change MUST NOT rename `factory.config.jsonc`, `factory.lock.json`, `.factor
 
 ### Requirement: Historical material stays untouched
 
-Past `CHANGELOG.md` sections, `docs/decisions/**`, `docs/research/**`, `docs/e2e/**`, `docs/audit/**` and the `test/fixtures/install-*.json` replay snapshots MUST keep their existing text and MUST NOT mention the new brand.
+Existing `CHANGELOG.md` sections, the `docs/decisions/**` files that predate this change, `docs/research/**`, `docs/e2e/**`, `docs/audit/**` and the `test/fixtures/install-*.json` replay snapshots MUST keep their existing text. None of the files under those directories may name the product `Loomwright`; new material added by this change, such as a new ADR, may name the `loomwright` command.
 
 #### Scenario: the replay snapshot stays historical
 
@@ -45,7 +45,8 @@ Past `CHANGELOG.md` sections, `docs/decisions/**`, `docs/research/**`, `docs/e2e
 - **THEN** it still contains its original review-findings text
 - **AND** the section is unchanged by this change
 
-#### Scenario: historical docs do not mention Loomwright
+#### Scenario: historical docs do not mention the product name
 
 - **WHEN** every file under `docs/decisions/`, `docs/research/`, `docs/e2e/` and `docs/audit/` is scanned
 - **THEN** none contains the string `Loomwright`
+- **AND** the command `loomwright` is allowed there, so a new ADR such as `docs/decisions/0041-unsandboxed-workspace.md` may name it

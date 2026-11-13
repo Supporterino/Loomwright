@@ -18,7 +18,7 @@ A single TypeScript repo is both the product and its own factory workspace. Iden
 
 6. **Plugin id stays `ai-factory`; its user-facing message changes.** The id is an allow-list/governance value; the blocked-call message (`Loomwright blocked this call:`) is text an agent or user reads.
 
-7. **Historical material is frozen.** Past `CHANGELOG.md` sections, `docs/decisions/**`, `docs/research/**`, `docs/e2e/**`, `docs/audit/**` and `test/fixtures/install-*.json` keep their text. The e2e transcript recorder's own header is updated, but the recorded transcripts are not regenerated. A test asserts the historical corpus never mentions `Loomwright`, which is cheap proof that it was not rewritten.
+7. **Historical material is frozen.** Past `CHANGELOG.md` sections, the `docs/decisions/**` files that predate this change, `docs/research/**`, `docs/e2e/**`, `docs/audit/**` and `test/fixtures/install-*.json` keep their text; a new ADR may be added without rewriting an old one. The e2e transcript recorder's own header is updated, but the recorded transcripts are not regenerated. A test asserts the historical corpus never mentions the product name `Loomwright` (the `loomwright` command is allowed), which is cheap proof that it was not rewritten.
 
 8. **CHANGELOG gets an `## Unreleased` section.** Writing a guessed version heading would be duplicated when `changeset version` prepends the real section at release. The release step replaces the placeholder; release mechanics stay human. The changeset itself is `major`, which is what "breaking" means to changesets.
 
