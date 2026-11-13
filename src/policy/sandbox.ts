@@ -12,15 +12,24 @@ import { realPathOf } from "./realpath.ts";
 
 export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 
+/** Set on commands the factory already wrapped: macOS cannot nest a sandbox in a deny profile. */
+export const SANDBOXED_ENV = "AI_FACTORY_SANDBOXED";
+
 export type SandboxSetting = "auto" | "off";
 
-/** Whether to sandbox on this machine. */
+/** Whether this process already runs inside a factory sandbox (`sandbox_apply` would fail). */
+export function sandboxNested(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[SANDBOXED_ENV] !== undefined;
+}
+
+/** Whether to sandbox on this machine. Never nests: the inner profile cannot start. */
 export function sandboxEnabled(
   setting: SandboxSetting,
   platform: NodeJS.Platform = process.platform,
   exists: (p: string) => boolean = existsSync,
+  env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return setting !== "off" && platform === "darwin" && exists(SANDBOX_EXEC);
+  return setting !== "off" && !sandboxNested(env) && platform === "darwin" && exists(SANDBOX_EXEC);
 }
 
 export interface SandboxPolicy {
