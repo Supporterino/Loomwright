@@ -120,6 +120,8 @@ describe("doctor", () => {
     const json = await report(root);
     expect(json.gates.map((g) => g.type)).toEqual(["format", "lint", "types", "test"]);
     expect(json.checks.filter((c) => c.status === "fail")).toEqual([]);
+    // The graph was skipped, so the fix hint points at the new command.
+    expect(find(json, "graph")).toMatchObject({ status: "warn", fix: "loomwright graph" });
     expect(find(json, "stored")?.detail).toContain("using environment variables only");
   });
 

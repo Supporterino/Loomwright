@@ -79,7 +79,7 @@ describe("product voice", () => {
 });
 
 describe("compatibility surface", () => {
-  test("block markers are byte-identical", () => {
+  test("managed block markers are unchanged", () => {
     expect(BLOCK_MARKERS).toEqual({
       "AGENTS.md": {
         start: "<!-- ai-factory:start (managed by ai-factory; edit outside this block) -->",
@@ -89,16 +89,20 @@ describe("compatibility surface", () => {
     });
   });
 
-  test("the plugin id is ai-factory", () => {
+  test("the plugin id is unchanged", () => {
     expect(readFileSync(join(ROOT, "templates/plugin/factory-plugin.txt"), "utf8")).toContain(
       'id: "ai-factory"',
     );
   });
 
-  test("the agent git environment keeps its persisted names", () => {
+  test("the agent marker environment variable is unchanged", () => {
     const env = agentGitEnv({});
     expect(env.AI_FACTORY_AGENT).toBe("1");
     expect(env.GIT_CONFIG_KEY_0).toBe("url.ai-factory-push-blocked://.pushInsteadOf");
+    // Existing GIT_CONFIG_* entries are appended to, not overwritten.
+    const appended = agentGitEnv({ GIT_CONFIG_COUNT: "2" });
+    expect(appended.GIT_CONFIG_COUNT).toBe("3");
+    expect(appended.GIT_CONFIG_KEY_2).toBe("url.ai-factory-push-blocked://.pushInsteadOf");
   });
 
   test("the 0.12.0 install fixture is historical and never mentions Loomwright", () => {
