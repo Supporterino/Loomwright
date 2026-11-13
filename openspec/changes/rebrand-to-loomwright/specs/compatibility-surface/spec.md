@@ -31,7 +31,7 @@ The change MUST NOT rename `factory.config.jsonc`, `factory.lock.json`, `.factor
 
 ### Requirement: Historical material stays untouched
 
-Existing `CHANGELOG.md` sections, the `docs/decisions/**` files that predate this change, `docs/research/**`, `docs/e2e/**`, `docs/audit/**` and the `test/fixtures/install-*.json` replay snapshots MUST keep their existing text. None of the files under those directories may name the product `Loomwright`; new material added by this change, such as a new ADR, may name the `loomwright` command.
+The `CHANGELOG.md` sections, the `docs/decisions/**`, `docs/research/**`, `docs/e2e/**`, `docs/audit/**` files and the `test/fixtures/install-*.json` snapshots that exist when this change starts MUST keep their existing text, and no file under those directories may name the product `Loomwright`; the `loomwright` command is allowed.
 
 #### Scenario: the replay snapshot stays historical
 
@@ -49,4 +49,23 @@ Existing `CHANGELOG.md` sections, the `docs/decisions/**` files that predate thi
 
 - **WHEN** every file under `docs/decisions/`, `docs/research/`, `docs/e2e/` and `docs/audit/` is scanned
 - **THEN** none contains the string `Loomwright`
-- **AND** the command `loomwright` is allowed there, so a new ADR such as `docs/decisions/0041-unsandboxed-workspace.md` may name it
+- **AND** the command `loomwright` is allowed there, so the new ADR `docs/decisions/0041-unsandboxed-workspace.md` may name it
+
+### Requirement: Naming the product in a historical directory is a separate change
+
+A transcript re-recorded by `scripts/e2e-transcript.ts`, or a new ADR that writes `Loomwright` into one of those directories, is an addition, not a rewrite. Such a change MUST narrow the scan in `test/docs.test.ts` to the files that existed when this change started before it uses the product name.
+
+#### Scenario: a re-recorded transcript updates the scan first
+
+- **WHEN** a transcript under `docs/e2e/` is re-recorded with the updated recorder
+- **THEN** the change that re-records it also narrows the scan in `test/docs.test.ts` to the historical files
+
+### Requirement: This workspace stays unsandboxed until the nesting guard lands
+
+`factory.config.jsonc` MUST keep `security.sandbox: "off"`, with the comment beside it naming `docs/decisions/0041-unsandboxed-workspace.md`. The product's sandbox code, profile and tests are unchanged, every other workspace keeps the `"auto"` default, and a change that flips the setting updates the ADR, the comment and this requirement together.
+
+#### Scenario: the workspace sandbox setting is pinned
+
+- **WHEN** `factory.config.jsonc` is read
+- **THEN** `security.sandbox` is `"off"`
+- **AND** the comment beside it names ADR-0041
