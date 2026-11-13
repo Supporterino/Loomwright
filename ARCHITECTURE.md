@@ -1,6 +1,6 @@
 # Architecture
 
-ai-factory is a CLI that turns a request into a spec, waits for one human approval, then implements, reviews and tests the change with opencode agents. Everything happens in local git: nothing is pushed. This document covers how the parts fit together. The reasons behind each choice are in [docs/decisions/](docs/decisions/), and command details in [docs/cli.md](docs/cli.md).
+Loomwright is a CLI that turns a request into a spec, waits for one human approval, then implements, reviews and tests the change with opencode agents. Everything happens in local git: nothing is pushed. This document covers how the parts fit together. The reasons behind each choice are in [docs/decisions/](docs/decisions/), and command details in [docs/cli.md](docs/cli.md).
 
 ## Components
 
@@ -8,7 +8,7 @@ ai-factory is a CLI that turns a request into a spec, waits for one human approv
 flowchart LR
   user([You]) -->|run / approve / resume / status| cli
 
-  subgraph cli[ai-factory CLI]
+  subgraph cli[Loomwright CLI]
     direction TB
     pipeline[pipeline<br/>intake · design · implement<br/>review · contracts · full suite · close]
     scheduler[scheduler<br/>task DAG · maxAgents · retries]
@@ -89,7 +89,7 @@ The phase lives in `.factory/runs/<id>.json`. `resume` re-enters at the recorded
 
 ```mermaid
 stateDiagram-v2
-  [*] --> intake: ai-factory run
+  [*] --> intake: loomwright run
   intake --> design: orchestrator picks id, explorers map the repos
   design --> design: validate / tasks / DAG problems → repair round (≤ maxRetries)
   design --> awaiting_approval: spec valid
@@ -179,9 +179,9 @@ Branches and commits for one change `<id>`:
 | each touched submodule (or the single repo) | `change/<id>`, created from the tracked branch in `.gitmodules` or the default branch, after a fetch; the newer of local and `origin/` wins (also from a detached HEAD) | one Conventional Commit per task (`feat:`/`fix:`/`test:`…) with `Change-Id: <id>` and `Task: <n>` trailers, fast-forwarded in merge-queue order                                                                                                                   |
 | per task                                    | `change/<id>--<task>` in a worktree                                                                                                                                     | deleted after its fast-forward (`git branch -d`)                                                                                                                                                                                                                  |
 
-Every commit is local. You push and open merge requests yourself. Afterwards `ai-factory repoint <id>` fetches each submodule and finds where its change landed upstream: a fast-forward, a merge commit, the `Change-Id` trailer after a rebase merge, or the patch-id of a squash. It then commits the real pointers.
+Every commit is local. You push and open merge requests yourself. Afterwards `loomwright repoint <id>` fetches each submodule and finds where its change landed upstream: a fast-forward, a merge commit, the `Change-Id` trailer after a rebase merge, or the patch-id of a squash. It then commits the real pointers.
 
-For a local-only finish, `ai-factory land <id>` merges the change branches into their base branches itself: touched submodules first, then the AI repo, with a pointer commit when a submodule produced a merge commit. It then deletes the change and task branches and removes worktrees, drafts, context, approvals, session context and run state. Reports, usage and logs stay (ADR-0034).
+For a local-only finish, `loomwright land <id>` merges the change branches into their base branches itself: touched submodules first, then the AI repo, with a pointer commit when a submodule produced a merge commit. It then deletes the change and task branches and removes worktrees, drafts, context, approvals, session context and run state. Reports, usage and logs stay (ADR-0034).
 
 ### Submodule worktree commands
 
@@ -220,9 +220,9 @@ The worktree metadata lives in `.git/modules/repos/backend/worktrees/`. Dependen
 - **Read-only roles.** The orchestrator, explorer, reviewer and contract-reviewer only read. Every role except the orchestrator may use read-only web search/fetch; MCP access is configured per role with `mcp.roles`. The architect edits only the change folder and its context folder.
 - **Sessions.** Every agent call is a fresh session in a known directory: a task worktree, a repo checkout or the root. The CLI writes a session context file first; the plugin refuses any factory agent that has none.
 - **Handoffs.** Agents end with a JSON handoff that is validated against `.opencode/schemas/handoff.schema.json`. An invalid handoff gets one repair turn.
-- **Token use.** Prompts put stable text first so it can be cached. Context packs are capped at `contextPackMaxTokens`, and gate output is compacted. Usage per agent, task and change is reported in `status` and in the final report, and never enforced. `ai-factory usage` scans every `.factory/usage/<id>.json` (changes, quick tasks, archived runs) for a workspace-wide report; `status` shows its one-line total. It is read-only and tolerates corrupt ledgers (ADR-0033).
+- **Token use.** Prompts put stable text first so it can be cached. Context packs are capped at `contextPackMaxTokens`, and gate output is compacted. Usage per agent, task and change is reported in `status` and in the final report, and never enforced. `loomwright usage` scans every `.factory/usage/<id>.json` (changes, quick tasks, archived runs) for a workspace-wide report; `status` shows its one-line total. It is read-only and tolerates corrupt ledgers (ADR-0033).
 - **Progress.** Every agent call prints a start and end line, the scheduler emits task transitions, the runner adds gates and dependency installs, and a 30-second heartbeat covers long turns and gates. Tool calls stream with `--verbose`; `status --watch` reprints the DAG in a second terminal (ADR-0031).
-- **Completion.** Each command declares its parse-args options, positionals and subcommands on the `Command` object. The same metadata feeds `parseCommandArgs` and a hidden `__complete` endpoint; `ai-factory completion` prints thin bash, zsh and fish scripts that call it. Value providers read workspace state and config defensively, so completion never writes or fails loudly (ADR-0032).
+- **Completion.** Each command declares its parse-args options, positionals and subcommands on the `Command` object. The same metadata feeds `parseCommandArgs` and a hidden `__complete` endpoint; `loomwright completion` prints thin bash, zsh and fish scripts that call it. Value providers read workspace state and config defensively, so completion never writes or fails loudly (ADR-0032).
 
 ## Updates
 

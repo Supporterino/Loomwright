@@ -1,6 +1,6 @@
 # CLI reference
 
-`ai-factory [-C <dir>] <command> [options]`. Every command takes `-h/--help`, and `-V/--version` prints the version. The npm package is `@supporterino/ai-factory` (`npx @supporterino/ai-factory@<version> <command>`). The unscoped package `ai-factory` on npm is an unrelated project.
+`loomwright [-C <dir>] <command> [options]`. Every command takes `-h/--help`, and `-V/--version` prints the version. The npm package is `@loomwright/cli` (`npx @loomwright/cli@<version> <command>`). The old `ai-factory` binary still works as a deprecated alias. The unscoped package `ai-factory` on npm is an unrelated project.
 
 `init`, `update` and `detect --apply` refuse to rewrite a workspace that a newer version installed, because that would downgrade it. Run the matching version, or pass `--allow-downgrade` to go back on purpose.
 
@@ -22,7 +22,7 @@ The source of truth is `src/cli/exit-codes.ts`; numbers are never reused.
 ## init
 
 ```
-ai-factory init [--plan] [--force] [--allow-downgrade] [--no-commit] [--no-graph] [--json]
+loomwright init [--plan] [--force] [--allow-downgrade] [--no-commit] [--no-graph] [--json]
 ```
 
 Installs or refreshes the factory. `--plan` prints what would be created, replaced or archived and writes nothing. It runs these steps in order:
@@ -41,7 +41,7 @@ Installs or refreshes the factory. `--plan` prints what would be created, replac
 Running it again on an unchanged workspace changes nothing.
 
 How it treats files that already exist:
-- A file you edited is kept; `ai-factory update` merges it.
+- A file you edited is kept; `loomwright update` merges it.
 - A file you deleted is not recreated.
 - A file the factory never created stops `init` before anything is written. `--force` overwrites it, or you can list it under `unmanaged`. Custom agents, commands and skills in the paths the factory takes over are archived under `.factory/legacy/<timestamp>/` on the first install instead of colliding.
 - An existing `openspec/config.yaml` (a team already using OpenSpec) is kept: the first config lists it under `unmanaged`. Add the factory's workspace context to it by hand if the architect should see it.
@@ -52,15 +52,15 @@ Tool binaries can be overridden with `AI_FACTORY_<TOOL>_BIN`, e.g. `AI_FACTORY_O
 
 Everything needed to run the factory is in git; the runtime state is not.
 1. Clone the workspace (with submodules: `git clone --recurse-submodules`, or `git submodule update --init --recursive` afterwards) and install the tools `git`, `opencode`, `openspec` and `graphify` plus the repos' own toolchains.
-2. Run `ai-factory init`. On an unchanged workspace it writes nothing and makes no commit, but it re-installs the `pre-push` hooks (they live in `.git/hooks`, which a clone does not carry) and rebuilds `graphify-out/` (gitignored).
-3. Run `ai-factory doctor` to check the tools, lock version, hooks and gates.
+2. Run `loomwright init`. On an unchanged workspace it writes nothing and makes no commit, but it re-installs the `pre-push` hooks (they live in `.git/hooks`, which a clone does not carry) and rebuilds `graphify-out/` (gitignored).
+3. Run `loomwright doctor` to check the tools, lock version, hooks and gates.
 
 What does not travel: worktrees, run state, session context, opencode's database, caches, logs, backups and legacy archives under `.factory/`. Finish an in-flight change (`land`) or `abort` it before switching machines; there is no mid-change handoff. With `"artifacts": { "mode": "git" }`, each finished change's report, approval and usage ledger are committed under `factory-records/` and do arrive with the clone.
 
 ## adopt
 
 ```
-ai-factory adopt [<change-id>... | --all] [--dry-run] [--json] [--normalize] [--preserve-progress]
+loomwright adopt [<change-id>... | --all] [--dry-run] [--json] [--normalize] [--preserve-progress]
 ```
 
 Takes over OpenSpec changes that existed before the factory. `init` leaves `openspec/changes/` alone, so a team that was already using OpenSpec keeps its pending changes. Without ids or `--all`, `adopt` lists them.
@@ -82,7 +82,7 @@ Exit codes: 0 adopted/skipped, 4 refused (partial progress without the flag, cus
 ## update
 
 ```
-ai-factory update [--dry-run] [--tools] [--restore] [--force] [--allow-downgrade] [--json]
+loomwright update [--dry-run] [--tools] [--restore] [--force] [--allow-downgrade] [--json]
 ```
 
 Upgrades an installed workspace to the factory version you run, as one local commit `chore(factory): update to vX.Y.Z`. It prints the plan first, and `--dry-run` stops there.
@@ -102,7 +102,7 @@ It needs a clean AI repo. It refuses while a change is active, queued or paused 
 ## rollback
 
 ```
-ai-factory rollback
+loomwright rollback
 ```
 
 Restores the files of the latest update from its backup, including the previous lock and config, and commits `chore(factory): roll back update to vX.Y.Z`. It also undoes an update that stopped on conflicts.
@@ -110,7 +110,7 @@ Restores the files of the latest update from its backup, including the previous 
 ## doctor
 
 ```
-ai-factory doctor [--json]
+loomwright doctor [--json]
 ```
 
 A read-only health check. It looks at:
@@ -134,7 +134,7 @@ It exits 4 when any check fails. Warnings exit 0.
 ## completion
 
 ```
-ai-factory completion [<bash|zsh|fish>] [--install] [--rc <file>]
+loomwright completion [<bash|zsh|fish>] [--install] [--rc <file>]
 ```
 
 Prints a completion script, or with `--install` adds a marked, idempotent block to the shell's rc file. Completion covers:
@@ -144,9 +144,9 @@ Prints a completion script, or with `--install` adds a marked, idempotent block 
 - comma-list values (`--levels lite,f`, `--by change,agent`).
 
 ```bash
-ai-factory completion zsh            # print it
-ai-factory completion zsh --install  # add to ~/.zshrc
-ai-factory completion --install      # detect from $SHELL
+loomwright completion zsh            # print it
+loomwright completion zsh --install  # add to ~/.zshrc
+loomwright completion --install      # detect from $SHELL
 ```
 
 The rc file is `~/.bashrc`, `${ZDOTDIR:-$HOME}/.zshrc` or `${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish`. `--rc` overrides it and requires `--install`. A malformed existing block stops the install instead of overwriting it; running it again is a no-op. The zsh script uses `compdef`, so load it after `compinit` (the normal zsh setup).
@@ -156,7 +156,7 @@ Completing values never writes, never calls a model and exits 0 even if the work
 ## detect
 
 ```
-ai-factory detect [--apply [--no-commit] [--allow-downgrade]] [--check] [--json]
+loomwright detect [--apply [--no-commit] [--allow-downgrade]] [--check] [--json]
 ```
 
 Re-detects the layout, repos, languages and contracts and prints the differences from the config:
@@ -169,7 +169,7 @@ Re-detects the layout, repos, languages and contracts and prints the differences
 ## gate
 
 ```
-ai-factory gate <change-id> [--task <id>] [--repo <name>] [--full] [--json]
+loomwright gate <change-id> [--task <id>] [--repo <name>] [--full] [--json]
 ```
 
 Runs format, lint, types and tests.
@@ -184,7 +184,7 @@ Runs format, lint, types and tests.
 ## repoint
 
 ```
-ai-factory repoint <change-id> [--json]
+loomwright repoint <change-id> [--json]
 ```
 
 Run this after the submodule MRs of a change have merged upstream.
@@ -197,7 +197,7 @@ Pointers whose MR has not merged stay provisional, and the command exits with 4.
 ## land
 
 ```
-ai-factory land <change-id> [--dry-run] [--json]
+loomwright land <change-id> [--dry-run] [--json]
 ```
 
 Merges a finished (`done`) change back into its base branches and removes what it no longer needs. It never pushes.
@@ -217,7 +217,7 @@ The command requires a `done` change, clean repo checkouts and clean change work
 ## status
 
 ```
-ai-factory status [<change-id>] [--json] [--watch [--interval <seconds>]]
+loomwright status [<change-id>] [--json] [--watch [--interval <seconds>]]
 ```
 
 Shows the active change and its driver, the queue, and each change's details, including token usage (by agent and task, retry overhead, wasted re-reads) and how far the graph lags behind the merges:
@@ -230,12 +230,12 @@ Shows the active change and its driver, the queue, and each change's details, in
 
 `--watch` reprints the same view every `--interval` seconds (default 2) until Ctrl-C. It clears the screen on a terminal and prints a separator between frames when piped, so a second terminal can watch a long run. `--watch` and `--json` exclude each other.
 
-Without an id, `status` also prints one workspace-wide usage line and `--json` includes `workspaceUsage` (the same totals as `ai-factory usage`).
+Without an id, `status` also prints one workspace-wide usage line and `--json` includes `workspaceUsage` (the same totals as `loomwright usage`).
 
 ## usage
 
 ```
-ai-factory usage [--since <date>] [--until <date>]
+loomwright usage [--since <date>] [--until <date>]
                  [--change <id>]... [--agent <id>]... [--model <id>]...
                  [--by <list>] [--json]
 ```
@@ -253,8 +253,8 @@ The JSON shape is versioned (`version: 1`) with `totalTokens`, `sessions`, `chan
 ## artifacts
 
 ```
-ai-factory artifacts sync <change-id>
-ai-factory artifacts sync --all [--dry-run] [--json]
+loomwright artifacts sync <change-id>
+loomwright artifacts sync --all [--dry-run] [--json]
 ```
 
 Copies a finished change's records out of the gitignored `.factory/` into the committed `factory-records/` tree, so they survive a fresh clone and another machine:
@@ -271,7 +271,7 @@ It requires `"artifacts": { "mode": "git" }` in `factory.config.jsonc`; the defa
 ## retry
 
 ```
-ai-factory retry <change-id> --task <id>
+loomwright retry <change-id> --task <id>
 ```
 
 After a human fix: resets a failed task's retry budget and un-cancels the tasks that were cancelled because of it. Continue with `resume`.
@@ -279,7 +279,7 @@ After a human fix: resets a failed task's retry budget and un-cancels the tasks 
 ## abort
 
 ```
-ai-factory abort <change-id>
+loomwright abort <change-id>
 ```
 
 Stops the change safely: the driver finishes in-flight merges and interrupts agents. Branches and worktrees are kept, the active-change lock is released, and the change is removed from the queue. The next queued change is not started automatically.
@@ -287,7 +287,7 @@ Stops the change safely: the driver finishes in-flight merges and interrupts age
 ## refine
 
 ```
-ai-factory refine "<request>"
+loomwright refine "<request>"
 ```
 
 Asks a few scope, out-of-scope, verification and constraint questions, then writes a
@@ -297,7 +297,7 @@ Feed it to `run --request`.
 ## quick
 
 ```
-ai-factory quick "<task>" [--repo <name>] [--agent <id>] [--no-review] [--verbose|--quiet]
+loomwright quick "<task>" [--repo <name>] [--agent <id>] [--no-review] [--verbose|--quiet]
 ```
 
 The no-OpenSpec path. Creates a `task/<slug>` branch (prefix from
@@ -308,7 +308,7 @@ gates; only the spec and approval hash are skipped. The branch stays checked out
 ## run
 
 ```
-ai-factory run "<request>" [--request <file>] [--no-interactive] [--verbose|--quiet]
+loomwright run "<request>" [--request <file>] [--no-interactive] [--verbose|--quiet]
 ```
 
 Starts a change and runs it up to spec approval. `--request` reads the request from a file
@@ -334,10 +334,10 @@ Every agent call prints when it starts (step, agent, model) and ends (outcome, d
 ## approve
 
 ```
-ai-factory approve <change-id> [--no-continue] [--verbose|--quiet]
+loomwright approve <change-id> [--no-continue] [--verbose|--quiet]
 ```
 
-Validates the change and commits the spec (`docs(spec): <id>`). Records the approval in `.factory/approvals/<id>.json`: the approver (git `user.email`), the spec commit and a content hash with task checkboxes normalised out. Then it continues automatically: activation, implementation, review and tests, contracts, full suite, close. If another change is active, this one is queued and starts when that one closes. When the pipeline finishes the change, the output ends with `next: ai-factory land <id>`.
+Validates the change and commits the spec (`docs(spec): <id>`). Records the approval in `.factory/approvals/<id>.json`: the approver (git `user.email`), the spec commit and a content hash with task checkboxes normalised out. Then it continues automatically: activation, implementation, review and tests, contracts, full suite, close. If another change is active, this one is queued and starts when that one closes. When the pipeline finishes the change, the output ends with `next: loomwright land <id>`.
 
 `approve` is the initial gate only. Once implementation has started, a spec edit is accepted with `reapprove` (hand edit) or `reword` (architect applies review findings).
 
@@ -346,10 +346,10 @@ Review runs once per touched repo by default. `workflow.reviewRounds` (1–10) r
 ## reword
 
 ```
-ai-factory reword <change-id> [--finding <n,...>] [--prompt <text>] [--dry-run]
+loomwright reword <change-id> [--finding <n,...>] [--prompt <text>] [--dry-run]
 ```
 
-Review findings that point at `openspec/changes/<id>/` cannot be fixed by an implementer, so they do not become tasks. They pause the change and are listed in the pause output (and in the run state as `specFindings`). Reviewers are told to set `file` to that spec path when the fix is wording, even if the mismatch shows in a code file. If a reviewer misses that and the resulting `review-fix` task blocks with a reason naming `openspec`, the factory moves its finding into `specFindings`, drops the impossible task and pauses the same way instead of failing the change. `reword` runs one architect session over the change folder to apply them. Only wording and clarity may change: the task list (ids, deps, touches and count) must stay as approved, and the architect may not write outside the change folder. On success the result is validated, committed on `change/<id>` as `docs(spec): reword <id>` and the approval is re-stamped with the new commit and hash (same approver; the replaced hash is kept in `history`). A failed, blocked or structural attempt restores the change folder and keeps the findings. Continue with `ai-factory resume <id>`.
+Review findings that point at `openspec/changes/<id>/` cannot be fixed by an implementer, so they do not become tasks. They pause the change and are listed in the pause output (and in the run state as `specFindings`). Reviewers are told to set `file` to that spec path when the fix is wording, even if the mismatch shows in a code file. If a reviewer misses that and the resulting `review-fix` task blocks with a reason naming `openspec`, the factory moves its finding into `specFindings`, drops the impossible task and pauses the same way instead of failing the change. `reword` runs one architect session over the change folder to apply them. Only wording and clarity may change: the task list (ids, deps, touches and count) must stay as approved, and the architect may not write outside the change folder. On success the result is validated, committed on `change/<id>` as `docs(spec): reword <id>` and the approval is re-stamped with the new commit and hash (same approver; the replaced hash is kept in `history`). A failed, blocked or structural attempt restores the change folder and keeps the findings. Continue with `loomwright resume <id>`.
 - `--finding <n,...>` applies only the listed findings (1-based, as shown at the pause). The others stay recorded, so the change stays paused and a second `reword` can apply them.
 - `--prompt <text>` adds an instruction for the architect.
 - `--dry-run` runs the architect, shows the diff, then restores the spec and keeps the findings.
@@ -357,7 +357,7 @@ Review findings that point at `openspec/changes/<id>/` cannot be fixed by an imp
 ## reapprove
 
 ```
-ai-factory reapprove <change-id> [--dry-run]
+loomwright reapprove <change-id> [--dry-run]
 ```
 
 Validates the current spec, commits any edit in `openspec/changes/<id>/` on `change/<id>` (same `docs(spec): reword <id>` subject) and records a new approval: new spec commit and hash, same approver, the old hash kept in `history`. The run's tasks and their progress are kept, unlike `approve`, which reloads the task DAG, so the approved task plan (ids, repos, deps, touches) must not change; start a new change for a new plan. Shows the diff it is accepting. Use it after editing the spec by hand; use `reword` to let the architect apply review findings. `--dry-run` validates and shows the diff without committing or re-stamping.
@@ -365,15 +365,15 @@ Validates the current spec, commits any edit in `openspec/changes/<id>/` on `cha
 ## resume
 
 ```
-ai-factory resume <change-id> [--verbose|--quiet]
+loomwright resume <change-id> [--verbose|--quiet]
 ```
 
-Continues a paused, aborted, interrupted or queued change from its last consistent state. The spec is re-checked against its approval first, and any edit other than a task checkbox voids the approval (`reapprove` accepts an intended edit). A change paused on spec findings stays paused until `reword` or `reapprove` clears them. A run that reaches `done` ends with `next: ai-factory land <id>`. A change that is already done prints the same hint: `land` deletes the run state, so a `done` state means it has not been landed yet.
+Continues a paused, aborted, interrupted or queued change from its last consistent state. The spec is re-checked against its approval first, and any edit other than a task checkbox voids the approval (`reapprove` accepts an intended edit). A change paused on spec findings stays paused until `reword` or `reapprove` clears them. A run that reaches `done` ends with `next: loomwright land <id>`. A change that is already done prints the same hint: `land` deletes the run state, so a `done` state means it has not been landed yet.
 
 ## graph
 
 ```
-ai-factory graph [--full] [--json]
+loomwright graph [--full] [--json]
 ```
 
 Builds or incrementally updates the one workspace graph (`graphify-out/`, gitignored) over the AI repo and every submodule. `--full` rebuilds from scratch. The pipeline updates it after every task merge (serialised and coalesced), so running it by hand is rarely needed. Graphify always runs with `GRAPHIFY_NO_AUTO_REFRESH=1 GRAPHIFY_BACKEND=none`.
@@ -381,7 +381,7 @@ Builds or incrementally updates the one workspace graph (`graphify-out/`, gitign
 ## bench
 
 ```
-ai-factory bench ponytail [--runs N] [--case ID[,ID]] [--levels lite,full,ultra] [--yes] [--json]
+loomwright bench ponytail [--runs N] [--case ID[,ID]] [--levels lite,full,ultra] [--yes] [--json]
 ```
 
 Runs each bench case (`slugify`, a new function; `paginate-fix`, a fix in existing code) N times (default 3) with and without the Ponytail add-on on your configured models. `--levels` compares several Ponytail levels against "without"; `--case` picks cases. Compares tokens, lines changed, first-attempt gate pass rate, retries, scenario test coverage and review findings as medians with min–max. Tokens count every run; the other metrics only runs that finished, and the table shows how many did. Results go to `docs/bench/ponytail-<date>.md` and `.json`, saved after every run (`"complete": false` until the end).

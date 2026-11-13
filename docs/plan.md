@@ -1,4 +1,4 @@
-# ai-factory v1 build plan
+# Loomwright v1 build plan
 
 Status: approved 2026-10-23. Slices 1–13 done. Inputs: [research/tooling.md](research/tooling.md), [decisions/](decisions/).
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Example: update ai-factory in many workspaces, one local commit each.
+# Example: update Loomwright in many workspaces, one local commit each.
 #
 #   docs/fleet-update.sh 0.2.0 ~/src/team-a-ai ~/src/team-b-ai
 #
@@ -15,14 +15,14 @@ ok=()
 skipped=()
 for ws in "$@"; do
   echo "== $ws"
-  if ! bunx "@supporterino/ai-factory@${version}" -C "$ws" update --dry-run; then
+  if ! bunx "@loomwright/cli@${version}" -C "$ws" update --dry-run; then
     skipped+=("$ws (plan failed)")
     continue
   fi
-  bunx "@supporterino/ai-factory@${version}" -C "$ws" update
+  bunx "@loomwright/cli@${version}" -C "$ws" update
   case $? in
     0) ok+=("$ws") ;;
-    4) skipped+=("$ws (in progress, dirty or conflicts: see above; \`ai-factory rollback\` undoes a conflicted update)") ;;
+    4) skipped+=("$ws (in progress, dirty or conflicts: see above; \`loomwright rollback\` undoes a conflicted update)") ;;
     *) skipped+=("$ws (failed)") ;;
   esac
 done
