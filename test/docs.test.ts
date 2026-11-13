@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
+const RENAME_VERSION = "0.12.0";
 
 function read(...parts: string[]): string {
   return readFileSync(join(ROOT, ...parts), "utf8");
@@ -13,6 +14,12 @@ function filesUnder(dir: string): string[] {
     const path = `${dir}/${entry.name}`;
     return entry.isDirectory() ? filesUnder(path) : [path];
   });
+}
+
+// Only snapshots written before the rename are historical; later releases may use the new name.
+function isHistoricalSnapshot(file: string): boolean {
+  const version = /^test\/fixtures\/install-(.+)\.json$/.exec(file)?.[1];
+  return version !== undefined && Bun.semver.order(version, RENAME_VERSION) <= 0;
 }
 
 describe("documentation", () => {
@@ -83,10 +90,15 @@ describe("compatibility surface", () => {
       ...filesUnder("docs/research"),
       ...filesUnder("docs/e2e"),
       ...filesUnder("docs/audit"),
-      ...filesUnder("test/fixtures").filter((file) => /install-.*\.json$/.test(file)),
+      ...filesUnder("test/fixtures").filter(isHistoricalSnapshot),
     ];
     for (const file of files) {
       expect(read(file), file).not.toContain("Loomwright");
     }
+  });
+
+  test("release snapshots after 0.12.0 may name Loomwright", () => {
+    expect(isHistoricalSnapshot("test/fixtures/install-0.12.0.json")).toBe(true);
+    expect(isHistoricalSnapshot("test/fixtures/install-0.13.0.json")).toBe(false);
   });
 });
