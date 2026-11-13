@@ -753,7 +753,7 @@ describe("pipeline: single repo", () => {
     expect(loadRun(fx.root, ID)?.phase).toBe("done");
   });
 
-  test("serial mode: a failed task's leftovers are set aside, not charged to the next task (audit P10)", async () => {
+  test("stashed leftover work carries the new product name: serial mode leaves a failed task's work aside, not charged to the next task (audit P10)", async () => {
     await configure(fx.root, (t) =>
       t
         .replace('"withinRepo": "worktrees"', '"withinRepo": "serial"')

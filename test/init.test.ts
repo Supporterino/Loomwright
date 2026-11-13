@@ -267,7 +267,7 @@ describe("init: single repo", () => {
     expect(readLock(fx.root)?.managed[skill]).toBeDefined();
   });
 
-  test("an older CLI refuses to downgrade a newer install unless told to", async () => {
+  test("the downgrade error names Loomwright: an older CLI refuses to downgrade a newer install unless told to", async () => {
     await cli(fx.root, "init");
     const lockFile = join(fx.root, LOCK_FILE);
     writeFileSync(

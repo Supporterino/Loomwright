@@ -121,7 +121,7 @@ describe("spec findings, reword and reapprove", () => {
     ),
   });
 
-  test("a spec finding pauses instead of creating an implementer task, and reword applies it", async () => {
+  test("a change paused on spec findings points at loomwright reword instead of creating an implementer task, and reword applies it", async () => {
     const runtime = team(rewritten);
     await cliWith(runtime, fx.root, "run", "Add math helpers");
     expect((await cliWith(runtime, fx.root, "approve", ID)).code).toBe(ExitCode.Paused);

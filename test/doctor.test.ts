@@ -107,7 +107,7 @@ describe("doctor", () => {
     expect(find(await report(root), "app strict")).toBeUndefined();
   });
 
-  test("a healthy install passes, with the resolved gate table", async () => {
+  test("doctor suggests the new command: a healthy install passes, with the resolved gate table", async () => {
     const root = await installed(createSingleRepoFixture, { app: passAll });
     const res = await cli(root, "doctor");
     expect(res.code).toBe(ExitCode.Ok);
