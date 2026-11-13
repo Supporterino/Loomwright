@@ -54,7 +54,7 @@ jobs:
 
           NPM_PUBLISHED=true
           NPM_OUTPUT=""
-          if NPM_OUTPUT=$(npm view "@supporterino/ai-factory@$VERSION" version \
+          if NPM_OUTPUT=$(npm view "@loomwright/cli@$VERSION" version \
             --json --registry=https://registry.npmjs.org 2>&1); then
             NPM_PUBLISHED=true
           elif printf '%s' "$NPM_OUTPUT" | grep -q 'E404'; then
@@ -124,7 +124,7 @@ jobs:
           set -euo pipefail
           PREFIX="$RUNNER_TEMP/ai-factory"
           npm install --global --prefix "$PREFIX" "$RUNNER_TEMP"/npm-pack/*.tgz
-          "$PREFIX/bin/ai-factory" --version
+          "$PREFIX/bin/loomwright" --version
       - uses: actions/upload-artifact@v7
         with:
           name: npm-tarball
