@@ -1,5 +1,5 @@
 /**
- * Process exit codes of the `ai-factory` CLI. Documented in docs/cli.md; never reuse a number.
+ * Process exit codes of the `loomwright` CLI. Documented in docs/cli.md; never reuse a number.
  */
 export const ExitCode = {
   /** Command succeeded. */

@@ -32,7 +32,7 @@ export function migrateConfigText(
   if (from > CONFIG_SCHEMA_VERSION) {
     throw new ConfigError(
       `factory.config.jsonc has schemaVersion ${from}, newer than this factory (${CONFIG_SCHEMA_VERSION})`,
-      ["install a newer ai-factory"],
+      ["install a newer Loomwright"],
     );
   }
   let current = from;

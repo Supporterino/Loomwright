@@ -61,7 +61,7 @@ export interface CommandPositional {
 export interface Command {
   readonly name: string;
   readonly summary: string;
-  /** Full help text shown by `ai-factory <name> --help`. */
+  /** Full help text shown by `loomwright <name> --help`. */
   readonly help: string;
   /** The same options passed to `parseCommandArgs`; completion reads them. */
   readonly options?: CommandOptions;
@@ -85,6 +85,6 @@ export function parseCommandArgs<const O extends CommandOptions>(
     return parseArgs({ args: [...args], options, strict: true, allowPositionals });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new UsageError(`${command}: ${message}`, [`see \`ai-factory ${command} --help\``]);
+    throw new UsageError(`${command}: ${message}`, [`see \`loomwright ${command} --help\``]);
   }
 }

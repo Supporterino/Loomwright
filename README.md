@@ -1,10 +1,20 @@
-# ai-factory
+<p align="center">
+  <img src="brand/icons/mark-on-light-512.png" alt="Loomwright mark" width="128" height="128">
+</p>
+
+# Loomwright
+
+**Spec in. Woven software out.**
+
+Renamed from ai-factory. The package is `@loomwright/cli` and the binary is `loomwright`; the
+old `ai-factory` binary still works as a deprecated alias. See [brand/BRAND.md](brand/BRAND.md)
+for the mark, colour and voice.
 
 [![CI](https://github.com/supporterino/ai-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/supporterino/ai-factory/actions/workflows/ci.yml)
 
-A repo-local AI software factory. You describe a change; the factory writes an [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec, waits for your approval, then has [opencode](https://opencode.ai) agents implement, test and review it across your repos, guided by one [Graphify](https://pypi.org/project/graphifyy/) knowledge graph of the workspace.
+Loomwright is a repo-local AI software factory. You describe a change; the factory writes an [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec, waits for your approval, then has [opencode](https://opencode.ai) agents implement, test and review it across your repos, guided by one [Graphify](https://pypi.org/project/graphifyy/) knowledge graph of the workspace.
 - **One human gate:** the spec approval. Everything after it runs on its own, and pauses with a report when it cannot finish.
-- **Local commits only.** Nothing is pushed and no merge request is opened. You review the `change/<id>` branches and push them yourself. When a change is done, `ai-factory land <id>` merges it into the local base branches and cleans up.
+- **Local commits only.** Nothing is pushed and no merge request is opened. You review the `change/<id>` branches and push them yourself. When a change is done, `loomwright land <id>` merges it into the local base branches and cleans up.
 - **Two layouts:** a single repo, or an "AI repo" that holds your code repos as git submodules.
 - **Language profiles** (stackable per repo): TypeScript/JavaScript, React, Python, Go, Rust, Swift, Helm, Tauri v2.
 
@@ -26,27 +36,27 @@ Plus credentials for the model providers you configure, either exported (`ANTHRO
 Run the CLI without installing it:
 
 ```bash
-bunx @supporterino/ai-factory@0.3.0 init
+bunx @loomwright/cli init
 ```
 
-`npx @supporterino/ai-factory@0.3.0 init` works too. The package is `@supporterino/ai-factory`; its command is `ai-factory`, so after `npm install --global @supporterino/ai-factory` you run `ai-factory init`. Note: the unscoped npm package `ai-factory` is an unrelated project. To run it from a checkout of this repository instead, build it with `bun install && bun run build`, then run `node dist/cli.js` (or `npm link` it).
+`npx @loomwright/cli init` works too. The package is `@loomwright/cli`; its command is `loomwright`, so after `npm install --global @loomwright/cli` you run `loomwright init`. The old `ai-factory` binary still works as a deprecated alias. Note: the unscoped npm package `ai-factory` is an unrelated project. To run it from a checkout of this repository instead, build it with `bun install && bun run build`, then run `node dist/cli.js` (or `npm link` it).
 
 `init` is idempotent. It detects the layout, languages, contracts and existing `opencode.json` instructions, and writes `factory.config.jsonc` from what it found, so edit that file afterwards. It also renders the agents, plugin, standards, skills and OpenSpec's commands into `.opencode/`, installs the `pre-push` hooks, builds the graph, writes `factory.lock.json`, and commits it all as `chore(factory): init vX.Y.Z`. On a first install it archives replaced custom agents, commands and skills under `.factory/legacy/<timestamp>/`; `init --plan` shows that plan without writing. Then check the setup:
 
 ```bash
-ai-factory doctor
+loomwright doctor
 ```
 
 `doctor` prints the resolved gate command per repo and flags anything a run would trip over: a missing toolchain, a model your credentials can't reach, a missing hook, an uninitialised submodule.
 
 ### Shell completion
 
-`ai-factory` completes commands, flags and values (change and task ids, repos, agents, models, files and bench levels) in bash, zsh and fish:
+`loomwright` completes commands, flags and values (change and task ids, repos, agents, models, files and bench levels) in bash, zsh and fish:
 
 ```bash
-ai-factory completion zsh            # print the script
-ai-factory completion zsh --install  # add an idempotent block to ~/.zshrc
-ai-factory completion --install      # detect the shell from $SHELL
+loomwright completion zsh            # print the script
+loomwright completion zsh --install  # add an idempotent block to ~/.zshrc
+loomwright completion --install      # detect the shell from $SHELL
 ```
 
 ### Adopting an existing OpenSpec workspace
@@ -54,9 +64,9 @@ ai-factory completion --install      # detect the shell from $SHELL
 `init` never touches the changes in `openspec/changes/`. If your team already has pending OpenSpec changes, `init` leaves them alone and prints a note. Take one over when you want the factory to finish it:
 
 ```bash
-ai-factory adopt --all                 # register every pending change
-ai-factory adopt add-search            # or name them
-ai-factory adopt add-search --dry-run  # show what would happen
+loomwright adopt --all                 # register every pending change
+loomwright adopt add-search            # or name them
+loomwright adopt add-search --dry-run  # show what would happen
 ```
 
 Adoption registers the change in `.factory/runs/` and validates it, but writes no git state and starts no model. `approve` then creates the change branch lazily. A change whose tasks are all checked is left alone: archive it with `openspec archive <id>`.
@@ -64,7 +74,7 @@ Adoption registers the change in `.factory/runs/` and validates it, but writes n
 Vanilla OpenSpec changes often lack the factory's per-task `repo`/`deps`/`touches` metadata. Add it by hand, or let the architect do it:
 
 ```bash
-ai-factory adopt add-search --normalize
+loomwright adopt add-search --normalize
 ```
 
 `--normalize` runs one architect session against the existing change, preserving its intent, task ids and checked state. It requires a clean AI repo, committed change files, the base branch and no active change, and it spends tokens. A partially implemented change needs `--preserve-progress`; commit that work on the base branch first, and the factory keeps the checked tasks merged and continues with the rest.
@@ -91,47 +101,47 @@ The same `change/<id>` branch is created in the AI repo and in every submodule t
 ## The flow
 
 ```bash
-ai-factory run "Add full-text search to the product list"
+loomwright run "Add full-text search to the product list"
 ```
 
 1. **Intake and design.** The orchestrator names the change. Explorers map the affected repos using the graph. The architect writes `openspec/changes/<id>/` (proposal, design, specs and `tasks.md`, with per-task `repo`/`deps`/`touches`). The CLI validates it and has the architect repair problems. `run` stops here.
 2. **Approve.** Read the spec, edit it if you like, then:
 
    ```bash
-   ai-factory approve <id>
+   loomwright approve <id>
    ```
 
-   This commits the spec (`docs(spec): <id>`) and records its hash. Any later edit to the spec, other than a task checkbox, voids the approval; accept an intended edit with `ai-factory reapprove <id>`, or let the architect apply review findings with `ai-factory reword <id>`. If another change is active, this one queues and starts automatically when the other one closes. Use `--no-continue` to only record the approval.
+   This commits the spec (`docs(spec): <id>`) and records its hash. Any later edit to the spec, other than a task checkbox, voids the approval; accept an intended edit with `loomwright reapprove <id>`, or let the architect apply review findings with `loomwright reword <id>`. If another change is active, this one queues and starts automatically when the other one closes. Use `--no-continue` to only record the approval.
 3. **Implement.** Tasks run in parallel in their own worktrees, at most `maxAgents` at a time. Tasks in one repo whose `touches` overlap run one after the other. Each task gets an affected-test gate. Merges go through a per-repo queue: rebase, gates again, fast-forward. A failing task gets three retries, then the change pauses with a report. The terminal shows each task starting (title, agent, model, attempt), its gates, retries and merges, plus a 30-second heartbeat with the elapsed time and current tool while agents and gates run. `--verbose` streams every tool call; `--quiet` keeps only merges, failures and the summary.
-4. **Review, contracts, full suite.** Each touched repo gets one reviewer and one tester pass. Findings and failures become fix tasks. With `workflow.reviewRounds` above 1, every touched repo is reviewed again after a fix round until a pass is clean or the cap is reached (the tester still runs once). Then come the contract gate and contract review, and finally every touched repo's full suite. A finding that points at the change's spec cannot be fixed by an implementer: the change pauses and `ai-factory reword <id>` lets the architect apply it (or `reapprove` accepts a hand edit). Reviewers set `file` to the spec path for a wording fix; if a `review-fix` task still blocks with a reason naming `openspec`, the factory routes its finding to the spec findings rather than failing the change.
+4. **Review, contracts, full suite.** Each touched repo gets one reviewer and one tester pass. Findings and failures become fix tasks. With `workflow.reviewRounds` above 1, every touched repo is reviewed again after a fix round until a pass is clean or the cap is reached (the tester still runs once). Then come the contract gate and contract review, and finally every touched repo's full suite. A finding that points at the change's spec cannot be fixed by an implementer: the change pauses and `loomwright reword <id>` lets the architect apply it (or `reapprove` accepts a hand edit). Reviewers set `file` to the spec path for a wording fix; if a `review-fix` task still blocks with a reason naming `openspec`, the factory routes its finding to the spec findings rather than failing the change.
 5. **Close.** The CLI mirrors the checkboxes, bumps the pointers, archives the spec and writes the report to `.factory/reports/<id>.md`. It makes local commits only.
 
 While it runs, or after it stops:
 
 | Situation                                                                                             | Command                                                      |
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| See what is happening: phase, task DAG, worktrees, gate results, token usage                          | `ai-factory status [<id>] [--json]`                          |
-| See AI usage across every change and quick task in the workspace                                      | `ai-factory usage [--json]`                                  |
-| Watch it from a second terminal (refreshes every 2 s until Ctrl-C)                                    | `ai-factory status <id> --watch`                             |
-| It paused because a task failed three times: fix it in the task's worktree (path in the report), then | `ai-factory retry <id> --task <n>`                           |
-| It paused, was aborted, or the process died: continue from the last consistent state                  | `ai-factory resume <id>`                                     |
-| A review finding concerns the spec itself: let the architect apply it                                 | `ai-factory reword <id> [--finding <n,...>] [--dry-run]`     |
-| You edited the spec after approval: accept the edit without reloading the tasks                       | `ai-factory reapprove <id> [--dry-run]`                      |
-| Stop it safely (branches and worktrees stay, the lock is released)                                    | `ai-factory abort <id>`                                      |
-| Run the gates by hand                                                                                 | `ai-factory gate <id> [--task <n>] [--repo <name>] [--full]` |
-| Your submodule MRs were merged upstream: replace the provisional pointers                             | `ai-factory repoint <id>`                                    |
-| The change is reviewed: merge it locally into the base branches and clean up                          | `ai-factory land <id> [--dry-run]`                           |
-| Commit a change's report, approval and usage (`artifacts.mode: "git"`), or backfill past changes      | `ai-factory artifacts sync <id>` / `--all`                   |
+| See what is happening: phase, task DAG, worktrees, gate results, token usage                          | `loomwright status [<id>] [--json]`                          |
+| See AI usage across every change and quick task in the workspace                                      | `loomwright usage [--json]`                                  |
+| Watch it from a second terminal (refreshes every 2 s until Ctrl-C)                                    | `loomwright status <id> --watch`                             |
+| It paused because a task failed three times: fix it in the task's worktree (path in the report), then | `loomwright retry <id> --task <n>`                           |
+| It paused, was aborted, or the process died: continue from the last consistent state                  | `loomwright resume <id>`                                     |
+| A review finding concerns the spec itself: let the architect apply it                                 | `loomwright reword <id> [--finding <n,...>] [--dry-run]`     |
+| You edited the spec after approval: accept the edit without reloading the tasks                       | `loomwright reapprove <id> [--dry-run]`                      |
+| Stop it safely (branches and worktrees stay, the lock is released)                                    | `loomwright abort <id>`                                      |
+| Run the gates by hand                                                                                 | `loomwright gate <id> [--task <n>] [--repo <name>] [--full]` |
+| Your submodule MRs were merged upstream: replace the provisional pointers                             | `loomwright repoint <id>`                                    |
+| The change is reviewed: merge it locally into the base branches and clean up                          | `loomwright land <id> [--dry-run]`                           |
+| Commit a change's report, approval and usage (`artifacts.mode: "git"`), or backfill past changes      | `loomwright artifacts sync <id>` / `--all`                   |
 
 Exit codes: 0 ok, 3 config invalid, 4 precondition, 5 gate failed, 6 paused/aborted, 10 detection drift ([full table](docs/cli.md#exit-codes)).
 
 ### Refinement and quick tasks
 
 ```bash
-ai-factory refine "make the imports faster"   # ask scope/verification questions, write .factory/requests/<slug>.md
-ai-factory run --request .factory/requests/make-the-imports-faster.md
-ai-factory run "make the imports faster"      # agents may ask questions during intake/design
-ai-factory quick "fix the login typo" --repo frontend   # add --agent <id> for a custom implementer
+loomwright refine "make the imports faster"   # ask scope/verification questions, write .factory/requests/<slug>.md
+loomwright run --request .factory/requests/make-the-imports-faster.md
+loomwright run "make the imports faster"      # agents may ask questions during intake/design
+loomwright quick "fix the login typo" --repo frontend   # add --agent <id> for a custom implementer
 ```
 
 `refine` asks a few questions before any model work starts. During `run`, the intake orchestrator and architect may raise questions; the CLI asks them in the terminal and records the Q&A in the change. Pass `--no-interactive` to record without asking. Spec approval is still the only hard gate. `quick` is the no-OpenSpec path: it creates a `task/<slug>` branch, implements, runs the gates, runs one review pass, and makes one local commit. It never pushes.
@@ -143,7 +153,7 @@ ai-factory quick "fix the login typo" --repo frontend   # add --agent <id> for a
 | Key                                                                                            | Default                                                                                                                   | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$schema`                                                                                      | `./.opencode/schemas/factory.config.schema.json`                                                                          | JSON Schema for editor completion and checks; the factory keeps it current.                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `schemaVersion`                                                                                | `4`                                                                                                                       | Config format. `ai-factory update` migrates older ones; v2/v3 stay readable until you update.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `schemaVersion`                                                                                | `4`                                                                                                                       | Config format. `loomwright update` migrates older ones; v2/v3 stay readable until you update.                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `layout`                                                                                       | detected                                                                                                                  | `"single"` or `"submodules"`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `repos[]`                                                                                      | detected                                                                                                                  | `{ name, path, role: "code" \| "orchestration", languages[], defaultBranch?, subPaths?[] }`.`languages` stacks profiles (`typescript`, `react`, `python`, `go`, `rust`, `swift`, `helm`, `tauri`). A Tauri v2 app is detected as `typescript` (plus `react`) for the frontend and `rust` + `tauri` for `src-tauri/`, where the `tauri` profile runs the cargo gates. `subPaths` overrides languages for monorepo packages. In the submodule layout, the AI repo is the one `orchestration` repo at `"."`. |
 | `models.{orchestrator, architect, reviewer, contractReviewer?, implementer, tester, explorer}` | Opus for architect/reviewer, Sonnet for orchestrator/implementer/tester, Haiku for explorer                               | opencode ids `"provider/model[#variant]"`.`contractReviewer` falls back to `reviewer`.`models.roles`, `models.repos.<repo>` and `models.agents.<id>` override the flat entries; `fallback[]` lists alternates.                                                                                                                                                                                                                                                                                            |
@@ -157,7 +167,7 @@ ai-factory quick "fix the login typo" --repo frontend   # add --agent <id> for a
 | `gates.extra[]`                                                                                | `[]`                                                                                                                      | Conditional gates: `name`, `type`, `phases`, `when.changed`, `command`, `env`, `setup`, `outputs`, `checkOnly`, `timeoutMs`.`outputs` makes it a generated-artifact drift gate.                                                                                                                                                                                                                                                                                                                           |
 | `contracts[]`                                                                                  | detected                                                                                                                  | `{ kind: openapi \| proto \| json-schema \| helm-values \| generated \| crd \| ipc \| custom, provider, path, consumers[], command?, outputs?, allowBreaking?, validate?{<consumer>: cmd} }`.`generated`/`crd`/`ipc` contracts run their command and fail on output drift. In `validate` commands, `{contract}` is the absolute path of the provider's new contract.                                                                                                                                      |
 | `commits.{style, scopes}`                                                                      | `"conventional"`, `false`                                                                                                 | `"gitmoji"` keeps the Conventional prefix and adds the emoji; `scopes` adds the repo name to task commits.                                                                                                                                                                                                                                                                                                                                                                                                |
-| `workflow.{refine, clarifyRounds, reviewRounds, quick}`                                        | `true`, `2`, `1`, `{enabled: true, branchPrefix: "task/"}`                                                                | Enables `workflow.refine` and caps clarification rounds; `reviewRounds` re-reviews after fix rounds (1 = a single pass, max 10); `quick` enables `ai-factory quick`.                                                                                                                                                                                                                                                                                                                                      |
+| `workflow.{refine, clarifyRounds, reviewRounds, quick}`                                        | `true`, `2`, `1`, `{enabled: true, branchPrefix: "task/"}`                                                                | Enables `workflow.refine` and caps clarification rounds; `reviewRounds` re-reviews after fix rounds (1 = a single pass, max 10); `quick` enables `loomwright quick`.                                                                                                                                                                                                                                                                                                                                      |
 | `release.detect`                                                                               | `true`                                                                                                                    | Detects release-please, goreleaser, changesets and forge CI, and reports them in `doctor`; no workflow is edited.                                                                                                                                                                                                                                                                                                                                                                                         |
 | `parallel.maxAgents`                                                                           | `4`                                                                                                                       | Concurrent agent sessions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `parallel.maxGateProcesses`                                                                    | `2`                                                                                                                       | Concurrent gate processes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -182,9 +192,9 @@ You can edit the agents in `.opencode/agents/` and the standards in `.opencode/s
 ## Updating
 
 ```bash
-bunx @supporterino/ai-factory@<new> update --dry-run   # print the plan
-bunx @supporterino/ai-factory@<new> update             # one commit: chore(factory): update to vX.Y.Z
-bunx @supporterino/ai-factory@<new> rollback           # undo it
+bunx @loomwright/cli@<new> update --dry-run   # print the plan
+bunx @loomwright/cli@<new> update             # one commit: chore(factory): update to vX.Y.Z
+bunx @loomwright/cli@<new> rollback           # undo it
 ```
 
 `update` migrates the config while keeping your comments. It replaces managed files you didn't touch, merges three-way the ones you edited (a conflict leaves markers and commits nothing), and keeps deleted files deleted unless `--restore`. `--tools` also refreshes OpenSpec's files and rebuilds the graph if its format changed. It refuses while a change is in progress unless `--force`; a running change keeps the agent and gate definitions it was approved with. For many workspaces, see [docs/fleet-update.sh](docs/fleet-update.sh).
@@ -193,29 +203,29 @@ bunx @supporterino/ai-factory@<new> rollback           # undo it
 
 [Ponytail](https://github.com/DietrichGebert/ponytail) (minimal-code guidance) is vendored at `v5.3.2@16352ac2`, verified by content hash, and injected only into implementer and reviewer prompts. The factory's rules and your standards take precedence over it. `shortcutComments: "report"` collects `shortcut:` comments into the report, and `"forbid"` fails the gate on them.
 
-**Default.** `enabled: true` is provisional. `ai-factory bench ponytail` compares runs with and without it on your models: tokens, diff size, first-attempt pass rate, retries, coverage and review findings. It writes the result to `docs/bench/`. The bench makes real model calls, so it prints a cost estimate and asks first. It has not been run for this release yet, and the default will be set from its result.
+**Default.** `enabled: true` is provisional. `loomwright bench ponytail` compares runs with and without it on your models: tokens, diff size, first-attempt pass rate, retries, coverage and review findings. It writes the result to `docs/bench/`. The bench makes real model calls, so it prints a cost estimate and asks first. It has not been run for this release yet, and the default will be set from its result.
 
 ## Troubleshooting
 
 | Symptom                                                                    | Fix                                                                                                                                                                                                                                   |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uses config schemaVersion 1; this factory needs 4`                        | `ai-factory update` (it migrates v1 → v4 and keeps comments).                                                                                                                                                                         |
+| `uses config schemaVersion 1; this factory needs 4`                        | `loomwright update` (it migrates v1 → v4 and keeps comments).                                                                                                                                                                         |
 | `doctor`: `model … is not available to opencode`                           | Run `opencode auth login <provider>` (imported on the next run) or export the key (e.g. `ANTHROPIC_API_KEY`), or change the model. `doctor` lists the stored credentials without their values.                                        |
 | `doctor` / `gate`: `no format gate` or `not found: golangci-lint`          | Install the tool, add a script under the name in `gates.scripts`, or set `gates.overrides.<repo>.<gate>` (`"skip"` to turn it off).                                                                                                   |
 | `gate is not check-only`                                                   | Your format or lint script writes files. Point the gate at the check variant (e.g. `prettier --check`, `biome check`).                                                                                                                |
 | The change paused                                                          | Read `.factory/reports/<id>.md`. Fix the code in the named worktree, then run `retry <id> --task <n>`; or run `resume <id>` after a transient failure.                                                                                |
 | `the spec changed after approval`                                          | Something other than a checkbox changed in `openspec/changes/<id>/`. Review it, then run `approve <id>` again.                                                                                                                        |
-| `<id> is the active change` after a crash                                  | `ai-factory resume <id>` takes over the stale lock (or `abort <id>`). `doctor` shows locks that nothing is driving.                                                                                                                   |
-| `update` stopped with conflicts                                            | Resolve the `<<<<<<< yours` markers in the listed files and commit, or `ai-factory rollback`.                                                                                                                                         |
-| `Ponytail add-on files were modified`                                      | `ai-factory update --restore`, or set `addons.ponytail.enabled` to `false`.                                                                                                                                                           |
+| `<id> is the active change` after a crash                                  | `loomwright resume <id>` takes over the stale lock (or `abort <id>`). `doctor` shows locks that nothing is driving.                                                                                                                   |
+| `update` stopped with conflicts                                            | Resolve the `<<<<<<< yours` markers in the listed files and commit, or `loomwright rollback`.                                                                                                                                         |
+| `Ponytail add-on files were modified`                                      | `loomwright update --restore`, or set `addons.ponytail.enabled` to `false`.                                                                                                                                                           |
 | A push is rejected by the `ai-factory` pre-push hook                       | It blocks pushes from agents while a change is active. Push from your own shell, where `AI_FACTORY_AGENT` is not set.                                                                                                                 |
 | Tauri: `cargo check` fails on a permission "not found"                     | A capability in `src-tauri/capabilities/` names a permission the app doesn't have. Add the plugin (`tauri add <plugin>`) or fix the identifier.                                                                                       |
 | Tauri gates fail on Linux with missing `webkit2gtk`/`pkg-config` libraries | Install Tauri's Linux prerequisites on the machine that runs the gates.                                                                                                                                                               |
 | An agent's command fails with `Operation not permitted`                    | The macOS sandbox stopped a write outside the session's worktree, or a read of a credential file. Agents work inside their worktree. If a repo truly needs more, set `security.sandbox` to `"off"` (weaker guarantees; see ADR-0026). |
 | A task fails with "you changed how your work is checked"                   | It edited a script or target the gates run (e.g. `scripts.lint` in package.json). Change gate definitions yourself, outside a factory change.                                                                                         |
-| A submodule is missing or empty                                            | `ai-factory doctor` offers `git submodule update --init`.                                                                                                                                                                             |
+| A submodule is missing or empty                                            | `loomwright doctor` offers `git submodule update --init`.                                                                                                                                                                             |
 | Commits fail with a signing error                                          | The factory commits with your git config. Unlock your signing agent (e.g. 1Password) and run `resume`, or rerun the command.                                                                                                          |
-| Agents re-read the same files a lot                                        | `status` shows wasted re-reads. Build the graph (`ai-factory graph`) so agents can query it instead.                                                                                                                                  |
+| Agents re-read the same files a lot                                        | `status` shows wasted re-reads. Build the graph (`loomwright graph`) so agents can query it instead.                                                                                                                                  |
 
 Logs: `.factory/logs/<id>/` (redacted tool calls and gate results). Run state: `.factory/runs/<id>.json`.
 
@@ -239,7 +249,7 @@ A profile is the language's prose standard plus a machine-readable part: test gl
    - `supersedes` (optional): profiles whose target in the same directory this one replaces. The Tauri profile replaces Rust in `src-tauri/`, for example.
 5. If its package manager has a cache, add it to `cacheEnv` in `src/gates/install.ts`.
 6. Add tests: detection (`test/detect-units.test.ts`) and gate resolution (`test/gates-resolve.test.ts`).
-7. Add a changeset with `bun run changeset` (a user-facing change needs a release note). Workspaces pick up the new standard and their regenerated implementers with `ai-factory update`, then `ai-factory detect --apply` adds the language to the repos that use it.
+7. Add a changeset with `bun run changeset` (a user-facing change needs a release note). Workspaces pick up the new standard and their regenerated implementers with `loomwright update`, then `loomwright detect --apply` adds the language to the repos that use it.
 
 ## Development
 

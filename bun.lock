@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "ai-factory",
+      "name": "@loomwright/cli",
       "devDependencies": {
         "@biomejs/biome": "2.6.2",
         "@changesets/cli": "3.0.3",

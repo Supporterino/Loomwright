@@ -81,7 +81,7 @@ async function run(...argv: string[]): Promise<number> {
     out: (t) => out.push(t),
     err: (t) => out.push(t),
   });
-  lines.push("```console", `$ ai-factory ${argv.join(" ")}`, scrub(out.join("\n")));
+  lines.push("```console", `$ loomwright ${argv.join(" ")}`, scrub(out.join("\n")));
   lines.push(`# exit ${code} · ${((Date.now() - t0) / 1000).toFixed(1)}s`, "```", "");
   return code;
 }
@@ -117,7 +117,7 @@ try {
   note(`# E2E: ${layout === "single" ? "single repo" : "AI repo with submodules"}`);
   note(
     [
-      `Recorded ${new Date().toISOString().slice(0, 10)} with \`bun scripts/e2e-transcript.ts ${layout}\` (ai-factory ${FACTORY_VERSION}).`,
+      `Recorded ${new Date().toISOString().slice(0, 10)} with \`bun scripts/e2e-transcript.ts ${layout}\` (Loomwright ${FACTORY_VERSION}).`,
       "",
       "**Real:**",
       `- the opencode server: ${await toolVersion([opencodeBin, "--version"])} with the factory's agents, permissions and guard plugin;`,

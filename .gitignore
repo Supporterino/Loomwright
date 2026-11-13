@@ -2,3 +2,8 @@ node_modules/
 dist/
 .factory/
 graphify-out/
+
+# ai-factory:start (managed)
+.factory/
+graphify-out/
+# ai-factory:end

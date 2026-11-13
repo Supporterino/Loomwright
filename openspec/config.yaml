@@ -1,0 +1,28 @@
+# Managed by Loomwright. Change factory.config.jsonc and run `loomwright update` instead of editing.
+schema: spec-driven
+context: |
+  Workspace layout: single. Code repos (task `repo` values):
+  - loomwright (.): typescript
+
+  Contracts: none configured.
+
+  Active language standards (full text in .opencode/standards/):
+  TypeScript / JavaScript:
+  - Keep the repo's layout, module system, tsconfig, formatter and linter config; never loosen them or add suppressions to pass a gate.
+  - Code must pass strict `tsc --noEmit`: no `any`, no `@ts-ignore`; take `unknown` and narrow it before use.
+  - Avoid `as` casts and non-null `!`; narrow with checks, `?.`, `??`, discriminated unions and exhaustive `never` switches.
+  - Named exports, ES modules, `import type` for type-only imports; no `namespace`, no `export let`, no `const enum`.
+  - Throw only `Error` subclasses with `cause`; catch as `unknown`; never leave a promise floating or unawaited in `try`.
+  - Validate untrusted input at the boundary with the repo's schema library; never build shell or SQL from strings; never log secrets.
+  - Tests go only in test files; every spec scenario has a test whose name mentions that scenario.
+rules:
+  proposal:
+    - Name the affected repos and contracts under Impact.
+  specs:
+    - Every requirement has at least one scenario with WHEN/THEN lines.
+    - Scenarios are concrete and testable; every scenario will get a test.
+  tasks:
+    - "Every task is `- [ ] N.M title` followed by `  - repo: <name>`, `  - deps: <ids or none>`, `  - touches: <globs>`."
+    - Each task names exactly one repo from the workspace list.
+    - Contract changes are separate tasks that come first; consumer tasks depend on them.
+    - Never write `[ ]` anywhere except on a task line.

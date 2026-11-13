@@ -42,7 +42,7 @@ const OPTIONS = {
   json: { type: "boolean", default: false, description: "Print the report as JSON" },
 } satisfies CommandOptions;
 
-const HELP = `Usage: ai-factory usage [--since <date>] [--until <date>]
+const HELP = `Usage: loomwright usage [--since <date>] [--until <date>]
                    [--change <id>]... [--agent <id>]... [--model <id>]...
                    [--by <list>] [--json]
 

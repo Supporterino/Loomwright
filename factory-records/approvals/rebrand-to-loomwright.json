@@ -1,0 +1,33 @@
+{
+  "changeId": "rebrand-to-loomwright",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "7e80d81139e162e5bfff6291ef1b85aacb6597c5",
+  "hash": "f111ab99b7d9d4c18e98c32e19d145c80a371186467ffb349e4be48159d71657",
+  "approvedAt": "2026-11-13T14:13:06.842Z",
+  "history": [
+    {
+      "hash": "fcf457533e0bfd3b675125f403793a517af76f02b4f86b357d8e3732008bfdfd",
+      "specCommit": "f900c9c1af03112912ff14708a34c33263ed9b5d",
+      "at": "2026-11-13T08:05:27.600Z",
+      "reason": "reword: review findings applied"
+    },
+    {
+      "hash": "0f164a82ade734328e89405b79cd08134940c84ad416fb147c8630827278d709",
+      "specCommit": "00ab3bcfea44da2d8136f17f757543aca5309029",
+      "at": "2026-11-13T11:51:24.035Z",
+      "reason": "manual re-approval"
+    },
+    {
+      "hash": "259996e05f22eeaa615db03955bf7595a71a95c11cc84d871fa07dd568c18aa3",
+      "specCommit": "47d427962aceec901fc0203e009f672adfe92e2a",
+      "at": "2026-11-13T12:45:39.557Z",
+      "reason": "manual re-approval"
+    },
+    {
+      "hash": "0da010c914f2179b060f65a35759b853bfdf56ca95dd6c85ecd51afe42ef0872",
+      "specCommit": "570b8599e4b56a75af53ecaf65ee2512efe66876",
+      "at": "2026-11-13T13:14:28.315Z",
+      "reason": "manual re-approval"
+    }
+  ]
+}

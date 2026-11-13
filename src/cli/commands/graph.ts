@@ -17,7 +17,7 @@ export const graphCommand: Command = {
   name: "graph",
   summary: "Build or incrementally update the workspace graph",
   options: OPTIONS,
-  help: `Usage: ai-factory graph [--full] [--json]
+  help: `Usage: loomwright graph [--full] [--json]
 
 Updates the one Graphify graph over the workspace and every submodule (graphify-out/,
 gitignored). Incremental by default (changed files only); --full rebuilds from scratch.
@@ -27,7 +27,7 @@ The pipeline also updates it after every task merge, so this is rarely needed by
     const root = await findWorkspaceRoot(io.cwd);
     if (root === undefined) throw new PreconditionError("not inside a git repository");
     if (!existsSync(join(root, LOCK_FILE)))
-      throw new PreconditionError("ai-factory is not installed here", ["run `ai-factory init`"]);
+      throw new PreconditionError("loomwright is not installed here", ["run `loomwright init`"]);
     const tool = await checkTool("graphify", root);
     if (!tool.ok) throw new PreconditionError(`graphify: ${tool.problem}`, [tool.fix]);
 

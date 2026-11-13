@@ -38,7 +38,7 @@ export async function refineRequest(
 ): Promise<{ path: string; text: string }> {
   if (io.ask === undefined) {
     throw new PreconditionError("cannot ask questions in this environment", [
-      "run `ai-factory refine` from an interactive terminal, or pass a complete request to `run`",
+      "run `loomwright refine` from an interactive terminal, or pass a complete request to `run`",
     ]);
   }
   const answers: [string, string][] = [];

@@ -121,7 +121,7 @@ describe("spec findings, reword and reapprove", () => {
     ),
   });
 
-  test("a spec finding pauses instead of creating an implementer task, and reword applies it", async () => {
+  test("a change paused on spec findings points at loomwright reword instead of creating an implementer task, and reword applies it", async () => {
     const runtime = team(rewritten);
     await cliWith(runtime, fx.root, "run", "Add math helpers");
     expect((await cliWith(runtime, fx.root, "approve", ID)).code).toBe(ExitCode.Paused);
@@ -130,11 +130,11 @@ describe("spec findings, reword and reapprove", () => {
     expect(paused?.phase).toBe("paused");
     expect(paused?.specFindings).toHaveLength(1);
     expect(paused?.tasks.some((t) => t.kind === "review-fix")).toBe(false);
-    expect(paused?.pausedReason).toContain(`ai-factory reword ${ID}`);
+    expect(paused?.pausedReason).toContain(`loomwright reword ${ID}`);
 
     const status = await cliWith(runtime, fx.root, "status", ID);
     expect(status.out).toContain("spec findings (1)");
-    expect(status.out).toContain(`ai-factory reword ${ID}`);
+    expect(status.out).toContain(`loomwright reword ${ID}`);
 
     // Resuming without resolving the findings stays paused (repos are already reviewed).
     const blocked = await cliWith(runtime, fx.root, "resume", ID);
@@ -368,6 +368,6 @@ describe("contract-review spec findings", () => {
     expect(paused?.phase).toBe("paused");
     expect(paused?.specFindings).toHaveLength(1);
     expect(paused?.tasks.some((t) => t.kind === "contract-fix")).toBe(false);
-    expect(paused?.pausedReason).toContain(`ai-factory reword ${ID}`);
+    expect(paused?.pausedReason).toContain(`loomwright reword ${ID}`);
   });
 });

@@ -18,7 +18,7 @@ import { type Command, type CommandOptions, type Io, parseCommandArgs } from "..
 import { ExitCode } from "../exit-codes.ts";
 import { PROGRESS_OPTIONS, verbosityOf, withPipeline } from "./pipeline-commands.ts";
 
-const HELP = `Usage: ai-factory adopt [<change-id>... | --all] [--dry-run] [--json] [--normalize] [--preserve-progress]
+const HELP = `Usage: loomwright adopt [<change-id>... | --all] [--dry-run] [--json] [--normalize] [--preserve-progress]
 
 Takes over OpenSpec changes that already exist in openspec/changes/ when the factory is
 adopted. Adoption registers the change in .factory/runs/ and validates it, but writes no
@@ -92,7 +92,7 @@ function selected(root: string, ids: readonly string[], all: boolean): PendingCh
       if (change === undefined)
         throw new PreconditionError(`no pending OpenSpec change ${id}`, [
           `expected openspec/changes/${id}/`,
-          "run `ai-factory adopt` to list the pending changes",
+          "run `loomwright adopt` to list the pending changes",
         ]);
       return change;
     });
@@ -134,7 +134,7 @@ function listPending(root: string, io: Io, json: boolean): ExitCode {
         : "not adopted";
     io.out(`  ${change.id} — ${tasks}; ${state}`);
   }
-  io.out("run `ai-factory adopt --all` or `ai-factory adopt <id>` to take them over");
+  io.out("run `loomwright adopt --all` or `loomwright adopt <id>` to take them over");
   return ExitCode.Ok;
 }
 
@@ -310,11 +310,11 @@ function report(io: Io, values: { dryRun: boolean }, results: readonly Outcome[]
   }
   const next = results.find((result) => result.phase === "awaiting-approval");
   if (next !== undefined && !values.dryRun)
-    io.out(`next: review openspec/changes/${next.id}/ then run \`ai-factory approve ${next.id}\``);
+    io.out(`next: review openspec/changes/${next.id}/ then run \`loomwright approve ${next.id}\``);
   const paused = results.find((result) => result.phase === "paused");
   if (paused !== undefined && !values.dryRun)
     io.out(
-      `next: fix openspec/changes/${paused.id}/, or \`ai-factory resume ${paused.id}\` to let the architect repair it`,
+      `next: fix openspec/changes/${paused.id}/, or \`loomwright resume ${paused.id}\` to let the architect repair it`,
     );
   if (results.some((result) => result.action === "refused")) return ExitCode.Precondition;
   if (!values.dryRun && results.some((result) => result.phase === "paused")) return ExitCode.Paused;
@@ -354,7 +354,7 @@ export const adoptCommand: Command = {
           "--normalize must start from the base branch with no active change",
           [
             "switch to your base branch (for example `git switch main`) and finish or abort the active change first",
-            "deterministic `ai-factory adopt` works at any time",
+            "deterministic `loomwright adopt` works at any time",
           ],
         );
     }

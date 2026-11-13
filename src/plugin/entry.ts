@@ -1,5 +1,5 @@
 /**
- * ai-factory opencode v2 plugin (bundled into .opencode/plugins/factory.js by init).
+ * Loomwright opencode v2 plugin (bundled into .opencode/plugins/factory.js by init).
  *
  * Guards every tool call of a factory agent before it runs (`tool.execute.before`; a thrown
  * error rejects that call only) and logs every call. Nothing is imported from an opencode
@@ -144,7 +144,7 @@ const isSecretReal = (directory: string, path: string): boolean =>
 
 class Refused extends Error {
   constructor(reason: string) {
-    super(`ai-factory blocked this call: ${reason}`);
+    super(`Loomwright blocked this call: ${reason}`);
   }
 }
 

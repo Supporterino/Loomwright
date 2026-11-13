@@ -107,7 +107,7 @@ describe("doctor", () => {
     expect(find(await report(root), "app strict")).toBeUndefined();
   });
 
-  test("a healthy install passes, with the resolved gate table", async () => {
+  test("doctor suggests the new command: a healthy install passes, with the resolved gate table", async () => {
     const root = await installed(createSingleRepoFixture, { app: passAll });
     const res = await cli(root, "doctor");
     expect(res.code).toBe(ExitCode.Ok);
@@ -120,6 +120,8 @@ describe("doctor", () => {
     const json = await report(root);
     expect(json.gates.map((g) => g.type)).toEqual(["format", "lint", "types", "test"]);
     expect(json.checks.filter((c) => c.status === "fail")).toEqual([]);
+    // The graph was skipped, so the fix hint points at the new command.
+    expect(find(json, "graph")).toMatchObject({ status: "warn", fix: "loomwright graph" });
     expect(find(json, "stored")?.detail).toContain("using environment variables only");
   });
 
@@ -178,6 +180,7 @@ describe("doctor", () => {
     const res = await cli(root, "doctor");
     expect(res.code).toBe(ExitCode.Precondition);
     const json = await report(root);
+    expect(json.checks.filter((c) => c.fix?.includes("ai-factory"))).toEqual([]);
     expect(find(json, "app toolchain")).toMatchObject({
       status: "fail",
       detail: "not found: not-a-real-linter-xyz",
@@ -190,9 +193,9 @@ describe("doctor", () => {
       status: "fail",
       detail: "nowhere/model-x is not available to opencode",
     });
-    expect(find(json, "factory")).toMatchObject({ status: "warn", fix: "ai-factory update" });
+    expect(find(json, "factory")).toMatchObject({ status: "warn", fix: "loomwright update" });
     expect(find(json, "AI repo working tree")).toMatchObject({ status: "warn" });
-    expect(find(json, "active")).toMatchObject({ status: "warn", fix: "ai-factory resume ghost" });
+    expect(find(json, "active")).toMatchObject({ status: "warn", fix: "loomwright resume ghost" });
     expect(find(json, "graph")).toMatchObject({ status: "ok" });
     expect(json.gates.find((g) => g.type === "format")?.problem).toContain("skip");
 
@@ -204,7 +207,7 @@ describe("doctor", () => {
     await fixtureGit(root, "commit", "-q", "-m", "feat: more");
     expect(find(await report(root), "graph")).toMatchObject({
       status: "warn",
-      fix: "ai-factory graph",
+      fix: "loomwright graph",
     });
     expect(find(await report(root), "graph")?.detail).toContain("src/more.ts");
 

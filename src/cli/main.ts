@@ -59,7 +59,7 @@ function usage(): string {
   const visible = COMMANDS.filter((command) => command.hidden !== true);
   const width = Math.max(...visible.map((c) => c.name.length));
   return [
-    "Usage: ai-factory [-C <dir>] <command> [options]",
+    "Usage: loomwright [-C <dir>] <command> [options]",
     "",
     "Commands:",
     ...visible.map((c) => `  ${c.name.padEnd(width)}  ${c.summary}`),

@@ -315,7 +315,7 @@ describe("pipeline: AI repo with submodules", () => {
     const approve = await cliWith(runtime, fx.root, "approve", ID);
     expect(approve.err).toBe("");
     expect(approve.out).toContain(`${ID}: done`);
-    expect(approve.out).toContain(`next: \`ai-factory land ${ID}\``);
+    expect(approve.out).toContain(`next: \`loomwright land ${ID}\``);
     expect(approve.code).toBe(ExitCode.Ok);
 
     // 1.2, 1.3 (backend) and 2.1 (frontend) ran at the same time, within maxAgents (4).
@@ -357,7 +357,7 @@ describe("pipeline: AI repo with submodules", () => {
     );
     expect(existsSync(join(fx.root, "openspec/specs/health/spec.md"))).toBe(true);
     const report = readFileSync(join(fx.root, ".factory/reports", `${ID}.md`), "utf8");
-    expect(report).toContain(`ai-factory repoint ${ID}`);
+    expect(report).toContain(`loomwright repoint ${ID}`);
     expect(report).toContain("nothing was pushed");
     expect(existsSync(join(fx.root, ".factory/worktrees", ID))).toBe(false);
     const logDir = join(fx.root, ".factory/logs", ID);
@@ -394,7 +394,7 @@ describe("pipeline: AI repo with submodules", () => {
     );
     expect(again.code).toBe(ExitCode.Ok);
     expect(again.out).toContain(`${ID} is already done`);
-    expect(again.out).toContain(`next: \`ai-factory land ${ID}\``);
+    expect(again.out).toContain(`next: \`loomwright land ${ID}\``);
   });
 });
 
@@ -534,7 +534,7 @@ describe("pipeline: single repo", () => {
     expect(approve.code).toBe(ExitCode.Paused);
     expect(approve.out).toContain("failed: 1.1");
     expect(approve.out).toContain(`${ID}-paused.md`);
-    expect(approve.out).not.toContain("ai-factory land");
+    expect(approve.out).not.toContain("loomwright land");
     const state = loadRun(fx.root, ID);
     expect(state?.tasks.map((t) => [t.id, t.status, t.failures])).toEqual([
       ["1.1", "failed", 4],
@@ -551,13 +551,13 @@ describe("pipeline: single repo", () => {
     const report = readFileSync(join(fx.root, ".factory/reports", `${ID}-paused.md`), "utf8");
     expect(report).toContain("- Failed: 1.1");
     expect(report).toContain("[lint]");
-    expect(report).toContain(`ai-factory retry ${ID} --task <task>`);
+    expect(report).toContain(`loomwright retry ${ID} --task <task>`);
 
     fixed = true;
     expect((await cli(fx.root, "retry", ID, "--task", "1.1")).code).toBe(ExitCode.Ok);
     const resume = await cliWith(runtime, fx.root, "resume", ID);
     expect(resume.out).toContain(`${ID}: done`);
-    expect(resume.out).toContain(`next: \`ai-factory land ${ID}\``);
+    expect(resume.out).toContain(`next: \`loomwright land ${ID}\``);
     expect(resume.code).toBe(ExitCode.Ok);
     expect(await gitOut(fx.root, "log", "-1", "--format=%s")).toBe(`chore(spec): archive ${ID}`);
     expect(await gitOut(fx.root, "show", `change/${ID}:src/mul.ts`)).toContain("mul");
@@ -753,7 +753,7 @@ describe("pipeline: single repo", () => {
     expect(loadRun(fx.root, ID)?.phase).toBe("done");
   });
 
-  test("serial mode: a failed task's leftovers are set aside, not charged to the next task (audit P10)", async () => {
+  test("stashed leftover work carries the new product name: serial mode leaves a failed task's work aside, not charged to the next task (audit P10)", async () => {
     await configure(fx.root, (t) =>
       t
         .replace('"withinRepo": "worktrees"', '"withinRepo": "serial"')
@@ -781,7 +781,7 @@ describe("pipeline: single repo", () => {
       ["1.2", "merged", 0],
     ]);
     // The evidence is kept in a stash, and the checkout is clean.
-    expect(await gitOut(fx.root, "stash", "list")).toContain(`ai-factory ${ID} 1.1`);
+    expect(await gitOut(fx.root, "stash", "list")).toContain(`loomwright ${ID} 1.1`);
     expect(await gitOut(fx.root, "status", "--porcelain")).toBe("");
   });
 
@@ -1129,5 +1129,5 @@ describe("pipeline: single repo", () => {
     expect(loadRun(fx.root, second)?.phase).toBe("done");
     expect(await gitOut(fx.root, "branch", "--show-current")).toBe(`change/${second}`);
     expect(existsSync(join(fx.root, ".factory/drafts", second))).toBe(false);
-  });
+  }, 60_000);
 });

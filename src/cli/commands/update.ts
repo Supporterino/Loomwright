@@ -60,11 +60,11 @@ export const updateCommand: Command = {
   name: "update",
   summary: "Upgrade an installed workspace (templates, config, tools)",
   options: OPTIONS,
-  help: `Usage: ai-factory update [--dry-run] [--tools] [--restore] [--force] [--allow-downgrade] [--json]
+  help: `Usage: loomwright update [--dry-run] [--tools] [--restore] [--force] [--allow-downgrade] [--json]
 
 Upgrades this workspace to the installed factory version, as one local commit
 ("chore(factory): update to vX.Y.Z") after backing up every file it touches to
-.factory/backups/<timestamp>/ (\`ai-factory rollback\` restores it):
+.factory/backups/<timestamp>/ (\`loomwright rollback\` restores it):
 - migrates factory.config.jsonc in order (comments are kept);
 - re-renders managed files: unchanged ones are replaced, ones you edited are merged
   three-way (conflicts get markers and nothing is committed), deleted ones stay deleted;
@@ -97,7 +97,7 @@ Upgrades this workspace to the installed factory version, as one local commit
         `the AI repo is on ${branch}: an update committed there would change that change's definitions`,
         [
           "switch to your base branch first (`git switch main`) and update there;",
-          "`ai-factory resume` switches back, and the change keeps the definitions it started with",
+          "`loomwright resume` switches back, and the change keeps the definitions it started with",
         ],
       );
     }
@@ -145,7 +145,7 @@ Upgrades this workspace to the installed factory version, as one local commit
         "update merged your edits but these files have conflicts (markers written, nothing committed):",
       );
       for (const f of result.conflicts) io.err(`  ${f}`);
-      io.err("resolve them and commit, or run `ai-factory rollback`");
+      io.err("resolve them and commit, or run `loomwright rollback`");
       return ExitCode.Precondition;
     }
     const commit = await commitInstall(root, `chore(factory): update to v${FACTORY_VERSION}`);
@@ -156,7 +156,7 @@ Upgrades this workspace to the installed factory version, as one local commit
       io.out(
         graph.ok
           ? "graph: rebuilt"
-          : `graph: rebuild failed (${graph.error ?? ""}); run \`ai-factory graph --full\``,
+          : `graph: rebuild failed (${graph.error ?? ""}); run \`loomwright graph --full\``,
       );
     }
     if (values.json) {
@@ -189,9 +189,9 @@ export const rollbackCommand: Command = {
   name: "rollback",
   summary: "Restore the workspace from the latest update backup",
   options: {},
-  help: `Usage: ai-factory rollback
+  help: `Usage: loomwright rollback
 
-Restores every file the latest \`ai-factory update\` touched (including the lock file) from
+Restores every file the latest \`loomwright update\` touched (including the lock file) from
 .factory/backups/ and commits the result. \`git revert\` of the update commit works too.`,
   async run(args, io) {
     parseCommandArgs("rollback", args, {});

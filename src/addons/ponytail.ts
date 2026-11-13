@@ -65,7 +65,7 @@ export function checkPonytailConfig(config: FactoryConfig): void {
   if (addon.ref !== PONYTAIL_REF) {
     throw new PreconditionError(
       `addons.ponytail.ref ${addon.ref} is not the release this factory vendors`,
-      [`set it to "${PONYTAIL_REF}" or update the factory (ai-factory update)`],
+      [`set it to "${PONYTAIL_REF}" or update the factory (loomwright update)`],
     );
   }
   verifyVendored(vendoredFiles());

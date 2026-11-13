@@ -30,7 +30,7 @@ const MAX_SUITE_ROUNDS = 2;
 
 /** Why a change with spec findings pauses, and how to get past it. */
 export const specPauseReason = (id: string, count: number): string =>
-  `${count} review finding${count === 1 ? "" : "s"} concern the change's spec; run \`ai-factory reword ${id}\` to apply them (or edit it and run \`ai-factory reapprove ${id}\`), then \`ai-factory resume ${id}\``;
+  `${count} review finding${count === 1 ? "" : "s"} concern the change's spec; run \`loomwright reword ${id}\` to apply them (or edit it and run \`loomwright reapprove ${id}\`), then \`loomwright resume ${id}\``;
 
 const touchedRepos = (run: RunState): string[] => [...new Set(run.tasks.map((t) => t.repo))];
 
@@ -305,15 +305,15 @@ export function writePauseReport(p: Pipeline, id: string, summary: RunSummary): 
             (f) => `- [${f.severity}] ${f.file ?? ""}${f.line ? `:${f.line}` : ""} ${f.problem}`,
           ),
           "",
-          `Run \`ai-factory reword ${id}\` to let the architect apply them, or edit openspec/changes/${id}/ and run \`ai-factory reapprove ${id}\`. Then \`ai-factory resume ${id}\`.`,
+          `Run \`loomwright reword ${id}\` to let the architect apply them, or edit openspec/changes/${id}/ and run \`loomwright reapprove ${id}\`. Then \`loomwright resume ${id}\`.`,
           "",
         ]
       : []),
     "## Next steps",
     "",
     "1. Inspect the failed task's worktree and fix the cause (or change the spec and approve again).",
-    `2. \`ai-factory retry ${id} --task <task>\` resets the task's retry budget.`,
-    `3. \`ai-factory resume ${id}\` continues the change.`,
+    `2. \`loomwright retry ${id} --task <task>\` resets the task's retry budget.`,
+    `3. \`loomwright resume ${id}\` continues the change.`,
     "",
     ...usageReport(summarizeUsage(p.root, id)),
   ];
@@ -441,7 +441,7 @@ export async function close(p: Pipeline, id: string): Promise<string> {
           "",
           ...pointers.map((x) => `- ${x}`),
           "",
-          `Push each \`${changeBranch(id)}\` branch and open your MRs. After they merge, run \`ai-factory repoint ${id}\` to replace these pointers with the merged commits.`,
+          `Push each \`${changeBranch(id)}\` branch and open your MRs. After they merge, run \`loomwright repoint ${id}\` to replace these pointers with the merged commits.`,
           "",
         ]
       : []),
@@ -468,14 +468,14 @@ export async function close(p: Pipeline, id: string): Promise<string> {
     d.reportPath = file;
   });
   // A record is a copy, never a precondition: a failure here leaves the run closed and the
-  // local files intact, and `ai-factory artifacts sync <id>` can retry.
+  // local files intact, and `loomwright artifacts sync <id>` can retry.
   try {
     const recorded = await maybeExport(p.root, p.config, id);
     if (recorded !== undefined && recorded.written.length > 0)
       p.out(`  ⚙ recorded ${recorded.written.join(", ")}`);
   } catch (err) {
     p.out(
-      `warning: could not record artifacts (${err instanceof Error ? err.message : String(err)}); run \`ai-factory artifacts sync ${id}\``,
+      `warning: could not record artifacts (${err instanceof Error ? err.message : String(err)}); run \`loomwright artifacts sync ${id}\``,
     );
   }
   dropAgentSnapshot(p.root, id);

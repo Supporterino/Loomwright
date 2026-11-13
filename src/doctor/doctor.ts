@@ -41,7 +41,7 @@ import { GRAPHIFY } from "../versions.ts";
 import { INSTALL_PATHS, planWorkspace } from "../workspace/sync.ts";
 
 /**
- * `ai-factory doctor` (§5): read-only checks of everything a run depends on. Each check is
+ * `loomwright doctor` (§5): read-only checks of everything a run depends on. Each check is
  * ok, a warning (works, but worth fixing) or a failure (a run would fail or be unsafe).
  */
 
@@ -212,14 +212,14 @@ async function checkToolsAndLock(c: Checks, root: string, lock: Lock | undefined
         "warn",
         t.tool,
         `${t.version} is outside the lock's range (${range(pin)})`,
-        "ai-factory update --tools",
+        "loomwright update --tools",
       );
     } else if (pin !== undefined && pin.tested !== CURRENT_PINS[t.tool].tested) {
       c.add(
         "warn",
         t.tool,
         `${t.version}; the lock pins tested ${pin.tested}, this factory ${CURRENT_PINS[t.tool].tested}`,
-        "ai-factory update --tools",
+        "loomwright update --tools",
       );
     } else {
       c.add(
@@ -236,7 +236,7 @@ async function checkToolsAndLock(c: Checks, root: string, lock: Lock | undefined
       "warn",
       "factory",
       `installed by ${lock.factoryVersion}, this is ${FACTORY_VERSION}`,
-      "ai-factory update",
+      "loomwright update",
     );
   } else if (cmp > 0) {
     c.add(
@@ -263,7 +263,7 @@ function checkManaged(c: Checks, root: string, config: FactoryConfig): void {
         "warn",
         "managed files",
         `${stale.length} differ from this factory's templates: ${stale.slice(0, 5).join(", ")}${stale.length > 5 ? ", …" : ""}`,
-        "ai-factory update (or ai-factory detect --apply after repo changes)",
+        "loomwright update (or loomwright detect --apply after repo changes)",
       );
     } else {
       c.add("ok", "managed files", `${plan.length} up to date`);
@@ -274,7 +274,7 @@ function checkManaged(c: Checks, root: string, config: FactoryConfig): void {
         "fail",
         "guard plugin",
         `${GUARD_PLUGIN} differs from the rendered plugin`,
-        "ai-factory update --restore (after moving your changes elsewhere)",
+        "loomwright update --restore (after moving your changes elsewhere)",
       );
     }
     const yours = edited.filter((p) => p !== GUARD_PLUGIN);
@@ -348,7 +348,7 @@ async function checkRepos(
         "fail",
         `${name} pre-push hook`,
         hook,
-        "ai-factory init (reinstalls hooks, idempotent)",
+        "loomwright init (reinstalls hooks, idempotent)",
       );
   }
   return ready;
@@ -578,7 +578,7 @@ async function checkArtifacts(c: Checks, root: string, config: FactoryConfig): P
       "warn",
       "records",
       `${ARTIFACTS_DIR}/ does not exist yet`,
-      "ai-factory artifacts sync --all",
+      "loomwright artifacts sync --all",
     );
     return;
   }
@@ -603,7 +603,7 @@ async function checkArtifacts(c: Checks, root: string, config: FactoryConfig): P
       "warn",
       "records",
       `${count} file(s) in ${ARTIFACTS_DIR}/, some uncommitted`,
-      "commit them, or run `ai-factory artifacts sync <id>`",
+      "commit them, or run `loomwright artifacts sync <id>`",
     );
     return;
   }
@@ -715,7 +715,7 @@ async function checkGraph(
   c.in("graph");
   const status = graphStatus(root);
   if (status.state === "missing") {
-    c.add("warn", "graph", "not built yet", "ai-factory graph");
+    c.add("warn", "graph", "not built yet", "loomwright graph");
     return;
   }
   if (
@@ -726,14 +726,14 @@ async function checkGraph(
       "fail",
       "graph",
       "format differs from what this factory reads",
-      "ai-factory update --tools",
+      "loomwright update --tools",
     );
     return;
   }
   const [graphify] = await checkTools(["graphify"], root);
   const drift = graphRebuildReason(status, graphify?.version);
   if (drift !== undefined) {
-    c.add("warn", "graph", drift, "ai-factory graph --full");
+    c.add("warn", "graph", drift, "loomwright graph --full");
     return;
   }
   const age = `${Math.round(status.ageMs / 60_000)} min old`;
@@ -750,7 +750,7 @@ async function checkGraph(
       "warn",
       "graph",
       `${age}, built at an unknown commit (${built.slice(0, 12)})`,
-      "ai-factory graph --full",
+      "loomwright graph --full",
     );
     return;
   }
@@ -765,7 +765,7 @@ async function checkGraph(
       "warn",
       "graph",
       `${age}; ${stale.length} code path(s) changed since it was built: ${stale.slice(0, 3).join(", ")}${stale.length > 3 ? ", …" : ""}`,
-      "ai-factory graph",
+      "loomwright graph",
     );
   } else {
     c.add(
@@ -790,7 +790,7 @@ function checkChanges(c: Checks, root: string): void {
       "warn",
       "active",
       `${active.changeId} holds the lock but nothing is driving it`,
-      `ai-factory resume ${active.changeId}`,
+      `loomwright resume ${active.changeId}`,
     );
   if (queued.corrupt) c.add("fail", "queue", queued.corrupt.message, queued.corrupt.fix);
   else if (queue.length > 0) c.add("ok", "queue", queue.join(", "));
@@ -806,7 +806,7 @@ function checkChanges(c: Checks, root: string): void {
         .slice(0, 5)
         .map((change) => change.id)
         .join(", ")}${pending.length > 5 ? ", …" : ""}`,
-      "ai-factory adopt --all",
+      "loomwright adopt --all",
     );
 }
 
@@ -828,7 +828,7 @@ function checkEnvironment(c: Checks, env: NodeJS.ProcessEnv): void {
       "warn",
       "proxy",
       `${proxies.join(", ")} set: opencode was seen sending local (127.0.0.1) provider traffic through a proxy despite NO_PROXY`,
-      "unset them for ai-factory runs if a local provider fails",
+      "unset them for loomwright runs if a local provider fails",
     );
   // Graphify must never refresh files in $HOME or call an LLM backend (tooling.md G9).
   const graphify = toolEnv("graphify");
@@ -866,7 +866,7 @@ export async function runDoctor(root: string): Promise<DoctorReport> {
   const uninitialised: string[] = [];
   c.in("install");
   if (lock === undefined) {
-    c.add("fail", "install", "ai-factory is not installed here", "ai-factory init");
+    c.add("fail", "install", "loomwright is not installed here", "loomwright init");
     return { checks: c.list, gates: [], uninitialised };
   }
   let config: FactoryConfig;

@@ -165,17 +165,36 @@ describe("completion install and scripts", () => {
     }
   });
 
+  test("registers both commands and calls loomwright __complete", () => {
+    for (const shell of ["bash", "zsh", "fish"] as const) {
+      const script = completionScript(shell);
+      expect(script).toContain(`loomwright __complete ${shell}`);
+      expect(script).toContain("loomwright");
+      expect(script).toContain("ai-factory");
+    }
+    expect(completionScript("bash")).toContain("complete -F _ai_factory_complete loomwright");
+    expect(completionScript("bash")).toContain("complete -F _ai_factory_complete ai-factory");
+    expect(completionScript("zsh")).toContain("#compdef loomwright ai-factory");
+    expect(completionScript("zsh")).toContain("compdef _ai_factory loomwright ai-factory");
+    expect(completionScript("fish")).toContain(
+      "complete -c loomwright -f -a '(__ai_factory_complete)'",
+    );
+    expect(completionScript("fish")).toContain(
+      "complete -c ai-factory -f -a '(__ai_factory_complete)'",
+    );
+  });
+
   test("the bash script forwards each word and falls back to files", () => {
     if (spawnSync("bash", ["--version"], { encoding: "utf8" }).status !== 0) return;
     const harness = `
-ai-factory() { printf 'ARGC=%s\\n' "$#" >&2; echo candidate; }
+loomwright() { printf 'ARGC=%s\\n' "$#" >&2; echo candidate; }
 compopt() { echo COMPOPT; }
 complete() { :; }
 ${completionScript("bash")}
-COMP_WORDS=(ai-factory run --req); COMP_CWORD=2; _ai_factory_complete
+COMP_WORDS=(loomwright run --req); COMP_CWORD=2; _ai_factory_complete
 printf 'REPLY=%s\\n' "\${COMPREPLY[@]}" >&2
-ai-factory() { echo ":files"; }
-COMP_WORDS=(ai-factory run --request ""); COMP_CWORD=3; _ai_factory_complete
+loomwright() { echo ":files"; }
+COMP_WORDS=(loomwright run --request ""); COMP_CWORD=3; _ai_factory_complete
 printf 'FALLBACK=%s\\n' "\${#COMPREPLY[@]}" >&2
 `;
     const run = spawnSync("bash", ["-f", "-c", harness], { encoding: "utf8" });
@@ -189,7 +208,7 @@ printf 'FALLBACK=%s\\n' "\${#COMPREPLY[@]}" >&2
   test("the zsh script forwards each word and falls back to files", () => {
     if (spawnSync("zsh", ["--version"], { encoding: "utf8" }).status !== 0) return;
     const harness = `
-ai-factory() {
+loomwright() {
   printf 'ARGC=%s\\n' "$#" >&2
   printf '%s\\t%s\\n' "--request" "Read the request from a file"
 }
@@ -198,11 +217,11 @@ compadd() { print -r -- "COMPADD=\${(j:,:)plain}" >&2; }
 _files() { print -r -- "FILES_CALLED" >&2; }
 compdef() { :; }
 ${completionScript("zsh")}
-words=(ai-factory run --req); CURRENT=3; _ai_factory
-ai-factory() { print -r -- "plainvalue" }
-words=(ai-factory completion ""); CURRENT=3; _ai_factory
-ai-factory() { print -r -- ":files" }
-words=(ai-factory run --request ""); CURRENT=4; _ai_factory
+words=(loomwright run --req); CURRENT=3; _ai_factory
+loomwright() { print -r -- "plainvalue" }
+words=(loomwright completion ""); CURRENT=3; _ai_factory
+loomwright() { print -r -- ":files" }
+words=(loomwright run --request ""); CURRENT=4; _ai_factory
 `;
     const run = spawnSync("zsh", ["-f", "-c", harness], { encoding: "utf8" });
     expect(run.status).toBe(0);

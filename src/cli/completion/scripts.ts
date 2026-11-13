@@ -24,7 +24,7 @@ const BASH = `_ai_factory_complete() {
   # "@" slice into a single word, which would pass the whole line as one argument.
   args=( "\${COMP_WORDS[@]:1:$COMP_CWORD}" )
   local IFS=$'\\n'
-  lines=( $(ai-factory __complete bash "\${args[@]}") )
+  lines=( $(loomwright __complete bash "\${args[@]}") )
   if [ "\${lines[0]:-}" = ":files" ]; then
     COMPREPLY=()
     compopt -o default 2>/dev/null
@@ -41,13 +41,14 @@ const BASH = `_ai_factory_complete() {
     [ -n "$line" ] && COMPREPLY+=("\${line%%$'\\t'*}")
   done
 }
+complete -F _ai_factory_complete loomwright
 complete -F _ai_factory_complete ai-factory
 `;
 
-const ZSH = `#compdef ai-factory
+const ZSH = `#compdef loomwright ai-factory
 _ai_factory() {
   local -a lines described plain
-  lines=("\${(@f)$(ai-factory __complete zsh "\${(@)words[2,CURRENT]}")}")
+  lines=("\${(@f)$(loomwright __complete zsh "\${(@)words[2,CURRENT]}")}")
   if [[ "\${lines[1]:-}" == ":files" ]]; then _files; return; fi
   if [[ "\${lines[1]:-}" == ":dirs" ]]; then _files -/; return; fi
   local line
@@ -61,16 +62,16 @@ _ai_factory() {
   done
   # _describe renders "value  -- description" like Homebrew; plain values use compadd so a
   # colon in a path or id is not mistaken for the value/description separator.
-  (( \${#described} )) && _describe -t ai-factory 'ai-factory' described
+  (( \${#described} )) && _describe -t loomwright 'loomwright' described
   (( \${#plain} )) && compadd -a plain
 }
-compdef _ai_factory ai-factory
+compdef _ai_factory loomwright ai-factory
 `;
 
 const FISH = `function __ai_factory_complete
   set -l tokens (commandline -opc)
   set -l current (commandline -ct)
-  set -l lines (ai-factory __complete fish $tokens[2..-1] $current)
+  set -l lines (loomwright __complete fish $tokens[2..-1] $current)
   if test "$lines[1]" = ":files"
     __fish_complete_path "$current"
     return
@@ -89,6 +90,7 @@ const FISH = `function __ai_factory_complete
     end
   end
 end
+complete -c loomwright -f -a '(__ai_factory_complete)'
 complete -c ai-factory -f -a '(__ai_factory_complete)'
 `;
 
@@ -111,8 +113,8 @@ const rcPath = (shell: Shell, cwd: string, override: string | undefined): string
 
 const sourceLine = (shell: Shell): string =>
   shell === "fish"
-    ? "ai-factory completion fish | source"
-    : `eval "$(ai-factory completion ${shell})"`;
+    ? "loomwright completion fish | source"
+    : `eval "$(loomwright completion ${shell})"`;
 
 const block = (shell: Shell): string => `${START}\n${sourceLine(shell)}\n${END}\n`;
 

@@ -68,7 +68,7 @@ export interface AgentResult {
   readonly model: string;
 }
 
-/** `ai-factory abort` was requested for the change: stop at the next safe point. */
+/** `loomwright abort` was requested for the change: stop at the next safe point. */
 export class ChangeAborted extends Error {
   constructor(readonly changeId: string) {
     super(`${changeId} was aborted`);
@@ -125,7 +125,7 @@ export class Pipeline {
     return updateRun(this.root, id, mutate);
   }
 
-  /** Whether `ai-factory abort` asked this change to stop. */
+  /** Whether `loomwright abort` asked this change to stop. */
   abortRequested(id: string): boolean {
     return id !== "intake" && loadRun(this.root, id)?.abortRequested === true;
   }

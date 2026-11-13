@@ -63,7 +63,7 @@ export const BLOCK_MARKERS: Readonly<Record<string, BlockMarkers>> = {
 };
 
 const MANAGED_HEADER =
-  "Managed by ai-factory. Change factory.config.jsonc and run `ai-factory update` instead of editing.";
+  "Managed by Loomwright. Change factory.config.jsonc and run `loomwright update` instead of editing.";
 
 interface AgentSpec {
   readonly id: string;
@@ -78,42 +78,42 @@ const AGENTS: readonly AgentSpec[] = [
     id: "orchestrator",
     role: "orchestrator",
     modelRole: "orchestrator",
-    description: "ai-factory intake: request to change id and summary. No tools.",
+    description: "Loomwright intake: request to change id and summary. No tools.",
     body: orchestrator,
   },
   {
     id: "architect",
     role: "architect",
     modelRole: "architect",
-    description: "ai-factory architect: writes the OpenSpec change and context packs.",
+    description: "Loomwright architect: writes the OpenSpec change and context packs.",
     body: architect,
   },
   {
     id: "explorer",
     role: "explorer",
     modelRole: "explorer",
-    description: "ai-factory explorer: read-only, graph-first map of one repo.",
+    description: "Loomwright explorer: read-only, graph-first map of one repo.",
     body: explorer,
   },
   {
     id: "reviewer",
     role: "reviewer",
     modelRole: "reviewer",
-    description: "ai-factory reviewer: per-repo review against scenarios and standards.",
+    description: "Loomwright reviewer: per-repo review against scenarios and standards.",
     body: reviewer,
   },
   {
     id: "contract-reviewer",
     role: "contract-reviewer",
     modelRole: "contractReviewer",
-    description: "ai-factory contract reviewer: one cross-repo pass over contract changes.",
+    description: "Loomwright contract reviewer: one cross-repo pass over contract changes.",
     body: contractReviewer,
   },
   {
     id: "tester",
     role: "tester",
     modelRole: "tester",
-    description: "ai-factory tester: adds tests until every scenario has one.",
+    description: "Loomwright tester: adds tests until every scenario has one.",
     body: tester,
   },
 ];
@@ -251,7 +251,7 @@ function renderImplementer(config: FactoryConfig, repo: RepoConfig): ManagedFile
     mode: "file",
     content: agentFile({
       head: frontmatter({
-        description: `ai-factory implementer for ${repo.name} (${repo.path}; ${langs}).`,
+        description: `Loomwright implementer for ${repo.name} (${repo.path}; ${langs}).`,
         model: modelFor(config, "implementer", { repo: repo.name }),
         role: "implementer",
         permissions: agentRules("implementer", [], {
@@ -325,9 +325,9 @@ function renderAgentsMd(config: FactoryConfig): string {
     .map((r) => `| ${r.name} | \`${r.path}\` | ${r.role} | ${repoLanguages(r).join(", ") || "–"} |`)
     .join("\n");
   return `${markers.start}
-## ai-factory
+## Loomwright
 
-This workspace is driven by ai-factory: OpenSpec holds the specs (\`openspec/\`), Graphify the workspace graph (\`graphify-out/\`, local), opencode runs the agents (\`.opencode/\`).
+This workspace is driven by Loomwright: OpenSpec holds the specs (\`openspec/\`), Graphify the workspace graph (\`graphify-out/\`, local), opencode runs the agents (\`.opencode/\`).
 
 | Repo | Path | Role | Languages |
 |---|---|---|---|
@@ -407,7 +407,7 @@ function renderOpenspecConfig(config: FactoryConfig): string {
 /** JSON Schema for editor completion in factory.config.jsonc (the zod schema stays authoritative). */
 function configJsonSchema(): string {
   const schema = z.toJSONSchema(FactoryConfig, { target: "draft-2020-12", io: "input" });
-  return `${JSON.stringify({ title: "ai-factory config", ...schema }, null, 2)}\n`;
+  return `${JSON.stringify({ title: "Loomwright config", ...schema }, null, 2)}\n`;
 }
 
 /** The vendored add-on and its precedence rules, when enabled (removed cleanly when disabled). */

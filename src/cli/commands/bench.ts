@@ -15,7 +15,7 @@ import { formatTokens } from "../../usage/usage.ts";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
 import { ExitCode } from "../exit-codes.ts";
 
-const HELP = `Usage: ai-factory bench ponytail [--runs N] [--case ID] [--levels L,…] [--yes] [--json]
+const HELP = `Usage: loomwright bench ponytail [--runs N] [--case ID] [--levels L,…] [--yes] [--json]
 
 Runs each bench case (${BENCH_CASES.map((c) => c.id).join(", ")}) N times (default 3) with and
 without the Ponytail add-on on your configured models, and writes medians with their spread

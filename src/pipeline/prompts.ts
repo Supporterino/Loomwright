@@ -272,7 +272,7 @@ ${f.file ? `- Location: ${f.file}${f.line ? `:${f.line}` : ""}` : ""}`;
 }
 
 /**
- * `ai-factory reword`: the architect revises an approved change from review findings. Wording
+ * `loomwright reword`: the architect revises an approved change from review findings. Wording
  * only: the task DAG stays as approved, and the factory rejects structural edits.
  */
 export function rewordPrompt(input: {

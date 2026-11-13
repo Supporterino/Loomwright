@@ -17,7 +17,7 @@ import {
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
 import { ExitCode } from "../exit-codes.ts";
 
-const HELP = `Usage: ai-factory detect [--apply [--no-commit] [--allow-downgrade]] [--check] [--json]
+const HELP = `Usage: loomwright detect [--apply [--no-commit] [--allow-downgrade]] [--check] [--json]
 
 Re-detects the layout, repos, languages and contracts and shows the difference
 from ${CONFIG_FILE}. Detection only proposes; nothing is written without --apply.
@@ -62,13 +62,13 @@ export const detectCommand: Command = {
     const root = await findWorkspaceRoot(io.cwd);
     if (root === undefined) {
       throw new PreconditionError("not inside a git repository", [
-        "run ai-factory from the workspace (AI repo or single repo)",
+        "run loomwright from the workspace (AI repo or single repo)",
       ]);
     }
     const hasConfig = existsSync(join(root, CONFIG_FILE));
     const loaded = hasConfig ? loadConfig(root) : undefined;
     if (values.apply && loaded === undefined) {
-      throw new PreconditionError(`no ${CONFIG_FILE} to apply to`, ["run `ai-factory init` first"]);
+      throw new PreconditionError(`no ${CONFIG_FILE} to apply to`, ["run `loomwright init` first"]);
     }
     if (values.apply) ensureNotNewer(readLock(root), values["allow-downgrade"]);
 
@@ -132,7 +132,7 @@ export const detectCommand: Command = {
     } else {
       for (const note of detection.notes) io.out(`note: ${note}`);
       if (!hasConfig)
-        io.out(`no ${CONFIG_FILE} yet; this is what \`ai-factory init\` would propose:`);
+        io.out(`no ${CONFIG_FILE} yet; this is what \`loomwright init\` would propose:`);
       if (changes.length === 0) {
         io.out("No differences.");
       } else {
@@ -143,7 +143,7 @@ export const detectCommand: Command = {
           );
           if (commit) io.out(`committed ${commit.slice(0, 12)}`);
         } else if (hasConfig) {
-          io.out("Run `ai-factory detect --apply` to write these changes.");
+          io.out("Run `loomwright detect --apply` to write these changes.");
         }
       }
     }

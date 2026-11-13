@@ -91,7 +91,7 @@ export function planWorkspace(
   if (tampered.length > 0 && !options.restore) {
     throw new PreconditionError("Ponytail add-on files were modified (content hash mismatch)", [
       ...tampered.map((c) => (c.action === "keep-deleted" ? `${c.path} (deleted)` : c.path)),
-      "restore them (`ai-factory update --restore`) or set addons.ponytail.enabled to false",
+      "restore them (`loomwright update --restore`) or set addons.ponytail.enabled to false",
     ]);
   }
   const repaired = plan.map(
@@ -102,7 +102,7 @@ export function planWorkspace(
   );
   const conflicts = repaired.filter((c) => c.action === "conflict").map((c) => c.path);
   if (conflicts.length > 0) {
-    throw new PreconditionError("files already exist that ai-factory did not create", [
+    throw new PreconditionError("files already exist that Loomwright did not create", [
       ...conflicts,
       "move them away, list them under `unmanaged` in factory.config.jsonc, or rerun with --force",
     ]);

@@ -260,7 +260,7 @@ export class Scheduler {
     this.#emit({ type: "requeued", task, reason });
   }
 
-  /** Checks the run state for an abort another process requested (`ai-factory abort`). */
+  /** Checks the run state for an abort another process requested (`loomwright abort`). */
   #abortRequested(): boolean {
     if (!this.#aborted() && loadRun(this.#opts.root, this.#opts.id)?.abortRequested)
       this.#abort.abort();

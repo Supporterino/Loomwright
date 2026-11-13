@@ -28,7 +28,7 @@ import { GRAPHIFY } from "../versions.ts";
 import { INSTALL_PATHS, planWorkspace } from "../workspace/sync.ts";
 
 /**
- * `ai-factory update` (§10): migrate the config, re-render managed files with three-way
+ * `loomwright update` (§10): migrate the config, re-render managed files with three-way
  * merges of user edits, refresh tools, all behind a backup and in one commit.
  */
 
@@ -112,7 +112,7 @@ export async function planUpdate(
   const drift = diffDetection(await detectWorkspace(root), config);
   if (drift.length > 0) {
     warnings.push(
-      "detection differs from the config (not applied; see `ai-factory detect`):",
+      "detection differs from the config (not applied; see `loomwright detect`):",
       ...drift.map((c) => `  ${formatChange(c)}`),
     );
   }
@@ -123,7 +123,7 @@ export async function planUpdate(
     options.tools === true &&
     (rebuildReason !== undefined || lock.graph.schemaVersion !== GRAPHIFY.graphSchemaVersion);
   if (rebuildReason !== undefined && options.tools !== true)
-    warnings.push(`graph: ${rebuildReason}; run \`ai-factory update --tools\` to rebuild it`);
+    warnings.push(`graph: ${rebuildReason}; run \`loomwright update --tools\` to rebuild it`);
   return {
     fromVersion: lock.factoryVersion,
     toVersion: FACTORY_VERSION,
@@ -251,6 +251,6 @@ export const UPDATE_COMMIT_PATHS = [...INSTALL_PATHS];
 export function requireInstalled(root: string): Lock {
   const lock = readLock(root);
   if (lock === undefined)
-    throw new PreconditionError("ai-factory is not installed here", ["run `ai-factory init`"]);
+    throw new PreconditionError("loomwright is not installed here", ["run `loomwright init`"]);
   return lock;
 }

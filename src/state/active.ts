@@ -27,7 +27,7 @@ export function readActive(root: string): ActiveLock | undefined {
     root,
     activeFile(root),
     ActiveLock,
-    "if no ai-factory process is running: rm .factory/active.lock, then `ai-factory resume <change-id>`",
+    "if no loomwright process is running: rm .factory/active.lock, then `loomwright resume <change-id>`",
   );
 }
 
@@ -95,7 +95,7 @@ export function readQueue(root: string): Queue {
       root,
       queueFile(root),
       Queue,
-      "rm .factory/queue.json, then `ai-factory resume` each approved change that was waiting",
+      "rm .factory/queue.json, then `loomwright resume` each approved change that was waiting",
     ) ?? { entries: [] }
   );
 }

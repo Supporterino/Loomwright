@@ -21,7 +21,7 @@ export async function bundlePlugin(): Promise<string> {
     throw new Error(`plugin build failed:\n${result.logs.join("\n")}`);
   }
   const code = await result.outputs[0].text();
-  return `// ai-factory opencode plugin — generated from src/plugin/entry.ts; do not edit.\n${code}`;
+  return `// Loomwright opencode plugin — generated from src/plugin/entry.ts; do not edit.\n${code}`;
 }
 
 if (import.meta.main) {

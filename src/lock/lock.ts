@@ -97,7 +97,7 @@ export function ensureNotNewer(lock: Lock | undefined, allow = false): void {
   if (lock === undefined || allow) return;
   if (compareVersions(lock.factoryVersion, FACTORY_VERSION) <= 0) return;
   throw new PreconditionError(
-    `this workspace was installed by ai-factory ${lock.factoryVersion}; this is ${FACTORY_VERSION}, which would downgrade it`,
+    `this workspace was installed by Loomwright ${lock.factoryVersion}; this is ${FACTORY_VERSION}, which would downgrade it`,
     [
       `run the matching version: ${runVersion(lock.factoryVersion)} <command>`,
       "or pass --allow-downgrade to go back on purpose",

@@ -26,7 +26,7 @@ describe("pre-push hook and agent push block", () => {
     expect((await installPrePush(backend)).status).toBe("installed");
     const agent = await push({ AI_FACTORY_AGENT: "1" });
     expect(agent.code).not.toBe(0);
-    expect(agent.stderr).toContain("ai-factory: pushes are blocked for agents");
+    expect(agent.stderr).toContain("loomwright: pushes are blocked for agents");
     expect((await push({})).code).toBe(0);
   });
 

@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { changelogSection } from "../scripts/changelog-section.ts";
 import { syncVersionText } from "../scripts/sync-version.ts";
+
+const CI_WORKFLOW = readFileSync(join(import.meta.dir, "../.github/workflows/ci.yml"), "utf8");
+const RELEASE_WORKFLOW = readFileSync(
+  join(import.meta.dir, "../.github/workflows/release.yml"),
+  "utf8",
+);
 
 const CHANGELOG = `# Changelog
 
@@ -36,5 +44,23 @@ describe("release scripts", () => {
     expect(() => syncVersionText("export const NAME = 'x';", "1.0.0")).toThrow(
       "no FACTORY_VERSION",
     );
+  });
+});
+
+describe("release workflows", () => {
+  test("the release plan checks the new package", () => {
+    expect(RELEASE_WORKFLOW).toContain('npm view "@loomwright/cli@$VERSION"');
+    expect(RELEASE_WORKFLOW).not.toContain("@supporterino/ai-factory");
+  });
+
+  test("the tarball smoke test runs the new binary", () => {
+    expect(CI_WORKFLOW).toContain('"$PREFIX/bin/loomwright" --version');
+    expect(RELEASE_WORKFLOW).toContain('"$PREFIX/bin/loomwright" --version');
+  });
+
+  test("trusted publishing is untouched", () => {
+    expect(RELEASE_WORKFLOW).toMatch(/^\s+environment: npm$/m);
+    expect(RELEASE_WORKFLOW).toMatch(/^\s+id-token: write$/m);
+    expect(RELEASE_WORKFLOW).toContain("--provenance --access public");
   });
 });

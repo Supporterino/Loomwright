@@ -1,6 +1,12 @@
 # Changelog
 
-All notable changes per release. `ai-factory update` applies them to an installed workspace (see [docs/cli.md](docs/cli.md#update)).
+All notable changes per release. `loomwright update` applies them to an installed workspace (see [docs/cli.md](docs/cli.md#update)).
+
+## Unreleased
+
+### Major Changes
+
+- Loomwright now publishes as `@loomwright/cli` with the `loomwright` binary. `ai-factory` keeps working as a deprecated alias, and the on-disk names (`factory.config.jsonc`, `factory.lock.json`, `.factory/`) and `AI_FACTORY_*` variables are unchanged.
 
 ## 0.12.0
 

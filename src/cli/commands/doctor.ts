@@ -40,7 +40,7 @@ export const doctorCommand: Command = {
   name: "doctor",
   summary: "Check tools, install, repos, hooks, gates, caches, models and the graph",
   options: OPTIONS,
-  help: `Usage: ai-factory doctor [--json]
+  help: `Usage: loomwright doctor [--json]
 
 Read-only health check of the workspace:
 - tool versions against the lock and against what this factory supports;

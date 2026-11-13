@@ -91,8 +91,8 @@ export function renderInitialConfig(detection: Detection): string {
   const models = Object.entries(DEFAULT_MODELS)
     .map(([role, model]) => `    ${json(role)}: ${json(model)}`)
     .join(",\n");
-  return `// ai-factory workspace config. Validated on every command; see README "Config reference".
-// Detection only proposes values: edit freely, and use \`ai-factory detect\` to see drift.
+  return `// Loomwright workspace config. Validated on every command; see README "Config reference".
+// Detection only proposes values: edit freely, and use \`loomwright detect\` to see drift.
 {
   "$schema": "./.opencode/schemas/factory.config.schema.json",
   "schemaVersion": ${CONFIG_SCHEMA_VERSION},

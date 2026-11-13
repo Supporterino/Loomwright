@@ -230,7 +230,7 @@ describe("init: single repo", () => {
 
     const run = await cli(fx.root, "init");
     expect(run.out).toContain(
-      "kept your edit (run `ai-factory update` to merge): .opencode/agents/tester.md",
+      "kept your edit (run `loomwright update` to merge): .opencode/agents/tester.md",
     );
     expect(read(fx.root, ".opencode/agents/tester.md")).toBe("my own tester\n");
     expect(existsSync(join(fx.root, ".opencode/standards/rust.md"))).toBe(false);
@@ -267,7 +267,7 @@ describe("init: single repo", () => {
     expect(readLock(fx.root)?.managed[skill]).toBeDefined();
   });
 
-  test("an older CLI refuses to downgrade a newer install unless told to", async () => {
+  test("the downgrade error names Loomwright: an older CLI refuses to downgrade a newer install unless told to", async () => {
     await cli(fx.root, "init");
     const lockFile = join(fx.root, LOCK_FILE);
     writeFileSync(
@@ -283,8 +283,8 @@ describe("init: single repo", () => {
     for (const argv of [["init"], ["update"], ["detect", "--apply"]]) {
       const res = await cli(fx.root, ...argv);
       expect(res.code).toBe(ExitCode.Precondition);
-      expect(res.err).toContain("installed by ai-factory 9.9.9");
-      expect(res.err).toContain("npx @supporterino/ai-factory@9.9.9");
+      expect(res.err).toContain("installed by Loomwright 9.9.9");
+      expect(res.err).toContain("npx @loomwright/cli@9.9.9");
     }
     expect(await gitOut(fx.root, "rev-parse", "HEAD")).toBe(head);
 
