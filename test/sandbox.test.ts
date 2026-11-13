@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   protectedInWorktree,
-  SANDBOXED_ENV,
   sandboxArgv,
   sandboxCommand,
   sandboxEnabled,
@@ -14,14 +13,10 @@ import {
 
 describe("sandboxEnabled", () => {
   test("macOS with sandbox-exec unless switched off; nowhere else yet", () => {
-    expect(sandboxEnabled("auto", "darwin", () => true, {})).toBe(true);
-    expect(sandboxEnabled("off", "darwin", () => true, {})).toBe(false);
-    expect(sandboxEnabled("auto", "darwin", () => false, {})).toBe(false);
-    expect(sandboxEnabled("auto", "linux", () => true, {})).toBe(false);
-  });
-
-  test("a nested run inside a factory sandbox skips the wrapper", () => {
-    expect(sandboxEnabled("auto", "darwin", () => true, { [SANDBOXED_ENV]: "1" })).toBe(false);
+    expect(sandboxEnabled("auto", "darwin", () => true)).toBe(true);
+    expect(sandboxEnabled("off", "darwin", () => true)).toBe(false);
+    expect(sandboxEnabled("auto", "darwin", () => false)).toBe(false);
+    expect(sandboxEnabled("auto", "linux", () => true)).toBe(false);
   });
 });
 

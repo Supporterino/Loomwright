@@ -146,8 +146,6 @@ describe("plugin guards", () => {
     }) => unknown;
     expect(() => create({ command: "id", env: {} })).toThrow("only through a factory agent");
 
-    // A profile with deny rules cannot nest: inside a factory sandbox the shell stays unwrapped.
-    const nested = process.env.AI_FACTORY_SANDBOXED === "1";
     process.env.AI_FACTORY_SCRUB = "ANTHROPIC_API_KEY";
     process.env.AI_FACTORY_SANDBOX = process.platform === "darwin" ? "seatbelt" : "off";
     try {
@@ -163,13 +161,10 @@ describe("plugin guards", () => {
         >,
       };
       create(event);
-      expect(event.env).toEqual({
-        PATH: "/usr/bin:/bin",
-        ...(process.platform === "darwin" && !nested ? { AI_FACTORY_SANDBOXED: "1" } : {}),
-      });
+      expect(event.env).toEqual({ PATH: "/usr/bin:/bin" });
       // The same command again needs its own guard pass.
       expect(() => create({ command, env: {} })).toThrow("only through a factory agent");
-      if (process.platform === "darwin" && !nested) {
+      if (process.platform === "darwin") {
         expect(event.command).toStartWith("exec '/usr/bin/sandbox-exec' -p");
         spawnSync("/bin/sh", ["-c", event.command], { cwd: wt });
         expect(existsSync(join(wt, "ok.txt"))).toBe(true);
@@ -179,29 +174,6 @@ describe("plugin guards", () => {
     } finally {
       delete process.env.AI_FACTORY_SCRUB;
       delete process.env.AI_FACTORY_SANDBOX;
-    }
-  });
-
-  test("a nested shell run inside a factory sandbox is not wrapped again", async () => {
-    const create = hooks.get("shell.create.before") as unknown as (e: {
-      command: string;
-      shell?: string;
-      env?: Record<string, string | undefined>;
-    }) => unknown;
-    const marker = process.env.AI_FACTORY_SANDBOXED;
-    process.env.AI_FACTORY_SANDBOX = "seatbelt";
-    process.env.AI_FACTORY_SANDBOXED = "1";
-    try {
-      const command = "echo nested";
-      expect(await call("impl", "implementer-app", "shell", { command })).toBeUndefined();
-      const event = { command, shell: "/bin/sh", env: {} as Record<string, string | undefined> };
-      create(event);
-      expect(event.command).toBe(command);
-      expect(event.env).toEqual({});
-    } finally {
-      delete process.env.AI_FACTORY_SANDBOX;
-      if (marker === undefined) delete process.env.AI_FACTORY_SANDBOXED;
-      else process.env.AI_FACTORY_SANDBOXED = marker;
     }
   });
 
