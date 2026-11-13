@@ -114,7 +114,7 @@ function renderStatus(io: Io, root: string, positionals: readonly string[]): voi
         `usage: ${usageLine(workspaceUsage.total)} across ${workspaceUsage.changes} change${workspaceUsage.changes === 1 ? "" : "s"}, ${workspaceUsage.sessions} session${workspaceUsage.sessions === 1 ? "" : "s"}`,
       );
     if (runs.length === 0 && corrupt.length === 0)
-      io.out('no changes yet (start one with `ai-factory run "<request>"`)');
+      io.out('no changes yet (start one with `loomwright run "<request>"`)');
   }
   for (const run of runs) printRun(io, root, run, active, queue.indexOf(run.id));
   for (const c of corrupt)
@@ -138,7 +138,7 @@ function printRun(
   if (run.pausedReason) io.out(`  paused: ${run.pausedReason}`);
   if (run.specFindings.length > 0) {
     io.out(
-      `  spec findings (${run.specFindings.length}): run \`ai-factory reword ${run.id}\` or \`ai-factory reapprove ${run.id}\``,
+      `  spec findings (${run.specFindings.length}): run \`loomwright reword ${run.id}\` or \`loomwright reapprove ${run.id}\``,
     );
     for (const f of run.specFindings)
       io.out(
@@ -215,7 +215,7 @@ export const statusCommand: Command = {
   summary: "Show the active change, the queue, task states and branches",
   options: STATUS_OPTIONS,
   positionals: [{ name: "change-id", optional: true, complete: "change" }],
-  help: `Usage: ai-factory status [<change-id>] [--json] [--watch [--interval <seconds>]]
+  help: `Usage: loomwright status [<change-id>] [--json] [--watch [--interval <seconds>]]
 
 Without an id: the active change (if any), the queue and every known change.
 With an id: that change's phase, branches, task DAG with states, retries and worktrees.
@@ -314,7 +314,7 @@ export const abortCommand: Command = {
   summary: "Stop a change safely; keep branches and worktrees",
   options: {},
   positionals: [{ name: "change-id", complete: "change" }],
-  help: `Usage: ai-factory abort <change-id>
+  help: `Usage: loomwright abort <change-id>
 
 Marks the change aborted and removes it from the queue. A process driving it stops at its
 next safe point in any phase (it interrupts running agents) and then frees the workspace;
@@ -366,10 +366,10 @@ export const retryCommand: Command = {
   summary: "Reset a failed task's retry budget after a human fix",
   options: RETRY_OPTIONS,
   positionals: [{ name: "change-id", complete: "change" }],
-  help: `Usage: ai-factory retry <change-id> --task <id>
+  help: `Usage: loomwright retry <change-id> --task <id>
 
 Puts a failed task back in the queue with a fresh retry budget and un-cancels the tasks
-that were cancelled because of it. Continue the change with \`ai-factory resume <id>\`.`,
+that were cancelled because of it. Continue the change with \`loomwright resume <id>\`.`,
   async run(args, io) {
     const { values, positionals } = parseCommandArgs("retry", args, RETRY_OPTIONS, true);
     const id = changeId("retry", positionals);
@@ -382,7 +382,7 @@ that were cancelled because of it. Continue the change with \`ai-factory resume 
     const next = await updateRun(root, id, (draft) => retryTask(draft, task.id));
     const revived = next.tasks.filter((t) => t.status === "pending").map((t) => t.id);
     io.out(`requeued ${task.id} with a fresh retry budget (pending: ${revived.join(", ")})`);
-    io.out(`continue with \`ai-factory resume ${id}\``);
+    io.out(`continue with \`loomwright resume ${id}\``);
     return ExitCode.Ok;
   },
 };

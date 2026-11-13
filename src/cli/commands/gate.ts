@@ -13,7 +13,7 @@ import { Semaphore } from "../../util/semaphore.ts";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
 import { ExitCode } from "../exit-codes.ts";
 
-const HELP = `Usage: ai-factory gate <change-id> [--task <id>] [--repo <name>] [--full] [--json]
+const HELP = `Usage: loomwright gate <change-id> [--task <id>] [--repo <name>] [--full] [--json]
 
 Runs the quality gates (format, lint, types, tests) and prints the results.
 

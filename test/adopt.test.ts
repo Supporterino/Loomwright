@@ -221,7 +221,7 @@ describe("adopt: adoption hint", () => {
       const run = await cli(fx.root, "init", "--no-graph");
       expect(run.code).toBe(ExitCode.Ok);
       expect(run.out).toContain("pending OpenSpec change");
-      expect(run.out).toContain("ai-factory adopt --all");
+      expect(run.out).toContain("loomwright adopt --all");
     } finally {
       fx.cleanup();
     }

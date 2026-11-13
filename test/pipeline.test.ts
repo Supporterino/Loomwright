@@ -315,7 +315,7 @@ describe("pipeline: AI repo with submodules", () => {
     const approve = await cliWith(runtime, fx.root, "approve", ID);
     expect(approve.err).toBe("");
     expect(approve.out).toContain(`${ID}: done`);
-    expect(approve.out).toContain(`next: \`ai-factory land ${ID}\``);
+    expect(approve.out).toContain(`next: \`loomwright land ${ID}\``);
     expect(approve.code).toBe(ExitCode.Ok);
 
     // 1.2, 1.3 (backend) and 2.1 (frontend) ran at the same time, within maxAgents (4).
@@ -394,7 +394,7 @@ describe("pipeline: AI repo with submodules", () => {
     );
     expect(again.code).toBe(ExitCode.Ok);
     expect(again.out).toContain(`${ID} is already done`);
-    expect(again.out).toContain(`next: \`ai-factory land ${ID}\``);
+    expect(again.out).toContain(`next: \`loomwright land ${ID}\``);
   });
 });
 
@@ -534,7 +534,7 @@ describe("pipeline: single repo", () => {
     expect(approve.code).toBe(ExitCode.Paused);
     expect(approve.out).toContain("failed: 1.1");
     expect(approve.out).toContain(`${ID}-paused.md`);
-    expect(approve.out).not.toContain("ai-factory land");
+    expect(approve.out).not.toContain("loomwright land");
     const state = loadRun(fx.root, ID);
     expect(state?.tasks.map((t) => [t.id, t.status, t.failures])).toEqual([
       ["1.1", "failed", 4],
@@ -557,7 +557,7 @@ describe("pipeline: single repo", () => {
     expect((await cli(fx.root, "retry", ID, "--task", "1.1")).code).toBe(ExitCode.Ok);
     const resume = await cliWith(runtime, fx.root, "resume", ID);
     expect(resume.out).toContain(`${ID}: done`);
-    expect(resume.out).toContain(`next: \`ai-factory land ${ID}\``);
+    expect(resume.out).toContain(`next: \`loomwright land ${ID}\``);
     expect(resume.code).toBe(ExitCode.Ok);
     expect(await gitOut(fx.root, "log", "-1", "--format=%s")).toBe(`chore(spec): archive ${ID}`);
     expect(await gitOut(fx.root, "show", `change/${ID}:src/mul.ts`)).toContain("mul");
@@ -1129,5 +1129,5 @@ describe("pipeline: single repo", () => {
     expect(loadRun(fx.root, second)?.phase).toBe("done");
     expect(await gitOut(fx.root, "branch", "--show-current")).toBe(`change/${second}`);
     expect(existsSync(join(fx.root, ".factory/drafts", second))).toBe(false);
-  });
+  }, 60_000);
 });

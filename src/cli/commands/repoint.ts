@@ -5,7 +5,7 @@ import { CHANGE_ID } from "../../git/repo.ts";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
 import { ExitCode } from "../exit-codes.ts";
 
-const HELP = `Usage: ai-factory repoint <change-id> [--json]
+const HELP = `Usage: loomwright repoint <change-id> [--json]
 
 After the submodule MRs of a change are merged upstream: fetches each submodule, finds the
 merged commit (fast-forward, merge commit, Change-Id trailer, or the squash commit with the

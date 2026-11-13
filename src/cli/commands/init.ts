@@ -29,7 +29,7 @@ const OPENSPEC_CONFIG = "openspec/config.yaml";
 
 import { ExitCode } from "../exit-codes.ts";
 
-const HELP = `Usage: ai-factory init [--plan] [--force] [--allow-downgrade] [--no-commit] [--no-graph] [--json]
+const HELP = `Usage: loomwright init [--plan] [--force] [--allow-downgrade] [--no-commit] [--no-graph] [--json]
 
 Installs the factory into the workspace: detects repos, languages and contracts, checks
 the tools, runs \`openspec init\` for opencode, renders agents, standards and config,
@@ -39,10 +39,10 @@ no diff and no commit.
 
 Options:
   --plan        Show what would be created, archived or replaced; write nothing
-  --force       Overwrite existing files that ai-factory did not create
+  --force       Overwrite existing files that loomwright did not create
   --allow-downgrade  Let this (older) version rewrite a workspace a newer one installed
   --no-commit   Leave the changes uncommitted
-  --no-graph    Skip building the workspace graph (build it later with \`ai-factory graph\`)
+  --no-graph    Skip building the workspace graph (build it later with \`loomwright graph\`)
   --json        Print the result as JSON
   -h, --help`;
 
@@ -60,7 +60,7 @@ function adoptionHint(
     .map((change) => change.id)
     .join(", ");
   io.out(
-    `note: ${changes.length} pending OpenSpec change${changes.length === 1 ? "" : "s"} not managed by the factory: ${shown}${changes.length > 5 ? ", …" : ""}; run \`ai-factory adopt --all\` to take over`,
+    `note: ${changes.length} pending OpenSpec change${changes.length === 1 ? "" : "s"} not managed by the factory: ${shown}${changes.length > 5 ? ", …" : ""}; run \`loomwright adopt --all\` to take over`,
   );
 }
 
@@ -69,7 +69,7 @@ const REPORTED: Partial<Record<SyncAction, string>> = {
   update: "updated",
   overwrite: "overwritten (--force)",
   remove: "removed",
-  "keep-user-edit": "kept your edit (run `ai-factory update` to merge)",
+  "keep-user-edit": "kept your edit (run `loomwright update` to merge)",
   "keep-deleted": "kept deleted",
   "keep-removed-edit": "no longer managed; kept your edited copy",
 };
@@ -78,7 +78,7 @@ const OPTIONS = {
   force: {
     type: "boolean",
     default: false,
-    description: "Overwrite files ai-factory did not create",
+    description: "Overwrite files loomwright did not create",
   },
   "allow-downgrade": {
     type: "boolean",
@@ -106,7 +106,7 @@ export const initCommand: Command = {
     const root = await findWorkspaceRoot(io.cwd);
     if (root === undefined) {
       throw new PreconditionError("not inside a git repository", [
-        "ai-factory installs into a git repository (the AI repo or the single repo)",
+        "loomwright installs into a git repository (the AI repo or the single repo)",
       ]);
     }
     ensureNotNewer(readLock(root), values["allow-downgrade"]);
@@ -186,7 +186,7 @@ export const initCommand: Command = {
           ),
         );
       } else {
-        io.out(`ai-factory ${FACTORY_VERSION} plan for ${root}`);
+        io.out(`loomwright ${FACTORY_VERSION} plan for ${root}`);
         if (newConfig) io.out(`would write ${CONFIG_FILE}`);
         for (const change of planned)
           io.out(`${REPORTED[change.action] ?? change.action}: ${change.path}`);
@@ -231,7 +231,7 @@ export const initCommand: Command = {
       return ExitCode.Ok;
     }
 
-    io.out(`ai-factory ${FACTORY_VERSION} in ${root}`);
+    io.out(`loomwright ${FACTORY_VERSION} in ${root}`);
     io.out(`tools: ${tools.map((t) => `${t.tool} ${t.ok ? t.version : "?"}`).join(", ")}`);
     for (const note of detection?.notes ?? []) io.out(`note: ${note}`);
     if (legacy !== undefined && legacy.archived.length > 0) {
@@ -257,7 +257,7 @@ export const initCommand: Command = {
       );
     } else if (graph) {
       io.out(
-        `graph: not built (${graph.error ?? "unknown error"}); run \`ai-factory graph --full\` later`,
+        `graph: not built (${graph.error ?? "unknown error"}); run \`loomwright graph --full\` later`,
       );
     }
     io.out(

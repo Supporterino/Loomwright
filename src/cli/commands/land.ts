@@ -14,7 +14,7 @@ const OPTIONS = {
   json: { type: "boolean", default: false, description: "Print the result as JSON" },
 } satisfies CommandOptions;
 
-const HELP = `Usage: ai-factory land <change-id> [--dry-run] [--json]
+const HELP = `Usage: loomwright land <change-id> [--dry-run] [--json]
 
 Merges a finished change back into its base branches and removes what it no longer needs.
 The factory still never pushes: every merge stays local.
@@ -27,7 +27,7 @@ context packs, approvals, session context and run state.
 Kept for the record: the final report, the token usage ledger and the redacted logs. With
 "artifacts": { "mode": "git" }, the report, approval and usage ledger are also committed
 under factory-records/ before cleanup; otherwise a successful land hints how to commit
-them later with \`ai-factory artifacts sync <id>\`.
+them later with \`loomwright artifacts sync <id>\`.
 
   --dry-run   Print the plan only; merge and delete nothing
   --json      Machine-readable result
@@ -82,12 +82,12 @@ export const landCommand: Command = {
     if (outcome.recorded !== undefined) io.out(`  ✓ recorded: ${outcome.recorded.join(", ")}`);
     if (outcome.recordError !== undefined)
       io.err(
-        `  ! could not record artifacts: ${outcome.recordError}; run \`ai-factory artifacts sync ${id}\``,
+        `  ! could not record artifacts: ${outcome.recordError}; run \`loomwright artifacts sync ${id}\``,
       );
     if (outcome.kept.length > 0) io.out(`  kept: ${outcome.kept.join(", ")}`);
     if (outcome.keptBranches.length === 0 && config.artifacts.mode === "local")
       io.out(
-        `  hint: records stay in .factory/; set "artifacts": { "mode": "git" } and run \`ai-factory artifacts sync ${id}\` to commit them`,
+        `  hint: records stay in .factory/; set "artifacts": { "mode": "git" } and run \`loomwright artifacts sync ${id}\` to commit them`,
       );
     return outcome.keptBranches.length > 0 ? ExitCode.Precondition : ExitCode.Ok;
   },

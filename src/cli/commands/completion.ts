@@ -16,7 +16,7 @@ const OPTIONS = {
   rc: { type: "string", complete: "file", description: "With --install: the rc file to edit" },
 } satisfies CommandOptions;
 
-const HELP = `Usage: ai-factory completion [<bash|zsh|fish>] [--install] [--rc <file>]
+const HELP = `Usage: loomwright completion [<bash|zsh|fish>] [--install] [--rc <file>]
 
 Prints a shell completion script. It completes command names, every optional flag and the
 values they take: change ids, task ids, repos, agents, models, shells, files and bench
@@ -29,8 +29,8 @@ levels/cases.
 
 Without a shell, --install detects it from $SHELL. Reload the shell afterwards:
 
-  ai-factory completion zsh --install
-  ai-factory completion bash            # print and source it yourself`;
+  loomwright completion zsh --install
+  loomwright completion bash            # print and source it yourself`;
 
 function shellFrom(value: string | undefined, fallback: boolean): Shell {
   if (value !== undefined) {
@@ -66,8 +66,8 @@ export const completionCommand: Command = {
     const result = installCompletion(shell, io.cwd, values.rc);
     io.out(
       result.changed
-        ? `installed ai-factory completion in ${result.path}`
-        : `ai-factory completion is already installed in ${result.path}`,
+        ? `installed loomwright completion in ${result.path}`
+        : `loomwright completion is already installed in ${result.path}`,
     );
     return ExitCode.Ok;
   },
@@ -77,7 +77,7 @@ export const completionCommand: Command = {
 export const completeCommand: Command = {
   name: "__complete",
   summary: "Internal shell completion endpoint",
-  help: "Usage: ai-factory __complete <shell> <words...>",
+  help: "Usage: loomwright __complete <shell> <words...>",
   hidden: true,
   options: {},
   async run(args, io) {

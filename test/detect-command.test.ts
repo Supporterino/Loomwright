@@ -101,7 +101,7 @@ describe("ai-factory detect (submodules)", () => {
     expect(check.out).toBe(
       [
         "+ repo worker (repos/worker) languages [python]",
-        "Run `ai-factory detect --apply` to write these changes.",
+        "Run `loomwright detect --apply` to write these changes.",
       ].join("\n"),
     );
     // --check never writes.
@@ -150,7 +150,7 @@ describe("ai-factory detect (submodules)", () => {
       "~ repo frontend languages: [typescript, react] → [typescript]",
       "- repo legacy (repos/legacy)",
       "~ contract openapi backend:api/openapi.yaml consumers: [frontend] → []",
-      "Run `ai-factory detect --apply` to write these changes.",
+      "Run `loomwright detect --apply` to write these changes.",
     ]);
 
     expect((await cli(fx.root, "detect", "--apply")).code).toBe(ExitCode.Ok);
@@ -186,7 +186,7 @@ describe("ai-factory detect (single repo, no config)", () => {
     const run = await cli(fx.root, "detect");
     expect(run.code).toBe(ExitCode.Ok);
     expect(run.out.split("\n")).toEqual([
-      "no factory.config.jsonc yet; this is what `ai-factory init` would propose:",
+      "no factory.config.jsonc yet; this is what `loomwright init` would propose:",
       "~ layout: (none) → single",
       "+ repo app (.) languages [typescript]",
     ]);
@@ -195,12 +195,12 @@ describe("ai-factory detect (single repo, no config)", () => {
   test("--apply without a config is a precondition error", async () => {
     const run = await cli(fx.root, "detect", "--apply");
     expect(run.code).toBe(ExitCode.Precondition);
-    expect(run.err).toContain("run `ai-factory init` first");
+    expect(run.err).toContain("run `loomwright init` first");
   });
 
   test("usage errors", async () => {
     expect((await cli(fx.root, "detect", "--nope")).code).toBe(ExitCode.Usage);
     expect((await cli(fx.root, "frobnicate")).code).toBe(ExitCode.Usage);
-    expect((await cli(fx.root, "detect", "--help")).out).toStartWith("Usage: ai-factory detect");
+    expect((await cli(fx.root, "detect", "--help")).out).toStartWith("Usage: loomwright detect");
   });
 });

@@ -134,7 +134,7 @@ describe("spec findings, reword and reapprove", () => {
 
     const status = await cliWith(runtime, fx.root, "status", ID);
     expect(status.out).toContain("spec findings (1)");
-    expect(status.out).toContain(`ai-factory reword ${ID}`);
+    expect(status.out).toContain(`loomwright reword ${ID}`);
 
     // Resuming without resolving the findings stays paused (repos are already reviewed).
     const blocked = await cliWith(runtime, fx.root, "resume", ID);

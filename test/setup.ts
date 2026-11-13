@@ -12,6 +12,16 @@ process.env.AI_FACTORY_GRAPHIFY_BIN ??= join(root, "test/fixtures/bin/graphify")
 // no global hooksPath, signing, templates or identity leak into the tests.
 process.env.GIT_CONFIG_GLOBAL = join(root, "test/fixtures/gitconfig");
 process.env.GIT_CONFIG_NOSYSTEM = "1";
+// ...and from the factory's own push block (ADR-0003): it runs gates with the block injected
+// as command-scope git config, and the fixtures push to local bare remotes. Tests that
+// exercise the block set it explicitly.
+delete process.env.AI_FACTORY_AGENT;
+delete process.env.GIT_CONFIG_COUNT;
+for (const key of Object.keys(process.env)) {
+  if (key.startsWith("GIT_CONFIG_KEY_") || key.startsWith("GIT_CONFIG_VALUE_")) {
+    delete process.env[key];
+  }
+}
 
 // Fixture workspaces run real git, OpenSpec and toolchains; 5s is too tight.
 setDefaultTimeout(60_000);

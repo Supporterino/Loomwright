@@ -230,7 +230,7 @@ describe("init: single repo", () => {
 
     const run = await cli(fx.root, "init");
     expect(run.out).toContain(
-      "kept your edit (run `ai-factory update` to merge): .opencode/agents/tester.md",
+      "kept your edit (run `loomwright update` to merge): .opencode/agents/tester.md",
     );
     expect(read(fx.root, ".opencode/agents/tester.md")).toBe("my own tester\n");
     expect(existsSync(join(fx.root, ".opencode/standards/rust.md"))).toBe(false);

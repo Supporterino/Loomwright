@@ -5,7 +5,7 @@ import { type Command, type CommandOptions, parseCommandArgs } from "../command.
 import { ExitCode } from "../exit-codes.ts";
 import { PROGRESS_OPTIONS, verbosityOf, withPipeline } from "./pipeline-commands.ts";
 
-const HELP = `Usage: ai-factory quick "<task>" [--repo <name>] [--agent <id>] [--no-review] [--verbose|--quiet]
+const HELP = `Usage: loomwright quick "<task>" [--repo <name>] [--agent <id>] [--no-review] [--verbose|--quiet]
 
 The no-OpenSpec path: create a task/<slug> branch, implement, run the repository gates, run
 one review pass, then make one local commit. No spec, no approval hash, and no push.
@@ -52,7 +52,7 @@ export const quickCommand: Command = {
           io.out(`  recorded ${recorded.written.join(", ")}`);
       } catch (err) {
         io.err(
-          `warning: could not record artifacts (${err instanceof Error ? err.message : String(err)}); run \`ai-factory artifacts sync ${quickChangeId(task)}\``,
+          `warning: could not record artifacts (${err instanceof Error ? err.message : String(err)}); run \`loomwright artifacts sync ${quickChangeId(task)}\``,
         );
       }
       return result.ok ? ExitCode.Ok : ExitCode.GateFailed;

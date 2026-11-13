@@ -5,7 +5,7 @@ import { PreconditionError, UsageError } from "../../errors.ts";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
 import { ExitCode } from "../exit-codes.ts";
 
-const HELP = `Usage: ai-factory artifacts sync [<change-id> | --all] [--dry-run] [--json]
+const HELP = `Usage: loomwright artifacts sync [<change-id> | --all] [--dry-run] [--json]
 
 Copies a finished change's final report, approval record and usage ledger from the
 gitignored .factory/ into the committed factory-records/ tree, so they survive a fresh

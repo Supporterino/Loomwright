@@ -24,7 +24,7 @@ async function setup(
   const root = await findWorkspaceRoot(io.cwd);
   if (root === undefined) throw new PreconditionError("not inside a git repository");
   if (!existsSync(join(root, LOCK_FILE)))
-    throw new PreconditionError("ai-factory is not installed here", ["run `ai-factory init`"]);
+    throw new PreconditionError("loomwright is not installed here", ["run `loomwright init`"]);
   const { config } = loadConfig(root);
   pruneLogs(root, config.logs.retentionDays);
   return { root, config };
@@ -54,7 +54,7 @@ export async function withPipeline<T>(
   const runtime = factory(root, config, changeId);
   const controller = new AbortController();
   const onSignal = (): void => {
-    io.err("interrupt: stopping safely (state is kept; continue with `ai-factory resume`)");
+    io.err("interrupt: stopping safely (state is kept; continue with `loomwright resume`)");
     controller.abort();
   };
   process.once("SIGINT", onSignal);
@@ -109,7 +109,7 @@ function report(io: Io, outcome: DriveOutcome): ExitCode {
   io.out(`${outcome.id}: ${outcome.phase}${outcome.detail ? ` — ${outcome.detail}` : ""}`);
   if (outcome.phase === "done")
     io.out(
-      `next: \`ai-factory land ${outcome.id}\` merges the finished change into its base branches`,
+      `next: \`loomwright land ${outcome.id}\` merges the finished change into its base branches`,
     );
   return outcome.phase === "paused" || outcome.phase === "aborted" ? ExitCode.Paused : ExitCode.Ok;
 }
@@ -141,18 +141,18 @@ export const runCommand: Command = {
   summary: "Start a change from a request and run it up to spec approval",
   options: RUN_OPTIONS,
   positionals: [{ name: "request", variadic: true }],
-  help: `Usage: ai-factory run "<request>" [--request <file>] [--no-interactive] [--verbose|--quiet]
+  help: `Usage: loomwright run "<request>" [--request <file>] [--no-interactive] [--verbose|--quiet]
 
 Intake (change id and summary), a change branch in the AI repo, explorers per likely repo,
 then the architect writes the OpenSpec change. Stops at spec approval: review
-openspec/changes/<id>/ and run \`ai-factory approve <id>\`. If another change is active, the
+openspec/changes/<id>/ and run \`loomwright approve <id>\`. If another change is active, the
 new one is drafted in .factory/drafts/<id> and queued after approval.
 
 The intake orchestrator and architect may raise questions in their handoffs. When stdin is a
 terminal, the CLI asks them, sends the answers back to the same session, and records the Q&A
 in openspec/changes/<id>/questions.md and .factory/clarifications/<id>.md.
 
-  --request <file>   Read the request from a file (e.g. one written by \`ai-factory refine\`)
+  --request <file>   Read the request from a file (e.g. one written by \`loomwright refine\`)
   --no-interactive   Do not ask; record the questions and continue
   --verbose          Also print one line per agent tool call and per gate
   --quiet            Only phase banners, merges, failures and the summary`,
@@ -160,7 +160,7 @@ in openspec/changes/<id>/questions.md and .factory/clarifications/<id>.md.
     const removed = args.find((arg) => arg === "--interactive" || arg.startsWith("--interactive="));
     if (removed !== undefined) {
       throw new UsageError("run: --interactive was removed", [
-        'use `ai-factory refine "<request>"` and `ai-factory run --request <file>` for a pre-run interview',
+        'use `loomwright refine "<request>"` and `loomwright run --request <file>` for a pre-run interview',
         "`run` now asks agent-raised questions automatically; pass --no-interactive to record them without asking",
       ]);
     }
@@ -170,7 +170,7 @@ in openspec/changes/<id>/questions.md and .factory/clarifications/<id>.md.
       request = readFileSync(resolve(io.cwd, values.request), "utf8").trim();
     }
     if (request === "")
-      throw new UsageError('run: expected a request, e.g. ai-factory run "add a health endpoint"');
+      throw new UsageError('run: expected a request, e.g. loomwright run "add a health endpoint"');
     const verbosity = verbosityOf(values);
     return withPipeline(
       io,
@@ -194,12 +194,12 @@ in openspec/changes/<id>/questions.md and .factory/clarifications/<id>.md.
           io.out(`${id}: the spec does not validate yet:`);
           for (const issue of result.issues) io.out(`  - ${issue}`);
           io.out(
-            `fix openspec/changes/${id}/ and run \`ai-factory approve ${id}\`, or \`ai-factory resume ${id}\` to let the architect repair it`,
+            `fix openspec/changes/${id}/ and run \`loomwright approve ${id}\`, or \`loomwright resume ${id}\` to let the architect repair it`,
           );
           return ExitCode.Paused;
         }
         io.out(
-          `${id}: awaiting approval — review openspec/changes/${id}/ then run \`ai-factory approve ${id}\``,
+          `${id}: awaiting approval — review openspec/changes/${id}/ then run \`loomwright approve ${id}\``,
         );
         return ExitCode.Ok;
       },
@@ -221,7 +221,7 @@ export const approveCommand: Command = {
   summary: "Approve a change's spec and continue the pipeline",
   options: APPROVE_OPTIONS,
   positionals: [{ name: "change-id", complete: "change" }],
-  help: `Usage: ai-factory approve <change-id> [--no-continue] [--verbose|--quiet]
+  help: `Usage: loomwright approve <change-id> [--no-continue] [--verbose|--quiet]
 
 Validates the change, commits the spec on its AI-repo branch (\`docs(spec): <id>\`) and
 records the approval (approver = git user.email, spec commit, content hash; task checkboxes
@@ -247,7 +247,7 @@ export const resumeCommand: Command = {
   summary: "Continue a paused, aborted, interrupted or queued change",
   options: PROGRESS_OPTIONS,
   positionals: [{ name: "change-id", complete: "change" }],
-  help: `Usage: ai-factory resume <change-id> [--verbose|--quiet]
+  help: `Usage: loomwright resume <change-id> [--verbose|--quiet]
 
 Continues the change from its last consistent state: interrupted tasks restart in their
 kept worktrees, finished ones stay; a queued change starts when the workspace is free.
@@ -263,7 +263,7 @@ kept worktrees, finished ones stay; a queued change starts when the workspace is
       if (run === undefined) throw new PreconditionError(`no change ${id}`);
       if (run.phase === "done") {
         io.out(`${id} is already done`);
-        io.out(`next: \`ai-factory land ${id}\` merges the finished change into its base branches`);
+        io.out(`next: \`loomwright land ${id}\` merges the finished change into its base branches`);
         return ExitCode.Ok;
       }
       return report(io, await drive(p, id));
