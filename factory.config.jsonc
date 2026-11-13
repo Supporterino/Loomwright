@@ -13,12 +13,12 @@
   // opencode model ids ("provider/model") per role. contractReviewer defaults to reviewer.
   // "roles", "repos" and "agents" can override these; the flat entries stay the fallback.
   "models": {
-    "orchestrator": "anthropic/claude-sonnet-5-5",
-    "architect": "anthropic/claude-opus-5-5",
-    "reviewer": "anthropic/claude-opus-5-5",
-    "implementer": "anthropic/claude-sonnet-5-5",
-    "tester": "anthropic/claude-sonnet-5-5",
-    "explorer": "anthropic/claude-haiku-5-5"
+    "orchestrator": "opencode/claude-sonnet-5-5",
+    "architect": "opencode/claude-opus-5-5",
+    "reviewer": "opencode/claude-opus-5-5",
+    "implementer": "opencode/claude-sonnet-5-5",
+    "tester": "opencode/claude-sonnet-5-5",
+    "explorer": "opencode/claude-haiku-5-5"
   },
 
   // Project bars injected into every session. Add docs/security.md, docs/go.md, etc.
@@ -69,7 +69,7 @@
   // Web search provider for agents ("random" reuses an available provider) or false to disable it.
   "websearch": { "provider": "random" },
   // Task commits: "conventional" or "gitmoji"; scopes prefixes the repo name.
-  "commits": { "style": "conventional", "scopes": false },
+  "commits": { "style": "gitmoji", "scopes": false },
   // Agent-raised clarification during design, the reviewer loop and the no-spec quick task.
   // reviewRounds > 1 re-reviews every touched repo after a fix round until a pass is clean.
   "workflow": { "refine": true, "clarifyRounds": 2, "reviewRounds": 1, "quick": { "enabled": true, "branchPrefix": "task/" } },
