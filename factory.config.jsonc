@@ -67,7 +67,8 @@
   // Agent shells and gates run in an OS sandbox where available ("auto"; macOS sandbox-exec).
   // This repo's own suite applies Seatbelt itself, and macOS cannot nest a sandbox inside a
   // profile that has deny rules, so gates and shells run unsandboxed here. Re-enable once the
-  // factory refuses to nest (nested runs skip the wrapper).
+  // factory refuses to nest (nested runs skip the wrapper). See ADR-0041
+  // (docs/decisions/0041-unsandboxed-workspace.md).
   "security": { "sandbox": "off" },
   // Web search provider for agents ("random" reuses an available provider) or false to disable it.
   "websearch": { "provider": "random" },
