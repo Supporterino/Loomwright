@@ -46,7 +46,7 @@
 
   ],
 
-  "parallel": { "maxAgents": 4, "maxGateProcesses": 2, "withinRepo": "worktrees" },
+  "parallel": { "maxAgents": 6, "maxGateProcesses": 3, "withinRepo": "worktrees" },
   // Per agent turn wall-clock limit in minutes; a timed-out turn is retried.
   "runtime": { "turnTimeoutMinutes": 60 },
   "tokens": { "mode": "report", "contextPackMaxTokens": 8000, "gateOutputMaxLines": 80 },
@@ -62,7 +62,7 @@
   "logs": { "retentionDays": 14, "redact": true },
   // Per-change records. "local" keeps them in .factory/; "git" commits them under
   // factory-records/ so reports, approvals and usage survive a machine switch.
-  "artifacts": { "mode": "local", "reports": true, "approvals": true, "usage": true },
+  "artifacts": { "mode": "git", "reports": true, "approvals": true, "usage": true },
   "graph": { "exclude": ["**/node_modules/**","**/vendor/**","**/target/**","**/dist/**","**/build/**","**/coverage/**","**/.next/**","**/__pycache__/**","**/.venv/**",".factory/**","factory-records/**","graphify-out/**"] },
   // Agent shells and gates run in an OS sandbox where available ("auto"; macOS sandbox-exec).
   "security": { "sandbox": "auto" },
@@ -72,7 +72,7 @@
   "commits": { "style": "gitmoji", "scopes": false },
   // Agent-raised clarification during design, the reviewer loop and the no-spec quick task.
   // reviewRounds > 1 re-reviews every touched repo after a fix round until a pass is clean.
-  "workflow": { "refine": true, "clarifyRounds": 2, "reviewRounds": 1, "quick": { "enabled": true, "branchPrefix": "task/" } },
+  "workflow": { "refine": true, "clarifyRounds": 2, "reviewRounds": 6, "quick": { "enabled": true, "branchPrefix": "task/" } },
   // Detect release-please, goreleaser, changesets and forge CI (read-only).
   "release": { "detect": true },
 
