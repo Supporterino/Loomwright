@@ -269,6 +269,43 @@ describe(`update from a ${SNAPSHOT.version} install`, () => {
   });
 });
 
+describe("compatibility surface", () => {
+  test("an old install still updates", async () => {
+    const snapshot = JSON.parse(
+      readFileSync(join(import.meta.dir, "fixtures/install-0.12.0.json"), "utf8"),
+    ) as { version: string; files: Record<string, string> };
+    const base = mkdtempSync(join(tmpdir(), "loomwright-previous-"));
+    const root = join(base, "app");
+    try {
+      for (const [rel, content] of Object.entries(snapshot.files)) {
+        mkdirSync(dirname(join(root, rel)), { recursive: true });
+        writeFileSync(join(root, rel), content);
+      }
+      await fixtureGit(root, "init", "-q", "-b", "main");
+      await fixtureGit(root, "add", "-A");
+      await fixtureGit(root, "commit", "-q", "-m", `chore(factory): init v${snapshot.version}`);
+      const initial = await gitOut(root, "rev-parse", "HEAD");
+
+      const run = await cli(root, "update");
+      expect(run.err).toBe("");
+      expect(run.code).toBe(ExitCode.Ok);
+      expect(await gitOut(root, "rev-list", "--count", `${initial}..HEAD`)).toBe("1");
+      expect(await gitOut(root, "log", "-1", "--format=%s")).toBe(
+        `chore(factory): update to v${FACTORY_VERSION}`,
+      );
+      expect(await gitOut(root, "status", "--porcelain")).toBe("");
+
+      // The persisted names do not move with the brand.
+      expect(existsSync(join(root, "factory.lock.json"))).toBe(true);
+      expect(readLock(root)?.factoryVersion).toBe(FACTORY_VERSION);
+      expect(run.out).toContain(".factory/backups/");
+      expect(existsSync(join(root, ".factory", "backups"))).toBe(true);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("activation snapshot", () => {
   test("a resumed change keeps the agent and gate definitions it started with", async () => {
     const { createSingleRepoFixture } = await import("./fixtures/workspaces.ts");
