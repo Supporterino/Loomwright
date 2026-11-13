@@ -101,4 +101,10 @@ describe("compatibility surface", () => {
     expect(isHistoricalSnapshot("test/fixtures/install-0.12.0.json")).toBe(true);
     expect(isHistoricalSnapshot("test/fixtures/install-0.13.0.json")).toBe(false);
   });
+
+  test("the workspace sandbox setting is pinned to off (ADR-0041)", () => {
+    const config = read("factory.config.jsonc");
+    expect(config).toContain('"security": { "sandbox": "off" }');
+    expect(config).toContain("ADR-0041");
+  });
 });
