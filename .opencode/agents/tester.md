@@ -1,7 +1,7 @@
 ---
 description: "ai-factory tester: adds tests until every scenario has one."
 mode: primary
-model: anthropic/claude-sonnet-5-5
+model: opencode/claude-sonnet-5-5
 permissions:
   - { action: read, resource: "*", effect: deny }
   - { action: glob, resource: "*", effect: deny }

@@ -1,7 +1,7 @@
 ---
 description: "ai-factory explorer: read-only, graph-first map of one repo."
 mode: primary
-model: anthropic/claude-haiku-5-5
+model: opencode/claude-haiku-5-5
 permissions:
   - { action: read, resource: "*", effect: deny }
   - { action: glob, resource: "*", effect: deny }

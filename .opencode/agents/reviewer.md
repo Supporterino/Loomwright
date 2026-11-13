@@ -1,7 +1,7 @@
 ---
 description: "ai-factory reviewer: per-repo review against scenarios and standards."
 mode: primary
-model: anthropic/claude-opus-5-5
+model: opencode/claude-opus-5-5
 permissions:
   - { action: read, resource: "*", effect: deny }
   - { action: glob, resource: "*", effect: deny }

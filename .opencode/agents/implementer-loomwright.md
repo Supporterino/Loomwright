@@ -1,7 +1,7 @@
 ---
 description: ai-factory implementer for loomwright (.; typescript).
 mode: primary
-model: anthropic/claude-sonnet-5-5
+model: opencode/claude-sonnet-5-5
 permissions:
   - { action: read, resource: "*", effect: deny }
   - { action: glob, resource: "*", effect: deny }

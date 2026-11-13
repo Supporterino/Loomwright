@@ -1,7 +1,7 @@
 ---
 description: "ai-factory intake: request to change id and summary. No tools."
 mode: primary
-model: anthropic/claude-sonnet-5-5
+model: opencode/claude-sonnet-5-5
 permissions:
   - { action: read, resource: "*", effect: deny }
   - { action: glob, resource: "*", effect: deny }
