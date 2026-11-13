@@ -1,5 +1,5 @@
 ---
-description: "ai-factory tester: adds tests until every scenario has one."
+description: "Loomwright tester: adds tests until every scenario has one."
 mode: primary
 model: deepseek/deepseek-flash
 permissions:

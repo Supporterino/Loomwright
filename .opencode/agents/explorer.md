@@ -1,5 +1,5 @@
 ---
-description: "ai-factory explorer: read-only, graph-first map of one repo."
+description: "Loomwright explorer: read-only, graph-first map of one repo."
 mode: primary
 model: deepseek/deepseek-flash
 permissions:

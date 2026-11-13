@@ -1,5 +1,5 @@
 ---
-description: "ai-factory contract reviewer: one cross-repo pass over contract changes."
+description: "Loomwright contract reviewer: one cross-repo pass over contract changes."
 mode: primary
 model: deepseek/deepseek-flash
 permissions:

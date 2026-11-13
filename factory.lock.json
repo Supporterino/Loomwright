@@ -51,8 +51,8 @@
       "template": "graphifyignore",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "3245cc65f9f0fef797a8252da0b06a6fd5e0cf3570ea91f0521a4b34a62cbd67",
-      "blob": "d6af79f4abfc7803673cc7206de919c8fd899ba8"
+      "sha256": "d6ad5d7e9ea159c7b24d60c5497ccb1b9bb2784bcd9e15745de94cbdee802d59",
+      "blob": "60951bfb36a720384346feae58188f0626b3663b"
     },
     ".opencode/addons/ponytail/.opencode/command/ponytail-review.md": {
       "template": "addons/ponytail/.opencode/command/ponytail-review.md",
@@ -100,50 +100,50 @@
       "template": "agents/architect",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "4b7d2a08bb9afecbb9c5a9804e5487bbc168793939f8837b118cbe33b829e13d",
-      "blob": "847cd0842e3dfdee3f0f5fa9acef29694b478bb7"
+      "sha256": "795b39bc5a79de41c6ff82cd221661b6f02f1fb044faab692f1c7efe19583b31",
+      "blob": "396fd121388d53a7627242c1a01b678ad2491606"
     },
     ".opencode/agents/contract-reviewer.md": {
       "template": "agents/contract-reviewer",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "6b76b95c8d79edfc73b7180d7a83559764fbd2bfd444cd88a02c04f01354b544",
-      "blob": "c92185b4ccba6aba77f4590e62eb1bcbaa0795c1"
+      "sha256": "6f9befe8c3698a1a06839fda1531d037bd5864abaa11a940091f61a36c65f24f",
+      "blob": "7a013f5fc48e2de3ecf53bbcc2a0d74c59ed2a46"
     },
     ".opencode/agents/explorer.md": {
       "template": "agents/explorer",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "33bad5c570d83a2d2952eac2f15b93776c0d1f9b55c53d328d99990ad70a04f5",
-      "blob": "dd3af456541278bb961c9dce766d5511cfb76168"
+      "sha256": "5608feb8bb2ca45fb403254cd32451114ed68857bf1a0fb67a1cb2d800316cd3",
+      "blob": "8edd501ee3f9f405f4a629db71676f06f6f40a20"
     },
     ".opencode/agents/implementer-loomwright.md": {
       "template": "agents/implementer",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "beb60f14633741b85f5c1950f93f4c39e77b30083abbb3bc678a70601682ffa7",
-      "blob": "3fa3a3e67cf730f494a7b79453c9c8671f52f26d"
+      "sha256": "fd49e4738a833989ad5f69f78e18ff13c2d3f26d3619d68028f0eedb64041f1b",
+      "blob": "26be9570f14563059790c916d383dca868a836ee"
     },
     ".opencode/agents/orchestrator.md": {
       "template": "agents/orchestrator",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "c9303f53b05b84612aa4cca2fe81bacfb236c464afcc6041c11d3ee150c96c11",
-      "blob": "51eb9b66a78d5e3c1a169068b9881f6609c20d13"
+      "sha256": "964a58cc5c0f70bc58d0c89f405937c53fc66a36f807d0849271d304d79c84de",
+      "blob": "ae8b008f34a3b6b0c8c9a7c6c058c38d41990822"
     },
     ".opencode/agents/reviewer.md": {
       "template": "agents/reviewer",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "df706ab4953697b321e8fbbd2820d49c39db846f30d4e309fd1d71e97432a7cf",
-      "blob": "20508d5c3ad82eb51c833c6cf54abe854839d2ae"
+      "sha256": "3048910660c83067d55309dc3f576625c5dcff4773cc310ab2d205ceb161e65b",
+      "blob": "36c00fb46e815f69dd49632cf0e5c6912cffe0ba"
     },
     ".opencode/agents/tester.md": {
       "template": "agents/tester",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "2b85fee67c5e98cefd2a58aa36108dd12a835cc4f9b5496bd88b61620bb980af",
-      "blob": "e76606b091f0fcd590d19a93262b7291b72592a1"
+      "sha256": "27a9b0a3db1472c6960aab02d35879d0cd91ccb8366ba985f203a75840e5968d",
+      "blob": "2c07364b4a2a6b0230c093fc6d4ec443c4cf1636"
     },
     ".opencode/commands/opsx-apply.md": {
       "template": "openspec-tools",
@@ -191,29 +191,29 @@
       "template": "opencode-config",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "3a62e9573cc7244fe9e41bdb5efc343c5da1d0844c4dacd0793a3af16ab03602",
-      "blob": "c959f839607c50951e580efba45da1bfb5e2775a"
+      "sha256": "f16876933c6cc301742e16c3cd8a0a827c6c700b962e1dc67d6a1c7b6938f6f8",
+      "blob": "9f93b1ed663ee2ca0f03c065ad9ab5e63d0bac97"
     },
     ".opencode/plugins/factory.js": {
       "template": "plugin",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "16650f3bc43e253c0711e9048717da95105ee2c274a0579c38e9139f9d0325d3",
-      "blob": "b98eac95b563257c26a3638fd881ae3ed26fd1e8"
+      "sha256": "8c5e126d04f93ead64e8e5c1d2e820f60cee7db7e45a97a796ca8e18b3bccacb",
+      "blob": "f2955a9545077f20020bb8241d5fc2537060923a"
     },
     ".opencode/schemas/factory.config.schema.json": {
       "template": "config-schema",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "99a7ec25bb3072c5b6543bd5bd74eb73d1a55900a2e43702cd4e7ac90a35d771",
-      "blob": "28098ab38a6624cb3ba84377e7da7c7157bb117f"
+      "sha256": "cb34e4eaac88021d9d3c85ab3e0037470433ee7aafcc6d96ae86e65e1364939c",
+      "blob": "c756d791b9870bb45fdfdf0717610567ebde6cf0"
     },
     ".opencode/schemas/handoff.schema.json": {
       "template": "handoff-schema",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "4987ad4aafcbc5ede7fe31ca1f6f23372fa870924c82ddf0709b0924b4af2237",
-      "blob": "5176e62d41a2bbab1c9f85ba8885db70d4f6a877"
+      "sha256": "984f4e54ec7c4926e955c17bb014907004e1cc2f2718165f40e43a2ccbd60ce8",
+      "blob": "9109443f4f8c8c3fbcee68a16a0fcddf3647488f"
     },
     ".opencode/skills/openspec-apply-change/SKILL.md": {
       "template": "openspec-tools",
@@ -317,15 +317,15 @@
       "template": "agents-md",
       "templateVersion": "0.12.0",
       "mode": "block",
-      "sha256": "b6697bd6554f1bf46509f2a747df7502b5c24dc116618ebc300ed4c63fc9ba25",
-      "blob": "cea1693fa2ed411812e1aeb047061b8ba80a9b43"
+      "sha256": "6e81c677fb68c6d49e861ae0e98ea633e1a6e3b8f45158e1940f95ca20ddf388",
+      "blob": "ef495f3e30c762f8e5aa219edc6057e22ef495b9"
     },
     "openspec/config.yaml": {
       "template": "openspec-config",
       "templateVersion": "0.12.0",
       "mode": "file",
-      "sha256": "ff59822a1083b0f57edcd16163c80b778753265816ef184d3cba56565b627cc0",
-      "blob": "089765871f5a9547a1566264f466b868ab2d1505"
+      "sha256": "64ec23f0ce6472f84a6223c368c7bc7343b49db9188714d90f590cdb3b2bf050",
+      "blob": "9672027e771e52db0c582453091a0ff625c1b8ae"
     }
   }
 }

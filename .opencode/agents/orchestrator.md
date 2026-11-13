@@ -1,5 +1,5 @@
 ---
-description: "ai-factory intake: request to change id and summary. No tools."
+description: "Loomwright intake: request to change id and summary. No tools."
 mode: primary
 model: deepseek/deepseek-flash
 permissions:

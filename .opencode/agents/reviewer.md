@@ -1,5 +1,5 @@
 ---
-description: "ai-factory reviewer: per-repo review against scenarios and standards."
+description: "Loomwright reviewer: per-repo review against scenarios and standards."
 mode: primary
 model: deepseek/deepseek-flash
 permissions:

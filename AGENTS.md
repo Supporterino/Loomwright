@@ -80,9 +80,9 @@ committed `templates/plugin/factory-plugin.txt` differs from a fresh bundle, so 
   run by a factory task.
 
 <!-- ai-factory:start (managed by ai-factory; edit outside this block) -->
-## ai-factory
+## Loomwright
 
-This workspace is driven by ai-factory: OpenSpec holds the specs (`openspec/`), Graphify the workspace graph (`graphify-out/`, local), opencode runs the agents (`.opencode/`).
+This workspace is driven by Loomwright: OpenSpec holds the specs (`openspec/`), Graphify the workspace graph (`graphify-out/`, local), opencode runs the agents (`.opencode/`).
 
 | Repo | Path | Role | Languages |
 |---|---|---|---|

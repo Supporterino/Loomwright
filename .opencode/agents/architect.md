@@ -1,5 +1,5 @@
 ---
-description: "ai-factory architect: writes the OpenSpec change and context packs."
+description: "Loomwright architect: writes the OpenSpec change and context packs."
 mode: primary
 model: deepseek/deepseek-flash
 permissions:

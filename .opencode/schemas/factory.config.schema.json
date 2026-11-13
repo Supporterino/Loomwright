@@ -1,5 +1,5 @@
 {
-  "title": "ai-factory config",
+  "title": "Loomwright config",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -345,7 +345,7 @@
             ]
           },
           "description": {
-            "default": "custom ai-factory agent",
+            "default": "custom Loomwright agent",
             "type": "string",
             "minLength": 1
           },

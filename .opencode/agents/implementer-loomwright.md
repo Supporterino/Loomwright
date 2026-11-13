@@ -1,5 +1,5 @@
 ---
-description: ai-factory implementer for loomwright (.; typescript).
+description: Loomwright implementer for loomwright (.; typescript).
 mode: primary
 model: deepseek/deepseek-flash
 permissions:
