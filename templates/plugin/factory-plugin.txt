@@ -283,6 +283,10 @@ function realPathOf(abs, depth = 0) {
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
 import { isAbsolute, join as join4, resolve as resolve2 } from "path";
 var SANDBOX_EXEC = "/usr/bin/sandbox-exec";
+var SANDBOXED_ENV = "AI_FACTORY_SANDBOXED";
+function sandboxNested(env = process.env) {
+  return env[SANDBOXED_ENV] !== undefined;
+}
 var regexPath = (p) => realPathOf(p).replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 function secretReadRules(workspace) {
   const ws = regexPath(workspace);
@@ -2727,9 +2731,11 @@ function onShellCreate(workspace, event) {
     for (const name of ["OPENCODE_PASSWORD", "OPENCODE_SERVER_PASSWORD", ...scrub])
       delete event.env[name];
   }
-  if (process.env.AI_FACTORY_SANDBOX === "seatbelt") {
+  if (process.env.AI_FACTORY_SANDBOX === "seatbelt" && !sandboxNested()) {
     const shell = typeof event.shell === "string" && event.shell.startsWith("/") ? event.shell : "/bin/bash";
     event.command = sandboxCommand(seatbeltProfile(sandboxPolicy(workspace, ctx)), shell, event.command);
+    if (event.env !== undefined)
+      event.env[SANDBOXED_ENV] = "1";
   }
 }
 var entry_default = {

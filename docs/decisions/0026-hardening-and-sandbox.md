@@ -49,6 +49,8 @@ Every one of them passed through the shell parser, because a parser can only jud
   - outbound TCP to port 22.
 
   HTTPS, temp dirs and tool caches stay usable. Probes showed that blocking the Keychain service breaks Node's TLS, so the credential-helper rule is used instead.
+
+  macOS cannot start a sandbox inside a profile with deny rules (`sandbox_apply` returns `EPERM`). Every command the factory wraps is therefore marked with `AI_FACTORY_SANDBOXED`, and a nested run — this repo's own gate suite running the sandbox tests, or an agent shell running `bun test` — leaves its commands unwrapped (`sandboxEnabled`/`sandboxNested`). The outer profile still governs them.
 - **Gates and installs.**
   - Both run with the user's environment minus credentials, plus the push block.
   - Gates also run sandboxed. Installs are not sandboxed, so registry credentials keep working.

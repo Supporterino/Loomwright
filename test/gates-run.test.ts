@@ -5,6 +5,7 @@ import { ExitCode } from "../src/cli/exit-codes.ts";
 import { FactoryConfig, type FactoryConfigInput } from "../src/config/schema.ts";
 import { installDeps } from "../src/gates/install.ts";
 import { runGates } from "../src/gates/run.ts";
+import { sandboxEnabled } from "../src/policy/sandbox.ts";
 import {
   createSingleRepoFixture,
   createSubmoduleFixture,
@@ -192,11 +193,13 @@ describe("runGates (single repo, override commands)", () => {
   test("gates run without credentials, with pushes blocked, and (macOS) sandboxed", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-test";
     mkdirSync(join(fx.root, ".factory"), { recursive: true });
+    // A nested run (the suite itself under a gate) skips the wrapper, so that write would land.
+    const sandboxed = sandboxEnabled("auto");
     try {
       const report = await run({
         format: `test "$AI_FACTORY_AGENT" = 1 && test -z "$ANTHROPIC_API_KEY"`,
         lint: "git config --get-regexp '^url\\.ai-factory-push-blocked' >/dev/null",
-        types: process.platform === "darwin" ? "! touch .factory/gate-was-here" : "true",
+        types: sandboxed ? "! touch .factory/gate-was-here" : "true",
         testAffected: "true",
       });
       expect(report.results.map((r) => [r.type, r.status])).toEqual([
@@ -205,10 +208,20 @@ describe("runGates (single repo, override commands)", () => {
         ["types", "pass"],
         ["testAffected", "pass"],
       ]);
-      expect(existsSync(join(fx.root, ".factory/gate-was-here"))).toBe(false);
+      if (sandboxed) expect(existsSync(join(fx.root, ".factory/gate-was-here"))).toBe(false);
     } finally {
       delete process.env.ANTHROPIC_API_KEY;
     }
+  });
+
+  test("a sandboxed gate is marked so nested runs skip the wrapper (macOS)", async () => {
+    const report = await run({
+      format: process.platform === "darwin" ? 'test "$AI_FACTORY_SANDBOXED" = 1' : "true",
+      lint: "true",
+      types: "true",
+      testAffected: "true",
+    });
+    expect(report.passed).toBe(true);
   });
 
   test("a gate that commits is undone too", async () => {
