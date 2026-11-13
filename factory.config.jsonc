@@ -65,7 +65,10 @@
   "artifacts": { "mode": "git", "reports": true, "approvals": true, "usage": true },
   "graph": { "exclude": ["**/node_modules/**","**/vendor/**","**/target/**","**/dist/**","**/build/**","**/coverage/**","**/.next/**","**/__pycache__/**","**/.venv/**",".factory/**","factory-records/**","graphify-out/**"] },
   // Agent shells and gates run in an OS sandbox where available ("auto"; macOS sandbox-exec).
-  "security": { "sandbox": "auto" },
+  // This repo's own suite applies Seatbelt itself, and macOS cannot nest a sandbox inside a
+  // profile that has deny rules, so gates and shells run unsandboxed here. Re-enable once the
+  // factory refuses to nest (nested runs skip the wrapper).
+  "security": { "sandbox": "off" },
   // Web search provider for agents ("random" reuses an available provider) or false to disable it.
   "websearch": { "provider": "random" },
   // Task commits: "conventional" or "gitmoji"; scopes prefixes the repo name.
