@@ -7,13 +7,13 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Supporterino/AI-Factory.git"
+    "url": "git+https://github.com/Supporterino/Loomwright.git"
   },
-  "homepage": "https://github.com/Supporterino/AI-Factory#readme",
+  "homepage": "https://github.com/Supporterino/Loomwright#readme",
   "bugs": {
-    "url": "https://github.com/Supporterino/AI-Factory/issues"
+    "url": "https://github.com/Supporterino/Loomwright/issues"
   },
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.4",
   "bin": {
     "loomwright": "./dist/cli.js",
     "ai-factory": "./dist/cli.js"
