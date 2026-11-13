@@ -283,8 +283,8 @@ describe("init: single repo", () => {
     for (const argv of [["init"], ["update"], ["detect", "--apply"]]) {
       const res = await cli(fx.root, ...argv);
       expect(res.code).toBe(ExitCode.Precondition);
-      expect(res.err).toContain("installed by ai-factory 9.9.9");
-      expect(res.err).toContain("npx @supporterino/ai-factory@9.9.9");
+      expect(res.err).toContain("installed by Loomwright 9.9.9");
+      expect(res.err).toContain("npx @loomwright/cli@9.9.9");
     }
     expect(await gitOut(fx.root, "rev-parse", "HEAD")).toBe(head);
 

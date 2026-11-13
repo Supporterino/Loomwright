@@ -4,8 +4,9 @@ import { appendJsonc, parseJsonc, setJsonc } from "../src/config/jsonc.ts";
 import { parseConfigText } from "../src/config/load.ts";
 import { FactoryConfig, type FactoryConfigInput, modelFor } from "../src/config/schema.ts";
 import { ConfigError } from "../src/errors.ts";
-import { FACTORY_VERSION, PACKAGE_NAME } from "../src/version.ts";
+import { FACTORY_VERSION, PACKAGE_NAME, runVersion } from "../src/version.ts";
 import { PONYTAIL } from "../src/versions.ts";
+import { cli } from "./helpers.ts";
 
 const MODELS = {
   orchestrator: "anthropic/claude-sonnet-5-5",
@@ -186,13 +187,61 @@ describe("JSONC config text", () => {
   });
 });
 
-test("FACTORY_VERSION and PACKAGE_NAME match package.json", () => {
-  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
-    version: string;
-    name: string;
-    bin: unknown;
-  };
+interface PackageJson {
+  version: string;
+  name: string;
+  description: string;
+  bin: Record<string, string>;
+  repository: { url: string };
+  homepage: string;
+  bugs: { url: string };
+  scripts: Record<string, string>;
+}
+
+const packageJson = (): PackageJson =>
+  // The repo's own package.json, shaped as the spec pins it.
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as PackageJson;
+
+test("package metadata exposes both binaries and PACKAGE_NAME matches package.json", () => {
+  const pkg = packageJson();
   expect(FACTORY_VERSION).toBe(pkg.version);
   expect(PACKAGE_NAME).toBe(pkg.name);
-  expect(pkg.bin).toEqual({ "ai-factory": "./dist/cli.js" });
+  expect(pkg.name).toBe("@loomwright/cli");
+  expect(pkg.bin).toEqual({
+    loomwright: "./dist/cli.js",
+    "ai-factory": "./dist/cli.js",
+  });
+  expect(pkg.description).toContain("Loomwright");
+});
+
+test("the deprecated alias keeps existing scripts working", () => {
+  const pkg = packageJson();
+  expect(pkg.bin["ai-factory"]).toBe(pkg.bin.loomwright);
+  expect(Object.keys(pkg.bin)).toEqual(["loomwright", "ai-factory"]);
+});
+
+test("runVersion names the new package", () => {
+  expect(runVersion("1.2.3")).toBe("npx @loomwright/cli@1.2.3");
+});
+
+test("the version flag prints only the version", async () => {
+  const res = await cli(process.cwd(), "--version");
+  expect(res.out).toBe(FACTORY_VERSION);
+  expect(res.out).not.toContain("Loomwright");
+  expect(res.out).not.toContain("ai-factory");
+});
+
+test("the repository URLs are unchanged", () => {
+  const pkg = packageJson();
+  expect(pkg.repository.url).toBe("git+https://github.com/Supporterino/AI-Factory.git");
+  expect(pkg.homepage).toBe("https://github.com/Supporterino/AI-Factory#readme");
+  expect(pkg.bugs.url).toBe("https://github.com/Supporterino/AI-Factory/issues");
+});
+
+test("gate scripts keep their exact definitions", () => {
+  const pkg = packageJson();
+  expect(pkg.scripts["format:check"]).toBe("biome format .");
+  expect(pkg.scripts.lint).toBe("biome check .");
+  expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
+  expect(pkg.scripts.test).toBe("bun test --timeout 60000");
 });

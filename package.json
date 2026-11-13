@@ -1,7 +1,7 @@
 {
-  "name": "@supporterino/ai-factory",
+  "name": "@loomwright/cli",
   "version": "0.12.0",
-  "description": "Repo-local AI software factory: OpenSpec + Graphify + opencode v2",
+  "description": "Loomwright: repo-local AI software factory — OpenSpec + Graphify + opencode v2",
   "license": "MIT",
   "author": "Lars Roth",
   "type": "module",
@@ -15,6 +15,7 @@
   },
   "packageManager": "bun@1.4.3",
   "bin": {
+    "loomwright": "./dist/cli.js",
     "ai-factory": "./dist/cli.js"
   },
   "files": [
