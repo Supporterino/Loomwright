@@ -54,34 +54,47 @@ function changelogSections(markdown: string): Section[] {
   return sections;
 }
 
+function readChangelog(): Section[] {
+  return changelogSections(readFileSync(join(ROOT, "CHANGELOG.md"), "utf8"));
+}
+
+// `changeset version` prepends the released section above a stale `Unreleased` one, so the
+// newest entry is always the first section before `## 0.12.0`.
+function newestSection(sections: Section[]): Section | undefined {
+  const released = sections.findIndex((section) => section.heading === "0.12.0");
+  return released > 0 ? sections[0] : undefined;
+}
+
 describe("release notes", () => {
   test("the changeset records the breaking rename", () => {
     const changeset = readChangesets().find(
       (entry) => entry.frontmatter["@loomwright/cli"] === "major",
     );
-    expect(changeset).toBeDefined();
-    expect(changeset?.body).toContain("loomwright");
-    expect(changeset?.body).toContain("ai-factory");
+    // Releasing deletes the changeset; the released section then carries the same note.
+    const recorded = changeset?.body ?? newestSection(readChangelog())?.body;
+    expect(recorded).toContain("loomwright");
+    expect(recorded).toContain("ai-factory");
   });
 
   test("the new changelog section announces the rename", () => {
-    const sections = changelogSections(readFileSync(join(ROOT, "CHANGELOG.md"), "utf8"));
-    const first = sections[0];
+    const sections = readChangelog();
+    expect(sections.some((section) => section.heading === "0.12.0")).toBe(true);
+    const first = newestSection(sections);
     expect(first).toBeDefined();
-    expect(first?.heading).toBe("Unreleased");
     expect(first?.body).toContain("@loomwright/cli");
     expect(first?.body).toContain("loomwright");
     expect(first?.body).toContain("ai-factory");
-    expect(sections.some((section) => section.heading === "0.12.0")).toBe(true);
   });
 
   test("past changelog entries are preserved", () => {
-    const sections = changelogSections(readFileSync(join(ROOT, "CHANGELOG.md"), "utf8"));
-    const released = sections.find((section) => section.heading === "0.12.0");
-    expect(released?.body).toContain(
+    const sections = readChangelog();
+    const released = sections.findIndex((section) => section.heading === "0.12.0");
+    expect(released).toBeGreaterThan(-1);
+    const kept = sections.slice(released < 0 ? sections.length : released);
+    expect(kept[0]?.body).toContain(
       "Reviewers and contract reviewers are now told to set `file` to the change's spec path",
     );
-    for (const section of sections.slice(1)) {
+    for (const section of kept) {
       expect(section.body).not.toContain("Loomwright");
     }
   });
