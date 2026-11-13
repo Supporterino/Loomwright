@@ -44,10 +44,10 @@ Doctor checks, pipeline next-steps, pause reasons, lock and downgrade errors, co
 - **THEN** stderr contains `installed by Loomwright <version>`
 - **AND** stderr contains `npx @loomwright/cli@<version>`
 
-#### Scenario: task commits carry the new product name
+#### Scenario: stashed leftover work carries the new product name
 
-- **WHEN** a task leaves uncommitted work in its worktree and the factory commits it
-- **THEN** the commit message starts `loomwright <change-id> <task-id>`
+- **WHEN** a task leaves uncommitted work in its worktree and the factory stashes it
+- **THEN** the stash message starts `loomwright <change-id> <task-id>`
 
 ### Requirement: Generated agent and workspace text uses Loomwright
 
