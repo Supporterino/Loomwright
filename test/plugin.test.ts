@@ -123,6 +123,12 @@ describe("plugin bundle", () => {
   test("the committed bundle is up to date (run `bun run build:plugin`)", async () => {
     expect(readFileSync(PLUGIN_OUT, "utf8")).toBe(await bundlePlugin());
   });
+
+  test("the bundled plugin names Loomwright", () => {
+    const bundle = readFileSync(PLUGIN_OUT, "utf8");
+    expect(bundle.startsWith("// Loomwright opencode plugin")).toBe(true);
+    expect(bundle).toContain("Loomwright blocked this call:");
+  });
 });
 
 describe("plugin guards", () => {

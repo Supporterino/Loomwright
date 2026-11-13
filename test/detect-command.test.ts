@@ -39,7 +39,7 @@ const MODELS = `{
 /** A hand-written config matching the submodule fixture, with comments to preserve. */
 function submoduleConfig(backendName = "backend"): string {
   return `{
-  // ai-factory workspace config
+  // Loomwright workspace config
   "schemaVersion": 2,
   "layout": "submodules",
   "repos": [
@@ -113,7 +113,7 @@ describe("ai-factory detect (submodules)", () => {
 
     const text = readFileSync(configFile, "utf8");
     for (const comment of [
-      "// ai-factory workspace config",
+      "// Loomwright workspace config",
       "// Go API",
       "/* confirmed by hand */",
     ]) {

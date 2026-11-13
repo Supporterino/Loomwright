@@ -35,5 +35,5 @@ export type Handoff = z.infer<typeof Handoff>;
 /** JSON Schema rendered into the workspace. */
 export function handoffJsonSchema(): string {
   const schema = z.toJSONSchema(Handoff, { target: "draft-2020-12" });
-  return `${JSON.stringify({ $id: "ai-factory/handoff.schema.json", title: "Agent handoff", ...schema }, null, 2)}\n`;
+  return `${JSON.stringify({ $id: "loomwright/handoff.schema.json", title: "Agent handoff", ...schema }, null, 2)}\n`;
 }

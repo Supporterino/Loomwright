@@ -151,7 +151,7 @@ const CustomAgent = z.strictObject({
     .regex(/^[a-z0-9][a-z0-9-]*$/, "lowercase letters, digits and dashes, starting alphanumeric"),
   /** Pipeline phase this agent can take over. */
   phase: z.enum(AGENT_PHASES),
-  description: z.string().min(1).default("custom ai-factory agent"),
+  description: z.string().min(1).default("custom Loomwright agent"),
   model: ModelId.optional(),
   mode: z.enum(["primary", "subagent", "all"]).default("subagent"),
   /** Inline system prompt. Use `promptFile` for a longer prompt kept in the repository. */

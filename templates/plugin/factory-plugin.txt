@@ -1,4 +1,4 @@
-// ai-factory opencode plugin — generated from src/plugin/entry.ts; do not edit.
+// Loomwright opencode plugin — generated from src/plugin/entry.ts; do not edit.
 // @bun
 // src/plugin/entry.ts
 import { existsSync as existsSync4, readdirSync as readdirSync3, readFileSync as readFileSync3, statSync as statSync3 } from "fs";
@@ -2582,7 +2582,7 @@ var isSecretReal = (directory, path) => isSecretPath(path) || isSecretPath(realP
 
 class Refused extends Error {
   constructor(reason) {
-    super(`ai-factory blocked this call: ${reason}`);
+    super(`Loomwright blocked this call: ${reason}`);
   }
 }
 var reads = new Map;
