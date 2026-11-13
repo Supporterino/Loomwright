@@ -27,8 +27,9 @@ describe("documentation", () => {
 
   test("README commands use the new package and binary", () => {
     const readme = read("README.md");
-    expect(readme).toContain("bunx @loomwright/cli@");
-    expect(readme).toContain("@loomwright/cli@0.3.0 init");
+    expect(readme).toContain("bunx @loomwright/cli init");
+    expect(readme).toContain("npx @loomwright/cli init");
+    expect(readme).not.toContain("@loomwright/cli@0.3.0");
     expect(readme).toContain("loomwright doctor");
     expect(readme).toContain("@loomwright/cli@<new> update");
     expect(readme).toContain("@loomwright/cli@<new> rollback");

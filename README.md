@@ -36,10 +36,10 @@ Plus credentials for the model providers you configure, either exported (`ANTHRO
 Run the CLI without installing it:
 
 ```bash
-bunx @loomwright/cli@0.3.0 init
+bunx @loomwright/cli init
 ```
 
-`npx @loomwright/cli@0.3.0 init` works too. The package is `@loomwright/cli`; its command is `loomwright`, so after `npm install --global @loomwright/cli` you run `loomwright init`. The old `ai-factory` binary still works as a deprecated alias. Note: the unscoped npm package `ai-factory` is an unrelated project. To run it from a checkout of this repository instead, build it with `bun install && bun run build`, then run `node dist/cli.js` (or `npm link` it).
+`npx @loomwright/cli init` works too. The package is `@loomwright/cli`; its command is `loomwright`, so after `npm install --global @loomwright/cli` you run `loomwright init`. The old `ai-factory` binary still works as a deprecated alias. Note: the unscoped npm package `ai-factory` is an unrelated project. To run it from a checkout of this repository instead, build it with `bun install && bun run build`, then run `node dist/cli.js` (or `npm link` it).
 
 `init` is idempotent. It detects the layout, languages, contracts and existing `opencode.json` instructions, and writes `factory.config.jsonc` from what it found, so edit that file afterwards. It also renders the agents, plugin, standards, skills and OpenSpec's commands into `.opencode/`, installs the `pre-push` hooks, builds the graph, writes `factory.lock.json`, and commits it all as `chore(factory): init vX.Y.Z`. On a first install it archives replaced custom agents, commands and skills under `.factory/legacy/<timestamp>/`; `init --plan` shows that plan without writing. Then check the setup:
 
