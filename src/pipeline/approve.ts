@@ -45,7 +45,7 @@ export async function approve(p: Pipeline, id: string): Promise<Approval> {
   if (branch !== changeBranch(id)) {
     throw new PreconditionError(
       `the spec of ${id} must be committed on ${changeBranch(id)}, but ${dir} is on ${branch ?? "a detached HEAD"}`,
-      [`run \`ai-factory resume ${id}\` to branch first`],
+      [`run \`loomwright resume ${id}\` to branch first`],
     );
   }
   const path = `openspec/changes/${id}`;
@@ -100,7 +100,7 @@ function assertApprovable(id: string, run: RunState): void {
   const started = run.tasks.some((t) => t.status !== "pending");
   if (PAST_APPROVAL.has(run.phase) || started) {
     throw new PreconditionError(`${id} is past approval (phase ${run.phase})`, [
-      `use \`ai-factory reapprove ${id}\` to accept a spec edit, or \`ai-factory reword ${id}\` to let the architect apply review findings`,
+      `use \`loomwright reapprove ${id}\` to accept a spec edit, or \`loomwright reword ${id}\` to let the architect apply review findings`,
     ]);
   }
   if (!["awaiting-approval", "paused", "queued"].includes(run.phase)) {
@@ -124,7 +124,7 @@ export async function verifyApproval(p: Pipeline, id: string, dir: string): Prom
   // The approval file always lives in the workspace root; the spec may be in a draft dir.
   const approval = readApproval(p.root, id);
   if (approval === undefined)
-    throw new PreconditionError(`${id} is not approved`, [`run \`ai-factory approve ${id}\``]);
+    throw new PreconditionError(`${id} is not approved`, [`run \`loomwright approve ${id}\``]);
   if (specHash(dir, id) !== approval.hash) {
     const started = p.run(id).tasks.some((t) => t.status !== "pending");
     throw new PreconditionError(
@@ -133,10 +133,10 @@ export async function verifyApproval(p: Pipeline, id: string, dir: string): Prom
         ? [
             "implementation has started; either restore the approved spec:",
             `git checkout ${approval.specCommit.slice(0, 12)} -- openspec/changes/${id} && git commit -m "docs(spec): restore approved ${id}"`,
-            `or accept the current spec with \`ai-factory reapprove ${id}\` (or let the architect apply review findings with \`ai-factory reword ${id}\`)`,
-            `then \`ai-factory resume ${id}\` (or \`ai-factory abort ${id}\` and start a new change)`,
+            `or accept the current spec with \`loomwright reapprove ${id}\` (or let the architect apply review findings with \`loomwright reword ${id}\`)`,
+            `then \`loomwright resume ${id}\` (or \`loomwright abort ${id}\` and start a new change)`,
           ]
-        : [`review the change and run \`ai-factory approve ${id}\` again`],
+        : [`review the change and run \`loomwright approve ${id}\` again`],
     );
   }
   const onBranch = await git(["merge-base", "--is-ancestor", approval.specCommit, "HEAD"], {

@@ -128,7 +128,7 @@ describe(`update from a ${SNAPSHOT.version} install`, () => {
   test("the old config is refused until update migrates it", async () => {
     expect(() => loadConfig(root)).toThrow("uses config schemaVersion 1; this factory needs 4");
     const res = await cli(root, "detect");
-    expect(res.err).toContain("run `ai-factory update` to migrate it");
+    expect(res.err).toContain("run `loomwright update` to migrate it");
   });
 
   test("keeps your edits, migrates the config, regenerates agents, one commit, rollback restores exactly", async () => {
@@ -227,7 +227,7 @@ describe(`update from a ${SNAPSHOT.version} install`, () => {
     const dry = await cli(root, "update", "--dry-run");
     expect(dry.code).toBe(ExitCode.Ok);
     expect(dry.out).toContain(
-      "detection differs from the config (not applied; see `ai-factory detect`)",
+      "detection differs from the config (not applied; see `loomwright detect`)",
     );
     expect(dry.out).toContain("go");
   });

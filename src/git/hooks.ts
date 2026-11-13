@@ -13,13 +13,13 @@ export const CHAINED_HOOK = "pre-push.ai-factory-chained";
 export const AGENT_MARKER_ENV = "AI_FACTORY_AGENT";
 
 export const PRE_PUSH_HOOK = `#!/bin/sh
-${HOOK_MARKER} (installed by ai-factory; reinstalled by \`ai-factory init\`, checked by \`doctor\`)
+${HOOK_MARKER} (installed by Loomwright; reinstalled by \`loomwright init\`, checked by \`doctor\`)
 # Agents run with ${AGENT_MARKER_ENV} set while a change is active; they must never push.
 if [ -n "$${AGENT_MARKER_ENV}" ]; then
-  echo "ai-factory: pushes are blocked for agents while a change is active" >&2
+  echo "loomwright: pushes are blocked for agents while a change is active" >&2
   exit 1
 fi
-# A pre-push hook that existed before ai-factory was installed still runs.
+# A pre-push hook that existed before Loomwright was installed still runs.
 chained="$(dirname "$0")/${CHAINED_HOOK}"
 if [ -x "$chained" ]; then
   exec "$chained" "$@"

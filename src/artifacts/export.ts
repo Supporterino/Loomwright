@@ -101,7 +101,7 @@ function precondition(config: FactoryConfig, id: string): PreconditionError | un
   if (!artifactsEnabled(config))
     return new PreconditionError('artifacts.mode is "local"', [
       'set "artifacts": { "mode": "git" } in factory.config.jsonc',
-      "run `ai-factory update` to apply the config, then `ai-factory artifacts sync --all`",
+      "run `loomwright update` to apply the config, then `loomwright artifacts sync --all`",
     ]);
   return undefined;
 }
@@ -174,7 +174,7 @@ export async function syncAllArtifacts(
   if (!artifactsEnabled(config)) {
     throw new PreconditionError('artifacts.mode is "local"', [
       'set "artifacts": { "mode": "git" } in factory.config.jsonc',
-      "run `ai-factory update` to apply the config",
+      "run `loomwright update` to apply the config",
     ]);
   }
   const changes: ExportResult[] = [];

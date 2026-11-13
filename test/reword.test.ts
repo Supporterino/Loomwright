@@ -130,7 +130,7 @@ describe("spec findings, reword and reapprove", () => {
     expect(paused?.phase).toBe("paused");
     expect(paused?.specFindings).toHaveLength(1);
     expect(paused?.tasks.some((t) => t.kind === "review-fix")).toBe(false);
-    expect(paused?.pausedReason).toContain(`ai-factory reword ${ID}`);
+    expect(paused?.pausedReason).toContain(`loomwright reword ${ID}`);
 
     const status = await cliWith(runtime, fx.root, "status", ID);
     expect(status.out).toContain("spec findings (1)");
@@ -368,6 +368,6 @@ describe("contract-review spec findings", () => {
     expect(paused?.phase).toBe("paused");
     expect(paused?.specFindings).toHaveLength(1);
     expect(paused?.tasks.some((t) => t.kind === "contract-fix")).toBe(false);
-    expect(paused?.pausedReason).toContain(`ai-factory reword ${ID}`);
+    expect(paused?.pausedReason).toContain(`loomwright reword ${ID}`);
   });
 });

@@ -357,7 +357,7 @@ describe("pipeline: AI repo with submodules", () => {
     );
     expect(existsSync(join(fx.root, "openspec/specs/health/spec.md"))).toBe(true);
     const report = readFileSync(join(fx.root, ".factory/reports", `${ID}.md`), "utf8");
-    expect(report).toContain(`ai-factory repoint ${ID}`);
+    expect(report).toContain(`loomwright repoint ${ID}`);
     expect(report).toContain("nothing was pushed");
     expect(existsSync(join(fx.root, ".factory/worktrees", ID))).toBe(false);
     const logDir = join(fx.root, ".factory/logs", ID);
@@ -551,7 +551,7 @@ describe("pipeline: single repo", () => {
     const report = readFileSync(join(fx.root, ".factory/reports", `${ID}-paused.md`), "utf8");
     expect(report).toContain("- Failed: 1.1");
     expect(report).toContain("[lint]");
-    expect(report).toContain(`ai-factory retry ${ID} --task <task>`);
+    expect(report).toContain(`loomwright retry ${ID} --task <task>`);
 
     fixed = true;
     expect((await cli(fx.root, "retry", ID, "--task", "1.1")).code).toBe(ExitCode.Ok);
@@ -781,7 +781,7 @@ describe("pipeline: single repo", () => {
       ["1.2", "merged", 0],
     ]);
     // The evidence is kept in a stash, and the checkout is clean.
-    expect(await gitOut(fx.root, "stash", "list")).toContain(`ai-factory ${ID} 1.1`);
+    expect(await gitOut(fx.root, "stash", "list")).toContain(`loomwright ${ID} 1.1`);
     expect(await gitOut(fx.root, "status", "--porcelain")).toBe("");
   });
 

@@ -56,7 +56,7 @@ export function updateGraph(
   root: string,
   options: { full?: boolean; changeId?: string } = {},
 ): Promise<GraphResult> {
-  // One graphify run per workspace, also across processes (`ai-factory graph` during a run).
+  // One graphify run per workspace, also across processes (`loomwright graph` during a run).
   const limit = 25 * 60_000;
   return withFileLock(factoryDir(root, "graph.lock"), () => runGraphify(root, options), limit, {
     staleAfterMs: limit,

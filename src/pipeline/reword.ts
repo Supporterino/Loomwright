@@ -86,19 +86,19 @@ async function assertRewordable(p: Pipeline, id: string): Promise<{ run: RunStat
   const run = loadRun(p.root, id);
   if (run === undefined) {
     throw new PreconditionError(`${id} has no run state`, [
-      `run \`ai-factory run "..."\` or \`ai-factory adopt ${id}\` first`,
+      `run \`loomwright run "..."\` or \`loomwright adopt ${id}\` first`,
     ]);
   }
   if (run.phase === "done")
     throw new PreconditionError(`${id} is closed; its spec has been archived`);
   if (!CHANGE_PHASES.has(run.phase)) {
     throw new PreconditionError(`${id} is not approved yet (phase ${run.phase})`, [
-      `run \`ai-factory approve ${id}\` first`,
+      `run \`loomwright approve ${id}\` first`,
     ]);
   }
   if (readApproval(p.root, id) === undefined) {
     throw new PreconditionError(`${id} is not approved`, [
-      `run \`ai-factory approve ${id}\` first`,
+      `run \`loomwright approve ${id}\` first`,
     ]);
   }
   // Claim the workspace for the duration of the command: a live driver means a resume is
@@ -111,7 +111,7 @@ async function assertRewordable(p: Pipeline, id: string): Promise<{ run: RunStat
   }
   if (claim.status === "running") {
     throw new PreconditionError(`${id} is being driven by pid ${claim.holder.pid}; stop it first`, [
-      "wait for it to pause, or run `ai-factory abort <id>`",
+      "wait for it to pause, or run `loomwright abort <id>`",
     ]);
   }
   const dir = specDir(p, run.draft);
@@ -348,7 +348,7 @@ export async function reapprove(
       p.out(
         `✓ ${id}: the spec is unchanged; cleared ${run.specFindings.length} spec finding${run.specFindings.length === 1 ? "" : "s"}`,
       );
-      p.out(`next: \`ai-factory resume ${id}\``);
+      p.out(`next: \`loomwright resume ${id}\``);
     } else {
       p.out(`✓ ${id}: the spec is unchanged; the approval is still valid`);
     }
@@ -370,7 +370,7 @@ export async function reapprove(
   p.out(
     `✓ re-approved ${id} (spec ${specCommit.slice(0, 12)}, hash ${approval.hash.slice(0, 12)})`,
   );
-  p.out(`next: \`ai-factory resume ${id}\``);
+  p.out(`next: \`loomwright resume ${id}\``);
   return { changed: true, approval, specCommit };
 }
 
@@ -392,13 +392,13 @@ export async function reword(
   const request = options.request?.trim() ?? "";
   if (findings.length === 0 && request === "") {
     throw new PreconditionError(`${id} has no spec findings to reword`, [
-      `pass an instruction: \`ai-factory reword ${id} --prompt "..."\``,
+      `pass an instruction: \`loomwright reword ${id} --prompt "..."\``,
     ]);
   }
   const dirty = (await git(["status", "--porcelain", "--", specPath(id)], { cwd: dir })).stdout;
   if (dirty.trim() !== "") {
     throw new PreconditionError(`the spec of ${id} has uncommitted edits`, [
-      `commit them, or run \`ai-factory reapprove ${id}\` to accept them`,
+      `commit them, or run \`loomwright reapprove ${id}\` to accept them`,
     ]);
   }
 
@@ -520,8 +520,8 @@ export async function reword(
   );
   if (remaining.length > 0)
     p.out(
-      `${remaining.length} finding${remaining.length === 1 ? "" : "s"} remain; run \`ai-factory reword ${id}\` again`,
+      `${remaining.length} finding${remaining.length === 1 ? "" : "s"} remain; run \`loomwright reword ${id}\` again`,
     );
-  else p.out(`next: \`ai-factory resume ${id}\``);
+  else p.out(`next: \`loomwright resume ${id}\``);
   return { changed: true, approval, specCommit, findings: remaining };
 }

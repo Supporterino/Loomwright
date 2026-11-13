@@ -214,7 +214,7 @@ describe("review loop: single repo", () => {
     const paused = loadRun(fx.root, ID);
     expect(paused?.phase).toBe("paused");
     expect(paused?.specFindings).toHaveLength(1);
-    expect(paused?.pausedReason).toContain(`ai-factory reword ${ID}`);
+    expect(paused?.pausedReason).toContain(`loomwright reword ${ID}`);
     expect(paused?.tasks.some((t) => t.id === "fix-app-1-1")).toBe(false);
     expect(paused?.tasks.some((t) => t.status === "failed")).toBe(false);
 

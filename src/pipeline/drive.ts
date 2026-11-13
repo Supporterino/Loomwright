@@ -141,7 +141,7 @@ async function step(p: Pipeline, id: string): Promise<Step> {
       return stop({
         id,
         phase: run.phase,
-        detail: `review openspec/changes/${id}/ and run \`ai-factory approve ${id}\``,
+        detail: `review openspec/changes/${id}/ and run \`loomwright approve ${id}\``,
       });
     case "aborted":
       // `resume` after `abort`: implementation continues from where it stopped.

@@ -267,7 +267,7 @@ export class PipelineTaskRunner implements TaskRunner {
     if (owner !== undefined && owner !== task.id) {
       const dirty = (await gitOk(["status", "--porcelain"], { cwd: dir })) !== "";
       if (dirty) {
-        const message = `ai-factory ${this.id} ${owner}: work left by the task`;
+        const message = `loomwright ${this.id} ${owner}: work left by the task`;
         await gitOk(["stash", "push", "-q", "--include-untracked", "-m", message], { cwd: dir });
         appendLog(this.p.root, this.id, { kind: "stashed", task: owner, note: message });
         this.p.out(`  ! ${owner} left work in ${task.repo}; kept as \`git stash\`: ${message}`);

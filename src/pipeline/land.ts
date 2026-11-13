@@ -321,7 +321,7 @@ export async function landChange(
   if (run === undefined) throw new PreconditionError(`no change ${id} in this workspace`);
   if (run.phase !== "done")
     throw new PreconditionError(`cannot land ${id}: the change is ${run.phase}, not done`, [
-      `finish it first (for example \`ai-factory resume ${id}\`)`,
+      `finish it first (for example \`loomwright resume ${id}\`)`,
     ]);
 
   const active = readActive(root);

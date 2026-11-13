@@ -59,13 +59,13 @@ export function parseConfigText(text: string, file: string): FactoryConfig {
   if (typeof version === "number" && version < 2) {
     throw new ConfigError(
       `${file} uses config schemaVersion ${version}; this factory needs ${CONFIG_SCHEMA_VERSION}`,
-      ["run `ai-factory update` to migrate it"],
+      ["run `loomwright update` to migrate it"],
     );
   }
   if (typeof version === "number" && version > CONFIG_SCHEMA_VERSION) {
     throw new ConfigError(
       `${file} uses config schemaVersion ${version}, newer than this factory (${CONFIG_SCHEMA_VERSION})`,
-      ["install a newer ai-factory"],
+      ["install a newer Loomwright"],
     );
   }
   const parsed = FactoryConfig.safeParse(value);
@@ -78,7 +78,7 @@ export function parseConfigText(text: string, file: string): FactoryConfig {
 export function loadConfig(root: string): LoadedConfig {
   const file = join(root, CONFIG_FILE);
   if (!existsSync(file)) {
-    throw new ConfigError(`no ${CONFIG_FILE} in ${root}`, ["run `ai-factory init` first"]);
+    throw new ConfigError(`no ${CONFIG_FILE} in ${root}`, ["run `loomwright init` first"]);
   }
   const text = readFileSync(file, "utf8");
   return { root, file, text, config: parseConfigText(text, CONFIG_FILE) };
