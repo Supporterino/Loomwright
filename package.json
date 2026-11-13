@@ -1,6 +1,6 @@
 {
   "name": "@loomwright/cli",
-  "version": "0.12.0",
+  "version": "1.0.0",
   "description": "Loomwright: repo-local AI software factory — OpenSpec + Graphify + opencode v2",
   "license": "MIT",
   "author": "Lars Roth",

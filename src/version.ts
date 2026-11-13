@@ -1,5 +1,5 @@
 /** Must equal "version" in package.json (checked by a test). */
-export const FACTORY_VERSION = "0.12.0";
+export const FACTORY_VERSION = "1.0.0";
 
 /** Must equal "name" in package.json (checked by a test). The CLI command is `loomwright`. */
 export const PACKAGE_NAME = "@loomwright/cli";
