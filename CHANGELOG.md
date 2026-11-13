@@ -2,11 +2,23 @@
 
 All notable changes per release. `loomwright update` applies them to an installed workspace (see [docs/cli.md](docs/cli.md#update)).
 
-## Unreleased
+## 1.0.0
 
 ### Major Changes
 
-- Loomwright now publishes as `@loomwright/cli` with the `loomwright` binary. `ai-factory` keeps working as a deprecated alias, and the on-disk names (`factory.config.jsonc`, `factory.lock.json`, `.factory/`) and `AI_FACTORY_*` variables are unchanged.
+- d537614: The package and binary are renamed to `@loomwright/cli` and `loomwright`. `ai-factory` keeps working as a deprecated alias, so existing scripts and installs continue to run.
+
+  The on-disk names (`factory.config.jsonc`, `factory.lock.json`, `.factory/`) and the `AI_FACTORY_*` environment variables are unchanged.
+
+### Patch Changes
+
+- b7a5208: Commands spawn fewer git processes. Managed files record their merge base as a git blob written
+  in-process (one `rev-parse` per sync instead of one `git hash-object` per file), the check-only
+  gate guard takes one `status --porcelain=v2 --branch` snapshot instead of a `status` plus a
+  `rev-parse HEAD` on both sides of every gate, and workspace discovery asks `rev-parse` once per
+  level. `bun run test` now runs test files in parallel (`bun run test:serial` keeps the old single
+  process; `bun run test:fast` skips the integration-heavy files), and the fixtures build their
+  workspaces once per process instead of once per test.
 
 ## 0.12.0
 

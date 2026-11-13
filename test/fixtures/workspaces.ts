@@ -1,4 +1,15 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { gitOk } from "../../src/exec.ts";
@@ -8,6 +19,11 @@ import { gitOk } from "../../src/exec.ts";
  * (a) a single-repo TS project;
  * (b) an AI repo with three local bare-repo submodules (Go backend with OpenAPI,
  *     React frontend consuming it, Helm chart).
+ *
+ * Building a fixture costs 50ms (single) to 900ms (submodules), mostly git processes, so
+ * each shape is built once per test process in a template directory and every test gets a
+ * byte copy of it. Copies are independent; the submodule git configs are re-pointed at the
+ * copy, because git stores those URLs as absolute paths.
  */
 
 export const FIXTURE_GIT_ENV: Readonly<Record<string, string>> = {
@@ -63,6 +79,70 @@ function tempBase(prefix: string): string {
   return mkdtempSync(join(tmpdir(), `ai-factory-${prefix}-`));
 }
 
+type TemplateKind = "single" | "submodules";
+
+const templates = new Map<TemplateKind, Promise<string>>();
+
+/** Builds a fixture shape once per process; every test copies the result. */
+function template(kind: TemplateKind, build: (dir: string) => Promise<void>): Promise<string> {
+  const cached = templates.get(kind);
+  if (cached !== undefined) return cached;
+  const pending = (async () => {
+    const dir = mkdtempSync(join(tmpdir(), `ai-factory-template-${kind}-`));
+    process.once("exit", () => rmSync(dir, { recursive: true, force: true }));
+    await build(dir);
+    return dir;
+  })();
+  templates.set(kind, pending);
+  // A failed build must not poison every later test in the file.
+  pending.catch(() => templates.delete(kind));
+  return pending;
+}
+
+/** Files a copy of a template must re-point: git records submodule URLs as absolute paths. */
+function pathConfigs(base: string): string[] {
+  const out = [join(base, "ai", ".git", "config")];
+  // Submodules live under .git/modules/<name>, where <name> can itself contain slashes
+  // ("repos/backend"), and each bare remote keeps its own config.
+  const walk = (dir: string): void => {
+    let names: string[];
+    try {
+      names = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      if (name === "objects" || name === "refs" || name === "logs") continue;
+      const abs = join(dir, name);
+      if (!statSync(abs).isDirectory()) continue;
+      out.push(join(abs, "config"));
+      walk(abs);
+    }
+  };
+  walk(join(base, "ai", ".git", "modules"));
+  walk(join(base, "remotes"));
+  return out;
+}
+
+/** Rewrites the template's absolute paths inside a copy, so its submodules resolve locally. */
+async function rewireTemplatePaths(base: string, templateDir: string): Promise<void> {
+  const from = [...new Set([templateDir, realpathSync(templateDir)])];
+  const rewrite = (abs: string): boolean => {
+    if (!existsSync(abs)) return false;
+    const text = readFileSync(abs, "utf8");
+    let next = text;
+    for (const prefix of from) next = next.split(prefix).join(base);
+    if (next === text) return false;
+    writeFileSync(abs, next);
+    return true;
+  };
+  for (const abs of pathConfigs(base)) rewrite(abs);
+  // `.gitmodules` is tracked, so the re-pointed URL must go into the fixture's commit too.
+  if (rewrite(join(base, "ai", ".gitmodules"))) {
+    await fixtureGit(join(base, "ai"), "commit", "-q", "--amend", "--no-edit", "-a");
+  }
+}
+
 export const SINGLE_TS_FILES: Files = {
   "package.json": JSON.stringify(
     {
@@ -81,10 +161,14 @@ export const SINGLE_TS_FILES: Files = {
 };
 
 export async function createSingleRepoFixture(): Promise<Fixture> {
+  const tmpl = await template("single", (dir) => initRepo(join(dir, "app"), SINGLE_TS_FILES));
   const base = tempBase("single");
-  const root = join(base, "app");
-  await initRepo(root, SINGLE_TS_FILES);
-  return { root, base, cleanup: () => rmSync(base, { recursive: true, force: true }) };
+  cpSync(join(tmpl, "app"), join(base, "app"), { recursive: true });
+  return {
+    root: join(base, "app"),
+    base,
+    cleanup: () => rmSync(base, { recursive: true, force: true }),
+  };
 }
 
 const OPENAPI = `openapi: 3.0.3
@@ -164,18 +248,28 @@ export const DEPLOY_FILES: Files = {
     "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ .Release.Name }}\nspec:\n  replicas: {{ .Values.replicas }}\n",
 };
 
-export async function createSubmoduleFixture(): Promise<Fixture> {
-  const base = tempBase("submodules");
+async function buildSubmoduleTemplate(dir: string): Promise<void> {
   const remotes = {
-    backend: await bareRepo(base, "backend", BACKEND_FILES),
-    frontend: await bareRepo(base, "frontend", FRONTEND_FILES),
-    deploy: await bareRepo(base, "deploy", DEPLOY_FILES),
+    backend: await bareRepo(dir, "backend", BACKEND_FILES),
+    frontend: await bareRepo(dir, "frontend", FRONTEND_FILES),
+    deploy: await bareRepo(dir, "deploy", DEPLOY_FILES),
   };
-  const root = join(base, "ai");
+  const root = join(dir, "ai");
   await initRepo(root, { "README.md": "# AI repo\n" });
   for (const [name, url] of Object.entries(remotes)) {
     await fixtureGit(root, "submodule", "add", "-q", url, `repos/${name}`);
   }
   await fixtureGit(root, "commit", "-q", "-m", "chore: add submodules");
-  return { root, base, cleanup: () => rmSync(base, { recursive: true, force: true }) };
+}
+
+export async function createSubmoduleFixture(): Promise<Fixture> {
+  const tmpl = await template("submodules", buildSubmoduleTemplate);
+  const base = tempBase("submodules");
+  cpSync(tmpl, base, { recursive: true });
+  await rewireTemplatePaths(base, tmpl);
+  return {
+    root: join(base, "ai"),
+    base,
+    cleanup: () => rmSync(base, { recursive: true, force: true }),
+  };
 }

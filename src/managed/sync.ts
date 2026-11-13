@@ -9,7 +9,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { deflateSync } from "node:zlib";
 import { exec, execOk } from "../exec.ts";
 import type { LockEntry } from "../lock/lock.ts";
 import { BLOCK_MARKERS, type BlockMarkers, type ManagedFile } from "../render/workspace.ts";
@@ -170,8 +171,50 @@ function removeOwned(root: string, path: string, mode: "file" | "block"): void {
   writeAtomic(abs, rest.trim() === "" ? "" : rest);
 }
 
-async function writeBlob(root: string, content: string): Promise<string> {
-  return execOk(["git", "hash-object", "-w", "--stdin"], { cwd: root, input: content });
+/**
+ * Writes the git blobs the lock records as merge bases. A loose object is just
+ * `"blob <size>\0" + content` deflated into `.git/objects/ab/cdef…`, so the factory writes it
+ * itself: one `rev-parse` per sync instead of one `git hash-object` process per managed file
+ * (init and update touch dozens of files, and that dominated the test suite).
+ */
+class BlobStore {
+  readonly #root: string;
+  readonly #pending: Promise<string | undefined>;
+  #seq = 0;
+
+  constructor(root: string) {
+    this.#root = root;
+    this.#pending = this.#objectDir();
+  }
+
+  async #objectDir(): Promise<string | undefined> {
+    const res = await exec(["git", "rev-parse", "--git-path", "objects", "--show-object-format"], {
+      cwd: this.#root,
+    });
+    const [dir = "", format = ""] = res.stdout.split("\n").map((line) => line.trim());
+    // Older gits have no --show-object-format; SHA-256 repositories hash differently.
+    if (res.code !== 0 || dir === "" || format !== "sha1") return undefined;
+    return resolve(this.#root, dir);
+  }
+
+  async write(content: string): Promise<string> {
+    const dir = await this.#pending;
+    if (dir === undefined) {
+      return execOk(["git", "hash-object", "-w", "--stdin"], { cwd: this.#root, input: content });
+    }
+    const body = Buffer.from(content, "utf8");
+    const header = Buffer.from(`blob ${body.length}\0`, "utf8");
+    const oid = createHash("sha1").update(header).update(body).digest("hex");
+    const file = join(dir, oid.slice(0, 2), oid.slice(2));
+    if (!existsSync(file)) {
+      mkdirSync(dirname(file), { recursive: true });
+      // Unique temp name, then rename: a concurrent writer must never see a partial object.
+      const tmp = join(dir, `tmp_loomwright_${process.pid}_${this.#seq++}`);
+      writeFileSync(tmp, deflateSync(Buffer.concat([header, body])));
+      renameSync(tmp, file);
+    }
+    return oid;
+  }
 }
 
 export interface SyncOutcome {
@@ -241,12 +284,13 @@ export async function executeSync(
   const managed: Record<string, LockEntry> = {};
   const merged: string[] = [];
   const conflicts: string[] = [];
+  const blobs = new BlobStore(root);
   const entry = async (file: ManagedFile): Promise<LockEntry> => ({
     template: file.template,
     templateVersion: FACTORY_VERSION,
     mode: file.mode,
     sha256: sha256(file.content),
-    blob: await writeBlob(root, file.content),
+    blob: await blobs.write(file.content),
   });
   for (const change of plan) {
     const prev = previous[change.path];

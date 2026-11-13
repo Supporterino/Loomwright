@@ -45,3 +45,4 @@ Short ADRs for every choice the build prompt did not lock. Format: Context / Dec
 | [0039](0039-spec-findings-and-reapproval.md)    | Spec findings and re-approval after implementation starts          |
 | [0040](0040-review-loop.md)                     | Re-reviewing after a fix round                                     |
 | [0041](0041-unsandboxed-workspace.md)           | This workspace runs gates and shells unsandboxed                   |
+| [0042](0042-fewer-git-processes.md)             | Fewer git processes per command; parallel test files               |

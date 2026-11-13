@@ -231,11 +231,11 @@ test("the version flag prints only the version", async () => {
   expect(res.out).not.toContain("ai-factory");
 });
 
-test("the repository URLs are unchanged", () => {
+test("the repository URLs point at the Loomwright repository", () => {
   const pkg = packageJson();
-  expect(pkg.repository.url).toBe("git+https://github.com/Supporterino/AI-Factory.git");
-  expect(pkg.homepage).toBe("https://github.com/Supporterino/AI-Factory#readme");
-  expect(pkg.bugs.url).toBe("https://github.com/Supporterino/AI-Factory/issues");
+  expect(pkg.repository.url).toBe("git+https://github.com/Supporterino/Loomwright.git");
+  expect(pkg.homepage).toBe("https://github.com/Supporterino/Loomwright#readme");
+  expect(pkg.bugs.url).toBe("https://github.com/Supporterino/Loomwright/issues");
 });
 
 test("gate scripts keep their exact definitions", () => {
@@ -243,5 +243,6 @@ test("gate scripts keep their exact definitions", () => {
   expect(pkg.scripts["format:check"]).toBe("biome format .");
   expect(pkg.scripts.lint).toBe("biome check .");
   expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
-  expect(pkg.scripts.test).toBe("bun test --timeout 60000");
+  expect(pkg.scripts.test).toBe("bun test --timeout 60000 --parallel");
+  expect(pkg.scripts["test:serial"]).toBe("bun test --timeout 60000");
 });
