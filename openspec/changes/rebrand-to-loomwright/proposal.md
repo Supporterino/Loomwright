@@ -2,7 +2,7 @@
 
 ## Why
 
-The product, its npm package and its CLI are still named `ai-factory`, while the brand and the GitHub organisation are Loomwright (`brand/BRAND.md`). Users meet two identities in every command, generated agent prompt and page of documentation. Renaming now, before the repository moves, lets the name change in one reviewable step while the on-disk compatibility surface and the sandbox/gate guarantees stay exactly as they are.
+The product, its npm package and its CLI are still named `ai-factory`, while the brand and the GitHub organisation are Loomwright (`brand/BRAND.md`). Users meet two identities in every command, generated agent prompt and page of documentation. Renaming now, before the repository moves, lets the name change in one reviewable step while the on-disk compatibility surface and the sandbox/gate guarantees of the code stay exactly as they are. This checkout's own sandbox exception (see Impact) is a workspace setting, decided separately in `docs/decisions/0041-unsandboxed-workspace.md`; the rename neither causes nor changes it.
 
 ## What Changes
 
@@ -36,5 +36,6 @@ None. This checkout has no `openspec/specs/` files; every delta is additive.
 - **Package:** `package.json`, `bun.lock`, `src/version.ts`, `src/cli/**`, `src/pipeline/**`, `src/doctor/**`, `src/update/**`, `src/render/workspace.ts`, `src/config/**`, `src/plugin/entry.ts`, `src/git/hooks.ts`, `src/handoff/schema.ts`.
 - **Generated artifacts:** `templates/plugin/factory-plugin.txt` (rebuilt), `test/fixtures` assertions (not the historical snapshots).
 - **Docs and release:** `README.md`, `ARCHITECTURE.md`, `docs/cli.md`, `docs/plan.md`, `docs/fleet-update.sh`, `CHANGELOG.md`, `.changeset/`, `.github/workflows/{ci,release}.yml`.
+- **Workspace config:** `factory.config.jsonc` in this checkout runs gates and agent shells unsandboxed (`security.sandbox: "off"`, committed in this change). `docs/decisions/0041-unsandboxed-workspace.md` records the decision, its reason (macOS cannot start a Seatbelt profile inside one with deny rules, and this suite applies Seatbelt itself) and its cost. It is a workspace-local setting: no sandbox code, profile or test changes in this change, and every other workspace keeps `"auto"`.
 - **Contracts:** none configured.
 - **Data:** no migration. `factory.config.jsonc`, `factory.lock.json`, `.factory/`, `factory-records/`, `.opencode/` and the `AI_FACTORY_*` variables keep their names. `.opencode/**`, `factory.lock.json`, `AGENTS.md` and the rendered `openspec/config.yaml` are not edited by tasks; the human re-renders them after landing.
