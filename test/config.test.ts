@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { PROTOCOL_VERSION } from "@loomwright/protocol";
 import { appendJsonc, parseJsonc, setJsonc } from "../src/config/jsonc.ts";
 import { parseConfigText } from "../src/config/load.ts";
 import { FactoryConfig, type FactoryConfigInput, modelFor } from "../src/config/schema.ts";
@@ -188,36 +189,47 @@ describe("JSONC config text", () => {
 });
 
 interface PackageJson {
-  version: string;
   name: string;
-  description: string;
-  bin: Record<string, string>;
-  repository: { url: string };
-  homepage: string;
-  bugs: { url: string };
-  scripts: Record<string, string>;
+  version?: string;
+  description?: string;
+  private?: boolean;
+  workspaces?: string[];
+  bin?: Record<string, string>;
+  files?: string[];
+  engines?: Record<string, string>;
+  publishConfig?: { access: string };
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
+  repository?: { url: string };
+  homepage?: string;
+  bugs?: { url: string };
+  exports?: Record<string, string>;
 }
 
-const packageJson = (): PackageJson =>
-  // The repo's own package.json, shaped as the spec pins it.
-  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as PackageJson;
+const readManifest = (path: string): PackageJson =>
+  // Parsed repository metadata, shaped as the spec pins it.
+  JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8")) as PackageJson;
+
+const packageJson = (): PackageJson => readManifest("../packages/cli/package.json");
+const rootPackageJson = (): PackageJson => readManifest("../package.json");
 
 test("package metadata exposes both binaries and PACKAGE_NAME matches package.json", () => {
   const pkg = packageJson();
-  expect(FACTORY_VERSION).toBe(pkg.version);
-  expect(PACKAGE_NAME).toBe(pkg.name);
+  expect(pkg.version).toBe(FACTORY_VERSION);
+  expect(pkg.name).toBe(PACKAGE_NAME);
   expect(pkg.name).toBe("@loomwright/cli");
   expect(pkg.bin).toEqual({
     loomwright: "./dist/cli.js",
     "ai-factory": "./dist/cli.js",
   });
-  expect(pkg.description).toContain("Loomwright");
+  expect(pkg.description ?? "").toContain("Loomwright");
 });
 
 test("the deprecated alias keeps existing scripts working", () => {
   const pkg = packageJson();
-  expect(pkg.bin["ai-factory"]).toBe(pkg.bin.loomwright);
-  expect(Object.keys(pkg.bin)).toEqual(["loomwright", "ai-factory"]);
+  expect(pkg.bin?.["ai-factory"]).toBe(pkg.bin?.loomwright);
+  expect(Object.keys(pkg.bin ?? {})).toEqual(["loomwright", "ai-factory"]);
 });
 
 test("runVersion names the new package", () => {
@@ -233,16 +245,92 @@ test("the version flag prints only the version", async () => {
 
 test("the repository URLs point at the Loomwright repository", () => {
   const pkg = packageJson();
-  expect(pkg.repository.url).toBe("git+https://github.com/Supporterino/Loomwright.git");
+  expect(pkg.repository?.url).toBe("git+https://github.com/Supporterino/Loomwright.git");
   expect(pkg.homepage).toBe("https://github.com/Supporterino/Loomwright#readme");
-  expect(pkg.bugs.url).toBe("https://github.com/Supporterino/Loomwright/issues");
+  expect(pkg.bugs?.url).toBe("https://github.com/Supporterino/Loomwright/issues");
+});
+
+test("the root manifest declares the workspaces and publishes nothing", () => {
+  const pkg = rootPackageJson();
+  expect(pkg.private).toBe(true);
+  expect(pkg.workspaces).toEqual(["packages/*"]);
+  expect(pkg).not.toHaveProperty("bin");
+  expect(pkg).not.toHaveProperty("files");
+  expect(pkg).not.toHaveProperty("publishConfig");
+});
+
+test("the three package identities are correct", () => {
+  const protocol = readManifest("../packages/protocol/package.json");
+  const core = readManifest("../packages/core/package.json");
+  const cli = packageJson();
+  expect([protocol.name, core.name, cli.name]).toEqual([
+    "@loomwright/protocol",
+    "@loomwright/core",
+    "@loomwright/cli",
+  ]);
+  expect(protocol.private).toBe(true);
+  expect(core.private).toBe(true);
+  expect(cli.private).toBeUndefined();
+  expect(cli.version).toBe("1.0.0");
+});
+
+test("protocol is a versioned skeleton with no engine imports", () => {
+  expect(PROTOCOL_VERSION).toBe(0);
+  const source = readFileSync(
+    new URL("../packages/protocol/src/index.ts", import.meta.url),
+    "utf8",
+  );
+  expect(source).not.toContain("import");
+  expect(source).not.toContain("require(");
+  expect(source).not.toContain("@loomwright/core");
+  expect(source).not.toContain("@loomwright/cli");
+});
+
+test("core exposes subpath exports", () => {
+  const core = readManifest("../packages/core/package.json");
+  expect(core.exports?.["./*"]).toBe("./src/*.ts");
+  expect(core.exports?.["."]).toBeUndefined();
+});
+
+test("the published CLI identity is unchanged", () => {
+  const pkg = packageJson();
+  expect(pkg.bin).toEqual({
+    loomwright: "./dist/cli.js",
+    "ai-factory": "./dist/cli.js",
+  });
+  expect(pkg.files).toEqual([
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "templates/addons/ponytail/LICENSE",
+  ]);
+  expect(pkg.engines).toEqual({ node: ">=20.3", bun: ">=1.3.0" });
+  expect(pkg.publishConfig).toEqual({ access: "public" });
+  expect(pkg.dependencies?.["@loomwright/core"]).toBeUndefined();
+  expect(pkg.dependencies?.["@loomwright/protocol"]).toBeUndefined();
+});
+
+test("Changesets sees package changes", () => {
+  const config = JSON.parse(
+    readFileSync(new URL("../.changeset/config.json", import.meta.url), "utf8"),
+  ) as { changedFilePatterns?: string[] };
+  expect(config.changedFilePatterns).toContain("packages/**");
+});
+
+test("the published manifest does not own the gates", () => {
+  const pkg = packageJson();
+  expect(pkg.scripts?.["format:check"]).toBeUndefined();
+  expect(pkg.scripts?.lint).toBeUndefined();
+  expect(pkg.scripts?.typecheck).toBeUndefined();
+  expect(pkg.scripts?.test).toBeUndefined();
 });
 
 test("gate scripts keep their exact definitions", () => {
-  const pkg = packageJson();
-  expect(pkg.scripts["format:check"]).toBe("biome format .");
-  expect(pkg.scripts.lint).toBe("biome check .");
-  expect(pkg.scripts.typecheck).toBe("tsc --noEmit");
-  expect(pkg.scripts.test).toBe("bun test --timeout 60000 --parallel");
-  expect(pkg.scripts["test:serial"]).toBe("bun test --timeout 60000");
+  const pkg = rootPackageJson();
+  expect(pkg.scripts?.["format:check"]).toBe("biome format .");
+  expect(pkg.scripts?.lint).toBe("biome check .");
+  expect(pkg.scripts?.typecheck).toBe("tsc --noEmit");
+  expect(pkg.scripts?.test).toBe("bun test --timeout 60000 --parallel");
+  expect(pkg.scripts?.["test:serial"]).toBe("bun test --timeout 60000");
 });

@@ -16,7 +16,11 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@loomwright/core/*": ["./packages/core/src/*"],
+      "@loomwright/protocol": ["./packages/protocol/src/index.ts"]
+    }
   },
-  "include": ["src", "test", "scripts"]
+  "include": ["src", "test", "scripts", "packages"]
 }

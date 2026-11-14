@@ -1,7 +1,6 @@
 {
-  "name": "@loomwright/cli",
-  "version": "1.0.0",
-  "description": "Loomwright: repo-local AI software factory — OpenSpec + Graphify + opencode v2",
+  "name": "loomwright",
+  "private": true,
   "license": "MIT",
   "author": "Lars Roth",
   "type": "module",
@@ -14,24 +13,9 @@
     "url": "https://github.com/Supporterino/Loomwright/issues"
   },
   "packageManager": "bun@1.4.4",
-  "bin": {
-    "loomwright": "./dist/cli.js",
-    "ai-factory": "./dist/cli.js"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
-    "templates/addons/ponytail/LICENSE"
+  "workspaces": [
+    "packages/*"
   ],
-  "engines": {
-    "node": ">=20.3",
-    "bun": ">=1.3.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "build": "bun scripts/build-plugin.ts && bun build src/cli/bin.ts --target=node --outfile dist/cli.js && bun scripts/write-dist-package.ts",
     "dev": "bun src/cli/bin.ts",
@@ -54,6 +38,8 @@
     "@biomejs/biome": "2.6.2",
     "@changesets/cli": "3.0.3",
     "@fission-ai/openspec": "1.14.3",
+    "@loomwright/core": "workspace:*",
+    "@loomwright/protocol": "workspace:*",
     "@types/bun": "1.4.4",
     "@types/node": "26.6.5",
     "ajv": "8.20.0",

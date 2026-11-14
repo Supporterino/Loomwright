@@ -6,7 +6,7 @@
   "linked": [],
   "access": "public",
   "baseBranch": "main",
-  "changedFilePatterns": ["src/**", "templates/**", "package.json"],
+  "changedFilePatterns": ["packages/**", "templates/**", "package.json"],
   "format": false,
   "updateInternalDependencies": "patch",
   "ignore": []
