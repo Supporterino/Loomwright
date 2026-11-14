@@ -17,8 +17,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun scripts/build-plugin.ts && bun build src/cli/bin.ts --target=node --outfile dist/cli.js && bun scripts/write-dist-package.ts",
-    "dev": "bun src/cli/bin.ts",
+    "build": "bun scripts/build-plugin.ts && bun build packages/cli/src/bin.ts --target=node --outfile packages/cli/dist/cli.js && bun scripts/write-dist-package.ts",
+    "dev": "bun packages/cli/src/bin.ts",
     "test": "bun test --timeout 60000 --parallel",
     "test:serial": "bun test --timeout 60000",
     "test:fast": "bun test --timeout 60000 --parallel --path-ignore-patterns='**/pipeline.test.ts' --path-ignore-patterns='**/workspace-install.test.ts' --path-ignore-patterns='**/reword.test.ts' --path-ignore-patterns='**/gates-run.test.ts' --path-ignore-patterns='**/review-loop.test.ts' --path-ignore-patterns='**/init.test.ts' --path-ignore-patterns='**/contract-gate.test.ts'",

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runCli } from "../packages/cli/src/main.ts";
 import { ExitCode } from "../packages/core/src/exit-codes.ts";
 import type { Handoff } from "../packages/core/src/handoff/schema.ts";
 import {
@@ -14,7 +15,6 @@ import {
 } from "../packages/core/src/pipeline/clarify.ts";
 import { clarifyPrompt } from "../packages/core/src/pipeline/prompts.ts";
 import type { Clarification } from "../packages/core/src/state/run.ts";
-import { runCli } from "../src/cli/main.ts";
 
 const handoff = (openQuestions: string[]): Handoff => ({
   status: "done",

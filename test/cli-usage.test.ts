@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { COMMANDS } from "../packages/cli/src/main.ts";
 import { ExitCode } from "../packages/core/src/exit-codes.ts";
-import { COMMANDS } from "../src/cli/main.ts";
 import { createSingleRepoFixture, type Fixture } from "./fixtures/workspaces.ts";
 import { cli } from "./helpers.ts";
 

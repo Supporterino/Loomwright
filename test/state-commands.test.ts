@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { runCli } from "../packages/cli/src/main.ts";
 import { ExitCode } from "../packages/core/src/exit-codes.ts";
 import { claimActive, enqueue, readActive, readQueue } from "../packages/core/src/state/active.ts";
 import { loadRun, newRun, saveRun, TaskState } from "../packages/core/src/state/run.ts";
 import { FACTORY_VERSION } from "../packages/core/src/version.ts";
-import { runCli } from "../src/cli/main.ts";
 import { createSingleRepoFixture, type Fixture } from "./fixtures/workspaces.ts";
 import { cli } from "./helpers.ts";
 

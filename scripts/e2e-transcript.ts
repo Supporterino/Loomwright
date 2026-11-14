@@ -29,7 +29,7 @@ process.env.AI_FACTORY_OPENSPEC_BIN ??= join(ROOT, "node_modules/.bin/openspec")
 process.env.GIT_CONFIG_GLOBAL = join(ROOT, "test/fixtures/gitconfig");
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 
-const { runCli } = await import("../src/cli/main.ts");
+const { runCli } = await import("../packages/cli/src/main.ts");
 const { setJsonc } = await import("../packages/core/src/config/jsonc.ts");
 const { git } = await import("../packages/core/src/exec.ts");
 const { FACTORY_VERSION } = await import("../packages/core/src/version.ts");

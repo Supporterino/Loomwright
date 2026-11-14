@@ -22,5 +22,5 @@
       "@loomwright/protocol": ["./packages/protocol/src/index.ts"]
     }
   },
-  "include": ["src", "test", "scripts", "packages"]
+  "include": ["test", "scripts", "packages"]
 }

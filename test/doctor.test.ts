@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { runCli } from "../packages/cli/src/main.ts";
 import type { DoctorReport } from "../packages/core/src/doctor/doctor.ts";
 import { gateExecutables } from "../packages/core/src/doctor/doctor.ts";
 import { ExitCode } from "../packages/core/src/exit-codes.ts";
 import { claimActive } from "../packages/core/src/state/active.ts";
-import { runCli } from "../src/cli/main.ts";
 import {
   createSingleRepoFixture,
   createSubmoduleFixture,

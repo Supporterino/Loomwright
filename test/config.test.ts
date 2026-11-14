@@ -263,6 +263,13 @@ test("the root manifest declares the workspaces and publishes nothing", () => {
   expect(pkg).not.toHaveProperty("publishConfig");
 });
 
+test("the bundle entry is unchanged", () => {
+  const pkg = rootPackageJson();
+  expect(pkg.scripts?.build).toContain("packages/cli/src/bin.ts");
+  expect(pkg.scripts?.build).toContain("packages/cli/dist/cli.js");
+  expect(pkg.scripts?.dev).toBe("bun packages/cli/src/bin.ts");
+});
+
 test("the three package identities are correct", () => {
   const protocol = readManifest("../packages/protocol/package.json");
   const core = readManifest("../packages/core/package.json");
