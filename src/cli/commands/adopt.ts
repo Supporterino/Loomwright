@@ -1,21 +1,21 @@
-import { findWorkspaceRoot, loadConfig } from "../../config/load.ts";
-import type { FactoryConfig } from "../../config/schema.ts";
-import { PreconditionError, UsageError } from "../../errors.ts";
-import { CHANGE_ID, currentBranch } from "../../git/repo.ts";
+import { findWorkspaceRoot, loadConfig } from "@loomwright/core/config/load";
+import type { FactoryConfig } from "@loomwright/core/config/schema";
+import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { CHANGE_ID, currentBranch } from "@loomwright/core/git/repo";
 import {
   hasRun,
   type PendingChange,
   pendingChanges,
   readPendingChange,
-} from "../../openspec/changes.ts";
-import { checkDesign } from "../../openspec/cli.ts";
-import type { Pipeline } from "../../pipeline/context.ts";
-import { design } from "../../pipeline/design.ts";
-import { readActive } from "../../state/active.ts";
-import { loadRun, newRun, now, type Phase, saveRun } from "../../state/run.ts";
-import { requireInstalled } from "../../update/update.ts";
+} from "@loomwright/core/openspec/changes";
+import { checkDesign } from "@loomwright/core/openspec/cli";
+import type { Pipeline } from "@loomwright/core/pipeline/context";
+import { design } from "@loomwright/core/pipeline/design";
+import { readActive } from "@loomwright/core/state/active";
+import { loadRun, newRun, now, type Phase, saveRun } from "@loomwright/core/state/run";
+import { requireInstalled } from "@loomwright/core/update/update";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 import { PROGRESS_OPTIONS, verbosityOf, withPipeline } from "./pipeline-commands.ts";
 
 const HELP = `Usage: loomwright adopt [<change-id>... | --all] [--dry-run] [--json] [--normalize] [--preserve-progress]

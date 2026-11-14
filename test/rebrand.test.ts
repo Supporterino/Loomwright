@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { renderInitialConfig } from "../src/config/render.ts";
-import { FactoryConfig } from "../src/config/schema.ts";
-import { agentGitEnv } from "../src/git/hooks.ts";
-import { BLOCK_MARKERS, renderWorkspace } from "../src/render/workspace.ts";
+import { renderInitialConfig } from "../packages/core/src/config/render.ts";
+import { FactoryConfig } from "../packages/core/src/config/schema.ts";
+import { agentGitEnv } from "../packages/core/src/git/hooks.ts";
+import { BLOCK_MARKERS, renderWorkspace } from "../packages/core/src/render/workspace.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const M = "anthropic/claude-sonnet-5-5";

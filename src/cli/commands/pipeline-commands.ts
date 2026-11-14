@@ -1,22 +1,22 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { findWorkspaceRoot, loadConfig } from "../../config/load.ts";
-import { PreconditionError, UsageError } from "../../errors.ts";
-import { CHANGE_ID } from "../../git/repo.ts";
-import { LOCK_FILE } from "../../lock/lock.ts";
-import { pruneLogs } from "../../logs/log.ts";
-import { approve } from "../../pipeline/approve.ts";
-import { Pipeline } from "../../pipeline/context.ts";
-import { design, intake } from "../../pipeline/design.ts";
-import type { DriveOutcome } from "../../pipeline/drive.ts";
-import { drive } from "../../pipeline/drive.ts";
-import type { Verbosity } from "../../pipeline/progress.ts";
-import { OpencodeRuntime } from "../../runtime/opencode.ts";
-import { readActive, releaseDriver } from "../../state/active.ts";
-import { readOrCorrupt } from "../../state/files.ts";
-import { loadRun } from "../../state/run.ts";
+import { findWorkspaceRoot, loadConfig } from "@loomwright/core/config/load";
+import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { CHANGE_ID } from "@loomwright/core/git/repo";
+import { LOCK_FILE } from "@loomwright/core/lock/lock";
+import { pruneLogs } from "@loomwright/core/logs/log";
+import { approve } from "@loomwright/core/pipeline/approve";
+import { Pipeline } from "@loomwright/core/pipeline/context";
+import { design, intake } from "@loomwright/core/pipeline/design";
+import type { DriveOutcome } from "@loomwright/core/pipeline/drive";
+import { drive } from "@loomwright/core/pipeline/drive";
+import type { Verbosity } from "@loomwright/core/pipeline/progress";
+import { OpencodeRuntime } from "@loomwright/core/runtime/opencode";
+import { readActive, releaseDriver } from "@loomwright/core/state/active";
+import { readOrCorrupt } from "@loomwright/core/state/files";
+import { loadRun } from "@loomwright/core/state/run";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 async function setup(
   io: Io,

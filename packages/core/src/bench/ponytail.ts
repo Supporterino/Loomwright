@@ -9,11 +9,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import type { Io } from "../cli/command.ts";
 import { setJsonc } from "../config/jsonc.ts";
 import type { FactoryConfig } from "../config/schema.ts";
 import { git, gitOk } from "../exec.ts";
 import type { Handoff } from "../handoff/schema.ts";
+import type { Io } from "../io.ts";
 import { loadRun } from "../state/run.ts";
 import { summarizeUsage, totalTokens } from "../usage/usage.ts";
 

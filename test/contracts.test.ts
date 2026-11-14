@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { diffOpenApi, referencedRemovedPaths } from "../src/contracts/openapi.ts";
-import { diffProto, parseProto } from "../src/contracts/proto.ts";
-import { diffSchema, localResolver } from "../src/contracts/schema-diff.ts";
+import { diffOpenApi, referencedRemovedPaths } from "../packages/core/src/contracts/openapi.ts";
+import { diffProto, parseProto } from "../packages/core/src/contracts/proto.ts";
+import { diffSchema, localResolver } from "../packages/core/src/contracts/schema-diff.ts";
 
 const api = (paths: Record<string, unknown>, schemas: Record<string, unknown> = {}) => ({
   openapi: "3.0.3",

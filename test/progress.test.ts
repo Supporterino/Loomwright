@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { GateEvent, GateReport } from "../src/gates/run.ts";
-import { describeTool, Progress } from "../src/pipeline/progress.ts";
-import type { Usage } from "../src/runtime/types.ts";
-import { TaskState } from "../src/state/run.ts";
-import { formatDuration } from "../src/util/duration.ts";
+import type { GateEvent, GateReport } from "../packages/core/src/gates/run.ts";
+import { describeTool, Progress } from "../packages/core/src/pipeline/progress.ts";
+import type { Usage } from "../packages/core/src/runtime/types.ts";
+import { TaskState } from "../packages/core/src/state/run.ts";
+import { formatDuration } from "../packages/core/src/util/duration.ts";
 
 const usage = (tokens = 1200): Usage => ({
   input: tokens / 2,

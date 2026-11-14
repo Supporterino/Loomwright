@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { detectWorkspace } from "../src/detect/workspace.ts";
+import { detectWorkspace } from "../packages/core/src/detect/workspace.ts";
 import {
   createSingleRepoFixture,
   createSubmoduleFixture,

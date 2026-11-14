@@ -1,6 +1,6 @@
+import { git } from "../packages/core/src/exec.ts";
+import type { AgentRuntime } from "../packages/core/src/runtime/types.ts";
 import { runCli } from "../src/cli/main.ts";
-import { git } from "../src/exec.ts";
-import type { AgentRuntime } from "../src/runtime/types.ts";
 
 export interface Run {
   code: number;

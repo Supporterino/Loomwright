@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { TransientError } from "../src/errors.ts";
-import { limited, RateLimiter } from "../src/runtime/rate-limit.ts";
-import { type AgentSession, type Turn, ZERO_USAGE } from "../src/runtime/types.ts";
+import { TransientError } from "../packages/core/src/errors.ts";
+import { limited, RateLimiter } from "../packages/core/src/runtime/rate-limit.ts";
+import { type AgentSession, type Turn, ZERO_USAGE } from "../packages/core/src/runtime/types.ts";
 
 const usage = { ...ZERO_USAGE, input: 1, output: 1 };
 

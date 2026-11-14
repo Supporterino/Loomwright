@@ -1,9 +1,9 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig } from "../../config/load.ts";
-import { CHANGE_ID } from "../../git/repo.ts";
-import { readActive, readQueue } from "../../state/active.ts";
-import { loadRun } from "../../state/run.ts";
+import { loadConfig } from "@loomwright/core/config/load";
+import { CHANGE_ID } from "@loomwright/core/git/repo";
+import { readActive, readQueue } from "@loomwright/core/state/active";
+import { loadRun } from "@loomwright/core/state/run";
 import type { CompletionValue } from "../command.ts";
 
 /** What value completion knows about the current command line. */

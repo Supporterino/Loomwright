@@ -2,13 +2,17 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FactoryConfig, type FactoryConfigInput, modelFor } from "../src/config/schema.ts";
-import { detectContracts } from "../src/detect/contracts.ts";
-import { listFiles } from "../src/detect/walk.ts";
-import { refineRequest, requestSlug } from "../src/pipeline/refine.ts";
-import { renderWorkspace } from "../src/render/workspace.ts";
-import { agentForTask } from "../src/tasks/routing.ts";
-import { archiveLegacySetups } from "../src/workspace/legacy.ts";
+import {
+  FactoryConfig,
+  type FactoryConfigInput,
+  modelFor,
+} from "../packages/core/src/config/schema.ts";
+import { detectContracts } from "../packages/core/src/detect/contracts.ts";
+import { listFiles } from "../packages/core/src/detect/walk.ts";
+import { refineRequest, requestSlug } from "../packages/core/src/pipeline/refine.ts";
+import { renderWorkspace } from "../packages/core/src/render/workspace.ts";
+import { agentForTask } from "../packages/core/src/tasks/routing.ts";
+import { archiveLegacySetups } from "../packages/core/src/workspace/legacy.ts";
 import { fixtureGit } from "./fixtures/workspaces.ts";
 import { gitOut } from "./helpers.ts";
 

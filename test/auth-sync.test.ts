@@ -5,7 +5,7 @@ import {
   type StoredCredential,
   scopeCredentials,
   syncCredentials,
-} from "../src/runtime/auth.ts";
+} from "../packages/core/src/runtime/auth.ts";
 
 const key = (
   id: string,

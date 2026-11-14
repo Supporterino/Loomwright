@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { parseConfigText } from "../src/config/load.ts";
-import { PRE_PUSH_HOOK } from "../src/git/hooks.ts";
-import { LOCK_FILE, readLock } from "../src/lock/lock.ts";
-import { PROFILES, renderStandard } from "../src/profiles/index.ts";
-import { FACTORY_VERSION } from "../src/version.ts";
+import { parseConfigText } from "../packages/core/src/config/load.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { PRE_PUSH_HOOK } from "../packages/core/src/git/hooks.ts";
+import { LOCK_FILE, readLock } from "../packages/core/src/lock/lock.ts";
+import { PROFILES, renderStandard } from "../packages/core/src/profiles/index.ts";
+import { FACTORY_VERSION } from "../packages/core/src/version.ts";
 import {
   bareRepo,
   createSingleRepoFixture,

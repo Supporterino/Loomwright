@@ -1,11 +1,11 @@
-import go from "../../templates/standards/go.md" with { type: "text" };
-import helm from "../../templates/standards/helm.md" with { type: "text" };
-import python from "../../templates/standards/python.md" with { type: "text" };
-import react from "../../templates/standards/react.md" with { type: "text" };
-import rust from "../../templates/standards/rust.md" with { type: "text" };
-import swift from "../../templates/standards/swift.md" with { type: "text" };
-import tauri from "../../templates/standards/tauri.md" with { type: "text" };
-import typescript from "../../templates/standards/typescript.md" with { type: "text" };
+import go from "../../../../templates/standards/go.md" with { type: "text" };
+import helm from "../../../../templates/standards/helm.md" with { type: "text" };
+import python from "../../../../templates/standards/python.md" with { type: "text" };
+import react from "../../../../templates/standards/react.md" with { type: "text" };
+import rust from "../../../../templates/standards/rust.md" with { type: "text" };
+import swift from "../../../../templates/standards/swift.md" with { type: "text" };
+import tauri from "../../../../templates/standards/tauri.md" with { type: "text" };
+import typescript from "../../../../templates/standards/typescript.md" with { type: "text" };
 import type { GateType, Language } from "../config/schema.ts";
 
 /**

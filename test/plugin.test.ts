@@ -13,12 +13,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { approvalFile, specHash } from "../packages/core/src/approval/approval.ts";
+import { appendLog, pruneLogs } from "../packages/core/src/logs/log.ts";
+import { redact, secretEnvValues } from "../packages/core/src/logs/redact.ts";
+import { auditChanges, type SessionContext } from "../packages/core/src/policy/scope.ts";
+import { sessionContextFile } from "../packages/core/src/policy/session-files.ts";
 import { bundlePlugin, PLUGIN_OUT } from "../scripts/build-plugin.ts";
-import { approvalFile, specHash } from "../src/approval/approval.ts";
-import { appendLog, pruneLogs } from "../src/logs/log.ts";
-import { redact, secretEnvValues } from "../src/logs/redact.ts";
-import { auditChanges, type SessionContext } from "../src/policy/scope.ts";
-import { sessionContextFile } from "../src/policy/session-files.ts";
 import { writeFiles } from "./fixtures/workspaces.ts";
 
 type Hook = (event: {

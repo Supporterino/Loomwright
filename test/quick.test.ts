@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
 import { ScriptedRuntime } from "./fixtures/scripted-runtime.ts";
 import { createSingleRepoFixture, type Fixture, fixtureGit } from "./fixtures/workspaces.ts";
 import { cli, cliWith, gitOut } from "./helpers.ts";

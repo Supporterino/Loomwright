@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TransientError } from "../src/errors.ts";
+import { TransientError } from "../packages/core/src/errors.ts";
 import {
   type AttemptContext,
   type AttemptResult,
@@ -12,7 +12,7 @@ import {
   Scheduler,
   type TaskEvent,
   type TaskRunner,
-} from "../src/scheduler/scheduler.ts";
+} from "../packages/core/src/scheduler/scheduler.ts";
 import {
   claimActive,
   dequeue,
@@ -21,8 +21,15 @@ import {
   readQueue,
   releaseActive,
   releaseDriver,
-} from "../src/state/active.ts";
-import { loadRun, newRun, type RunState, saveRun, TaskState, updateRun } from "../src/state/run.ts";
+} from "../packages/core/src/state/active.ts";
+import {
+  loadRun,
+  newRun,
+  type RunState,
+  saveRun,
+  TaskState,
+  updateRun,
+} from "../packages/core/src/state/run.ts";
 
 let root: string;
 beforeEach(() => {

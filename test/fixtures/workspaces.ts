@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { gitOk } from "../../src/exec.ts";
+import { gitOk } from "../../packages/core/src/exec.ts";
 
 /**
  * Fixture workspaces from §13, created in temp dirs:

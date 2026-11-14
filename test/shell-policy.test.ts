@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { checkShell, type ShellContext } from "../src/policy/shell.ts";
+import { checkShell, type ShellContext } from "../packages/core/src/policy/shell.ts";
 
 const WT = "/ws/.factory/worktrees/add-x/backend/1.1";
 const FILES: Record<string, string> = {

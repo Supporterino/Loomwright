@@ -1,9 +1,9 @@
-import { exportArtifacts, syncAllArtifacts } from "../../artifacts/export.ts";
-import { isArtifactId } from "../../artifacts/paths.ts";
-import { findWorkspaceRoot, loadConfig } from "../../config/load.ts";
-import { PreconditionError, UsageError } from "../../errors.ts";
+import { exportArtifacts, syncAllArtifacts } from "@loomwright/core/artifacts/export";
+import { isArtifactId } from "@loomwright/core/artifacts/paths";
+import { findWorkspaceRoot, loadConfig } from "@loomwright/core/config/load";
+import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const HELP = `Usage: loomwright artifacts sync [<change-id> | --all] [--dry-run] [--json]
 

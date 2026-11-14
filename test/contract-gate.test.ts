@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml, stringify as toYaml } from "yaml";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { loadConfig } from "../src/config/load.ts";
-import type { ContractConfig } from "../src/config/schema.ts";
-import { checkContract } from "../src/contracts/gate.ts";
-import { loadRun } from "../src/state/run.ts";
+import { loadConfig } from "../packages/core/src/config/load.ts";
+import type { ContractConfig } from "../packages/core/src/config/schema.ts";
+import { checkContract } from "../packages/core/src/contracts/gate.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { loadRun } from "../packages/core/src/state/run.ts";
 import { factoryScript, type ScriptedTask } from "./fixtures/factory-script.ts";
 import { ScriptedRuntime } from "./fixtures/scripted-runtime.ts";
 import {

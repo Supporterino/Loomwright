@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { isGeneratedLockfile } from "../src/policy/paths.ts";
-import { auditChanges, checkEdit, type SessionContext } from "../src/policy/scope.ts";
+import { isGeneratedLockfile } from "../packages/core/src/policy/paths.ts";
+import { auditChanges, checkEdit, type SessionContext } from "../packages/core/src/policy/scope.ts";
 
 /** A task worktree; `touches` deliberately omits every lockfile below. */
 const WT = "/ws/.factory/worktrees/add-x/app/1.1";

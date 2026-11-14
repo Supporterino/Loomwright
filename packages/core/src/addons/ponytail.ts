@@ -1,13 +1,15 @@
-import reviewCommand from "../../templates/addons/ponytail/.opencode/command/ponytail-review.md" with {
+import reviewCommand from "../../../../templates/addons/ponytail/.opencode/command/ponytail-review.md" with {
   type: "text",
 };
-import agentsMd from "../../templates/addons/ponytail/AGENTS.md" with { type: "text" };
-import license from "../../templates/addons/ponytail/LICENSE" with { type: "text" };
-import skill from "../../templates/addons/ponytail/skills/ponytail/SKILL.md" with { type: "text" };
-import reviewSkill from "../../templates/addons/ponytail/skills/ponytail-review/SKILL.md" with {
+import agentsMd from "../../../../templates/addons/ponytail/AGENTS.md" with { type: "text" };
+import license from "../../../../templates/addons/ponytail/LICENSE" with { type: "text" };
+import skill from "../../../../templates/addons/ponytail/skills/ponytail/SKILL.md" with {
   type: "text",
 };
-import precedenceTemplate from "../../templates/addons/ponytail-precedence.md" with {
+import reviewSkill from "../../../../templates/addons/ponytail/skills/ponytail-review/SKILL.md" with {
+  type: "text",
+};
+import precedenceTemplate from "../../../../templates/addons/ponytail-precedence.md" with {
   type: "text",
 };
 import type { FactoryConfig } from "../config/schema.ts";

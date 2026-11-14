@@ -1,9 +1,9 @@
-import { findWorkspaceRoot, loadConfig } from "../../config/load.ts";
-import { PreconditionError, UsageError } from "../../errors.ts";
-import { repoint } from "../../git/pointers.ts";
-import { CHANGE_ID } from "../../git/repo.ts";
+import { findWorkspaceRoot, loadConfig } from "@loomwright/core/config/load";
+import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { repoint } from "@loomwright/core/git/pointers";
+import { CHANGE_ID } from "@loomwright/core/git/repo";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const HELP = `Usage: loomwright repoint <change-id> [--json]
 

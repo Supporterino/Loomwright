@@ -1,9 +1,9 @@
-import { findWorkspaceRoot } from "../../config/load.ts";
-import { type Check, type DoctorReport, runDoctor } from "../../doctor/doctor.ts";
-import { PreconditionError } from "../../errors.ts";
-import { git } from "../../exec.ts";
+import { findWorkspaceRoot } from "@loomwright/core/config/load";
+import { type Check, type DoctorReport, runDoctor } from "@loomwright/core/doctor/doctor";
+import { PreconditionError } from "@loomwright/core/errors";
+import { git } from "@loomwright/core/exec";
+import { ExitCode } from "@loomwright/core/exit-codes";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const MARK: Record<Check["status"], string> = { ok: "✓", warn: "!", fail: "✗" };
 

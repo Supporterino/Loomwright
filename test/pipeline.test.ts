@@ -11,12 +11,12 @@ import {
 } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { loadConfig } from "../src/config/load.ts";
-import { approve } from "../src/pipeline/approve.ts";
-import { Pipeline } from "../src/pipeline/context.ts";
-import { readActive, readQueue } from "../src/state/active.ts";
-import { loadRun, updateRun } from "../src/state/run.ts";
+import { loadConfig } from "../packages/core/src/config/load.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { approve } from "../packages/core/src/pipeline/approve.ts";
+import { Pipeline } from "../packages/core/src/pipeline/context.ts";
+import { readActive, readQueue } from "../packages/core/src/state/active.ts";
+import { loadRun, updateRun } from "../packages/core/src/state/run.ts";
 import { factoryScript, type ScriptedTask, specFiles } from "./fixtures/factory-script.ts";
 import { ScriptedRuntime } from "./fixtures/scripted-runtime.ts";
 import {

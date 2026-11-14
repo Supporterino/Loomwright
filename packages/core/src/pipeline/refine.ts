@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Io } from "../cli/command.ts";
 import { findWorkspaceRoot } from "../config/load.ts";
 import { PreconditionError } from "../errors.ts";
+import type { Io } from "../io.ts";
 
 const QUESTIONS: readonly [string, string, string][] = [
   ["scope", "Which repos, modules or capabilities does this touch?", ""],

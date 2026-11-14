@@ -1,17 +1,17 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { findWorkspaceRoot, loadConfig } from "../../config/load.ts";
-import type { RepoConfig } from "../../config/schema.ts";
-import { PreconditionError, UsageError } from "../../errors.ts";
-import { git } from "../../exec.ts";
-import type { GateReport, GateResult } from "../../gates/run.ts";
-import { runGates } from "../../gates/run.ts";
-import { CHANGE_ID, resolveBranchRef } from "../../git/repo.ts";
-import { worktreePath } from "../../git/worktrees.ts";
-import { loadGateSnapshot } from "../../update/snapshot.ts";
-import { Semaphore } from "../../util/semaphore.ts";
+import { findWorkspaceRoot, loadConfig } from "@loomwright/core/config/load";
+import type { RepoConfig } from "@loomwright/core/config/schema";
+import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { git } from "@loomwright/core/exec";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import type { GateReport, GateResult } from "@loomwright/core/gates/run";
+import { runGates } from "@loomwright/core/gates/run";
+import { CHANGE_ID, resolveBranchRef } from "@loomwright/core/git/repo";
+import { worktreePath } from "@loomwright/core/git/worktrees";
+import { loadGateSnapshot } from "@loomwright/core/update/snapshot";
+import { Semaphore } from "@loomwright/core/util/semaphore";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const HELP = `Usage: loomwright gate <change-id> [--task <id>] [--repo <name>] [--full] [--json]
 

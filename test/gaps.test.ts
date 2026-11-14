@@ -3,12 +3,12 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
-import { graphRebuildReason, graphStatus } from "../src/graph/graph.ts";
-import { PROFILES } from "../src/profiles/index.ts";
-import { ZERO_USAGE } from "../src/runtime/types.ts";
-import { withFileLock } from "../src/state/files.ts";
-import { loadUsage, recordUsage, summarizeUsage } from "../src/usage/usage.ts";
-import { capText } from "../src/util/cap.ts";
+import { graphRebuildReason, graphStatus } from "../packages/core/src/graph/graph.ts";
+import { PROFILES } from "../packages/core/src/profiles/index.ts";
+import { ZERO_USAGE } from "../packages/core/src/runtime/types.ts";
+import { withFileLock } from "../packages/core/src/state/files.ts";
+import { loadUsage, recordUsage, summarizeUsage } from "../packages/core/src/usage/usage.ts";
+import { capText } from "../packages/core/src/util/cap.ts";
 
 /** Smaller findings of the 2026-10-26 audit (G8, P15, P20), one probe each. */
 

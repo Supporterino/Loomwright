@@ -30,9 +30,9 @@ process.env.GIT_CONFIG_GLOBAL = join(ROOT, "test/fixtures/gitconfig");
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 
 const { runCli } = await import("../src/cli/main.ts");
-const { setJsonc } = await import("../src/config/jsonc.ts");
-const { git } = await import("../src/exec.ts");
-const { FACTORY_VERSION } = await import("../src/version.ts");
+const { setJsonc } = await import("../packages/core/src/config/jsonc.ts");
+const { git } = await import("../packages/core/src/exec.ts");
+const { FACTORY_VERSION } = await import("../packages/core/src/version.ts");
 const { startStubModel } = await import("../test/fixtures/stub-model.ts");
 const { stubTeam } = await import("../test/fixtures/stub-team.ts");
 const { createSingleRepoFixture, createSubmoduleFixture } = await import(

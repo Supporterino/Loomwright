@@ -1,5 +1,6 @@
 import { basename } from "node:path";
-import { UsageError } from "../../errors.ts";
+import { UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
 import { completeWords } from "../completion/engine.ts";
 import {
@@ -9,7 +10,6 @@ import {
   SHELLS,
   type Shell,
 } from "../completion/scripts.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const OPTIONS = {
   install: { type: "boolean", default: false, description: "Add the script to your shell rc" },

@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FactoryConfig } from "../src/config/schema.ts";
-import { OpencodeRuntime } from "../src/runtime/opencode.ts";
+import { FactoryConfig } from "../packages/core/src/config/schema.ts";
+import { OpencodeRuntime } from "../packages/core/src/runtime/opencode.ts";
 
 /**
  * A turn longer than the `/wait` poll bound must keep polling. Regression test for the

@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FactoryConfig, type FactoryConfigInput, type Language } from "../src/config/schema.ts";
-import { globToRegExp, isTestFile } from "../src/gates/affected.ts";
-import { compactOutput } from "../src/gates/compact.ts";
-import { type GatePlan, resolveGates } from "../src/gates/resolve.ts";
-import { findTargets, worktreeFiles } from "../src/gates/targets.ts";
-import { PROFILES } from "../src/profiles/index.ts";
+import {
+  FactoryConfig,
+  type FactoryConfigInput,
+  type Language,
+} from "../packages/core/src/config/schema.ts";
+import { globToRegExp, isTestFile } from "../packages/core/src/gates/affected.ts";
+import { compactOutput } from "../packages/core/src/gates/compact.ts";
+import { type GatePlan, resolveGates } from "../packages/core/src/gates/resolve.ts";
+import { findTargets, worktreeFiles } from "../packages/core/src/gates/targets.ts";
+import { PROFILES } from "../packages/core/src/profiles/index.ts";
 import { type Files, writeFiles } from "./fixtures/workspaces.ts";
 
 const M = "a/b";

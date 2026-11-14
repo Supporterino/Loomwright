@@ -9,7 +9,7 @@ import {
   sandboxCommand,
   sandboxEnabled,
   seatbeltProfile,
-} from "../src/policy/sandbox.ts";
+} from "../packages/core/src/policy/sandbox.ts";
 
 describe("sandboxEnabled", () => {
   test("macOS with sandbox-exec unless switched off; nowhere else yet", () => {

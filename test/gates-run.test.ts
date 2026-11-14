@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { FactoryConfig, type FactoryConfigInput } from "../src/config/schema.ts";
-import { installDeps } from "../src/gates/install.ts";
-import { runGates } from "../src/gates/run.ts";
+import { FactoryConfig, type FactoryConfigInput } from "../packages/core/src/config/schema.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { installDeps } from "../packages/core/src/gates/install.ts";
+import { runGates } from "../packages/core/src/gates/run.ts";
 import {
   createSingleRepoFixture,
   createSubmoduleFixture,

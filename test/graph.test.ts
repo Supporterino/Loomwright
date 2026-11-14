@@ -2,13 +2,18 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { FactoryConfig } from "../src/config/schema.ts";
-import { resolveGates } from "../src/gates/resolve.ts";
-import { worktreeFiles } from "../src/gates/targets.ts";
-import { dependentFiles, graphFile, graphStatus, updateGraph } from "../src/graph/graph.ts";
-import { GraphUpdater } from "../src/graph/updater.ts";
-import { loadRun } from "../src/state/run.ts";
+import { FactoryConfig } from "../packages/core/src/config/schema.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { resolveGates } from "../packages/core/src/gates/resolve.ts";
+import { worktreeFiles } from "../packages/core/src/gates/targets.ts";
+import {
+  dependentFiles,
+  graphFile,
+  graphStatus,
+  updateGraph,
+} from "../packages/core/src/graph/graph.ts";
+import { GraphUpdater } from "../packages/core/src/graph/updater.ts";
+import { loadRun } from "../packages/core/src/state/run.ts";
 import { factoryScript, type ScriptedTask } from "./fixtures/factory-script.ts";
 import { ScriptedRuntime } from "./fixtures/scripted-runtime.ts";
 import {

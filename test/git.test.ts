@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import type { RepoConfig } from "../src/config/schema.ts";
-import { PreconditionError } from "../src/errors.ts";
-import { branchAiRepo, branchSubmodule } from "../src/git/branching.ts";
-import { commitTask, conventionalSubject } from "../src/git/commit.ts";
-import { MergeQueue, mergeTask } from "../src/git/merge-queue.ts";
-import { bumpPointers, findProvisionalBump, PROVISIONAL_SUBJECT } from "../src/git/pointers.ts";
-import { addTaskWorktree } from "../src/git/worktrees.ts";
+import type { RepoConfig } from "../packages/core/src/config/schema.ts";
+import { PreconditionError } from "../packages/core/src/errors.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { branchAiRepo, branchSubmodule } from "../packages/core/src/git/branching.ts";
+import { commitTask, conventionalSubject } from "../packages/core/src/git/commit.ts";
+import { MergeQueue, mergeTask } from "../packages/core/src/git/merge-queue.ts";
+import {
+  bumpPointers,
+  findProvisionalBump,
+  PROVISIONAL_SUBJECT,
+} from "../packages/core/src/git/pointers.ts";
+import { addTaskWorktree } from "../packages/core/src/git/worktrees.ts";
 import { createSubmoduleFixture, type Fixture, fixtureGit } from "./fixtures/workspaces.ts";
 import { cli, gitOut } from "./helpers.ts";
 

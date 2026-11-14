@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import type { Finding } from "../src/handoff/schema.ts";
-import { loadRun } from "../src/state/run.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import type { Finding } from "../packages/core/src/handoff/schema.ts";
+import { loadRun } from "../packages/core/src/state/run.ts";
 import { factoryScript, type ScriptedTask } from "./fixtures/factory-script.ts";
 import { ScriptedRuntime } from "./fixtures/scripted-runtime.ts";
 import {

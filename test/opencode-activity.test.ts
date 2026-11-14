@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FactoryConfig } from "../src/config/schema.ts";
-import { OpencodeRuntime } from "../src/runtime/opencode.ts";
-import type { SessionActivity } from "../src/runtime/types.ts";
+import { FactoryConfig } from "../packages/core/src/config/schema.ts";
+import { OpencodeRuntime } from "../packages/core/src/runtime/opencode.ts";
+import type { SessionActivity } from "../packages/core/src/runtime/types.ts";
 
 /** The runtime turns opencode's event stream into display progress for exactly its sessions. */
 describe("OpencodeRuntime activity", () => {

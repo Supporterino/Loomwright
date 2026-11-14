@@ -1,9 +1,9 @@
-import { PreconditionError, UsageError } from "../../errors.ts";
-import type { Finding } from "../../handoff/schema.ts";
-import { reapprove, reword } from "../../pipeline/reword.ts";
-import { loadRun } from "../../state/run.ts";
+import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import type { Finding } from "@loomwright/core/handoff/schema";
+import { reapprove, reword } from "@loomwright/core/pipeline/reword";
+import { loadRun } from "@loomwright/core/state/run";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 import { changeIdArg, PROGRESS_OPTIONS, verbosityOf, withPipeline } from "./pipeline-commands.ts";
 
 /** `--finding 1,3` indexes the run's recorded spec findings (1-based). */

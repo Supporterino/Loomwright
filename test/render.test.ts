@@ -2,11 +2,20 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { FactoryConfig, LANGUAGES } from "../src/config/schema.ts";
-import { Handoff } from "../src/handoff/schema.ts";
-import { agentRules, PROTECTED_PATHS, ruleEffect } from "../src/policy/permissions.ts";
-import { PROFILES, profileSummary, profilesFor, renderStandard } from "../src/profiles/index.ts";
-import { renderWorkspace } from "../src/render/workspace.ts";
+import { FactoryConfig, LANGUAGES } from "../packages/core/src/config/schema.ts";
+import { Handoff } from "../packages/core/src/handoff/schema.ts";
+import {
+  agentRules,
+  PROTECTED_PATHS,
+  ruleEffect,
+} from "../packages/core/src/policy/permissions.ts";
+import {
+  PROFILES,
+  profileSummary,
+  profilesFor,
+  renderStandard,
+} from "../packages/core/src/profiles/index.ts";
+import { renderWorkspace } from "../packages/core/src/render/workspace.ts";
 
 const M = "anthropic/claude-sonnet-5-5";
 const config = FactoryConfig.parse({

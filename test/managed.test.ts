@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { execOk } from "../src/exec.ts";
-import type { LockEntry } from "../src/lock/lock.ts";
-import { executeSync, planSync, sha256 } from "../src/managed/sync.ts";
-import type { ManagedFile } from "../src/render/workspace.ts";
+import { execOk } from "../packages/core/src/exec.ts";
+import type { LockEntry } from "../packages/core/src/lock/lock.ts";
+import { executeSync, planSync, sha256 } from "../packages/core/src/managed/sync.ts";
+import type { ManagedFile } from "../packages/core/src/render/workspace.ts";
 import { createSingleRepoFixture } from "./fixtures/workspaces.ts";
 
 const PATH = ".opencode/example.md";

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
+import { parseConfigText } from "../packages/core/src/config/load.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
 import { runCli } from "../src/cli/main.ts";
-import { parseConfigText } from "../src/config/load.ts";
 import {
   bareRepo,
   createSingleRepoFixture,

@@ -2,20 +2,20 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { parseJsonc } from "../src/config/jsonc.ts";
-import { loadConfig } from "../src/config/load.ts";
-import { DEFAULT_GRAPH_EXCLUDE } from "../src/config/schema.ts";
-import { readLock } from "../src/lock/lock.ts";
+import { parseJsonc } from "../packages/core/src/config/jsonc.ts";
+import { loadConfig } from "../packages/core/src/config/load.ts";
+import { DEFAULT_GRAPH_EXCLUDE } from "../packages/core/src/config/schema.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { readLock } from "../packages/core/src/lock/lock.ts";
 import {
   graphExcludeDefaults,
   V1_GRAPH_EXCLUDE,
-} from "../src/migrations/001-graph-exclude-defaults.ts";
-import { artifactsV4 } from "../src/migrations/003-artifacts.ts";
-import { migrateConfigText } from "../src/migrations/index.ts";
-import { claimActive, releaseActive } from "../src/state/active.ts";
-import { loadRun } from "../src/state/run.ts";
-import { FACTORY_VERSION } from "../src/version.ts";
+} from "../packages/core/src/migrations/001-graph-exclude-defaults.ts";
+import { artifactsV4 } from "../packages/core/src/migrations/003-artifacts.ts";
+import { migrateConfigText } from "../packages/core/src/migrations/index.ts";
+import { claimActive, releaseActive } from "../packages/core/src/state/active.ts";
+import { loadRun } from "../packages/core/src/state/run.ts";
+import { FACTORY_VERSION } from "../packages/core/src/version.ts";
 import { factoryScript, type ScriptedTask } from "./fixtures/factory-script.ts";
 import { ScriptedRuntime } from "./fixtures/scripted-runtime.ts";
 import { fixtureGit } from "./fixtures/workspaces.ts";

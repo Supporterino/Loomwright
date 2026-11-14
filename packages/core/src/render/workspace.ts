@@ -2,17 +2,19 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Document, isMap, isSeq, stringify as toYaml } from "yaml";
 import { z } from "zod";
-import architect from "../../templates/agents/architect.md" with { type: "text" };
-import contractReviewer from "../../templates/agents/contract-reviewer.md" with { type: "text" };
-import explorer from "../../templates/agents/explorer.md" with { type: "text" };
-import implementer from "../../templates/agents/implementer.md" with { type: "text" };
-import orchestrator from "../../templates/agents/orchestrator.md" with { type: "text" };
-import reviewer from "../../templates/agents/reviewer.md" with { type: "text" };
-import graphRules from "../../templates/agents/shared/graph.md" with { type: "text" };
-import handoffRules from "../../templates/agents/shared/handoff.md" with { type: "text" };
-import untrusted from "../../templates/agents/shared/untrusted.md" with { type: "text" };
-import tester from "../../templates/agents/tester.md" with { type: "text" };
-import factoryPlugin from "../../templates/plugin/factory-plugin.txt" with { type: "text" };
+import architect from "../../../../templates/agents/architect.md" with { type: "text" };
+import contractReviewer from "../../../../templates/agents/contract-reviewer.md" with {
+  type: "text",
+};
+import explorer from "../../../../templates/agents/explorer.md" with { type: "text" };
+import implementer from "../../../../templates/agents/implementer.md" with { type: "text" };
+import orchestrator from "../../../../templates/agents/orchestrator.md" with { type: "text" };
+import reviewer from "../../../../templates/agents/reviewer.md" with { type: "text" };
+import graphRules from "../../../../templates/agents/shared/graph.md" with { type: "text" };
+import handoffRules from "../../../../templates/agents/shared/handoff.md" with { type: "text" };
+import untrusted from "../../../../templates/agents/shared/untrusted.md" with { type: "text" };
+import tester from "../../../../templates/agents/tester.md" with { type: "text" };
+import factoryPlugin from "../../../../templates/plugin/factory-plugin.txt" with { type: "text" };
 import {
   checkPonytailConfig,
   PONYTAIL_DIR,

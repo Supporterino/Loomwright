@@ -3,11 +3,11 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { newRun, saveRun, TaskState } from "../packages/core/src/state/run.ts";
 import { completeWords } from "../src/cli/completion/engine.ts";
 import { completionScript } from "../src/cli/completion/scripts.ts";
-import { ExitCode } from "../src/cli/exit-codes.ts";
 import { COMMANDS } from "../src/cli/main.ts";
-import { newRun, saveRun, TaskState } from "../src/state/run.ts";
 import { createSingleRepoFixture, type Fixture, writeFiles } from "./fixtures/workspaces.ts";
 import { cli } from "./helpers.ts";
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { FactoryError } from "../errors.ts";
-import { FACTORY_VERSION } from "../version.ts";
+import { FactoryError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { FACTORY_VERSION } from "@loomwright/core/version";
 import type { Command, Io } from "./command.ts";
 import { adoptCommand } from "./commands/adopt.ts";
 import { artifactsCommand } from "./commands/artifacts.ts";
@@ -23,7 +24,6 @@ import { abortCommand, retryCommand, statusCommand } from "./commands/state-comm
 import { rollbackCommand, updateCommand } from "./commands/update.ts";
 import { usageCommand } from "./commands/usage.ts";
 import { setCompletionCommands } from "./completion/registry.ts";
-import { ExitCode } from "./exit-codes.ts";
 
 export const COMMANDS: readonly Command[] = [
   initCommand,

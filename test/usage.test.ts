@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import type { Usage } from "../src/runtime/types.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import type { Usage } from "../packages/core/src/runtime/types.ts";
 import {
   formatTokens,
   loadUsage,
@@ -11,7 +11,7 @@ import {
   summarizeUsage,
   totalTokens,
   usageReport,
-} from "../src/usage/usage.ts";
+} from "../packages/core/src/usage/usage.ts";
 import { factoryScript, type ScriptedTask } from "./fixtures/factory-script.ts";
 import { ScriptedRuntime, USAGE_PER_TURN } from "./fixtures/scripted-runtime.ts";
 import {

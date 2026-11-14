@@ -1,12 +1,12 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { findWorkspaceRoot } from "../../config/load.ts";
-import { PreconditionError } from "../../errors.ts";
-import { graphFile, updateGraph } from "../../graph/graph.ts";
-import { LOCK_FILE } from "../../lock/lock.ts";
-import { checkTool } from "../../tools.ts";
+import { findWorkspaceRoot } from "@loomwright/core/config/load";
+import { PreconditionError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { graphFile, updateGraph } from "@loomwright/core/graph/graph";
+import { LOCK_FILE } from "@loomwright/core/lock/lock";
+import { checkTool } from "@loomwright/core/tools";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const OPTIONS = {
   full: { type: "boolean", default: false, description: "Rebuild the graph from scratch" },

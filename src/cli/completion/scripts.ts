@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { PreconditionError } from "../../errors.ts";
+import { PreconditionError } from "@loomwright/core/errors";
 
 export const SHELLS = ["bash", "zsh", "fish"] as const;
 export type Shell = (typeof SHELLS)[number];

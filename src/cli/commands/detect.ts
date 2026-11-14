@@ -1,21 +1,21 @@
 import { existsSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { findWorkspaceRoot, loadConfig, parseConfigText } from "../../config/load.ts";
-import { CONFIG_FILE } from "../../config/schema.ts";
-import { applyChanges } from "../../detect/apply.ts";
-import { diffDetection, formatChange } from "../../detect/diff.ts";
-import { detectWorkspace } from "../../detect/workspace.ts";
-import { PreconditionError } from "../../errors.ts";
-import { ensureNotNewer, readLock } from "../../lock/lock.ts";
-import { FACTORY_VERSION } from "../../version.ts";
+import { findWorkspaceRoot, loadConfig, parseConfigText } from "@loomwright/core/config/load";
+import { CONFIG_FILE } from "@loomwright/core/config/schema";
+import { applyChanges } from "@loomwright/core/detect/apply";
+import { diffDetection, formatChange } from "@loomwright/core/detect/diff";
+import { detectWorkspace } from "@loomwright/core/detect/workspace";
+import { PreconditionError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { ensureNotNewer, readLock } from "@loomwright/core/lock/lock";
+import { FACTORY_VERSION } from "@loomwright/core/version";
 import {
   commitInstall,
   dirtyInstallPaths,
   planWorkspace,
   syncWorkspace,
-} from "../../workspace/sync.ts";
+} from "@loomwright/core/workspace/sync";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const HELP = `Usage: loomwright detect [--apply [--no-commit] [--allow-downgrade]] [--check] [--json]
 

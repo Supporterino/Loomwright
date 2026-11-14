@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { FactoryConfig, type FactoryConfigInput } from "../src/config/schema.ts";
-import { resolveGates } from "../src/gates/resolve.ts";
-import { runGates } from "../src/gates/run.ts";
+import { FactoryConfig, type FactoryConfigInput } from "../packages/core/src/config/schema.ts";
+import { resolveGates } from "../packages/core/src/gates/resolve.ts";
+import { runGates } from "../packages/core/src/gates/run.ts";
 import { createSingleRepoFixture, type Fixture } from "./fixtures/workspaces.ts";
 import { gitOut } from "./helpers.ts";
 

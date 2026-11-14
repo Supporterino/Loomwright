@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { detectContracts } from "../src/detect/contracts.ts";
-import { detectLanguages } from "../src/detect/languages.ts";
-import { listFiles } from "../src/detect/walk.ts";
+import { detectContracts } from "../packages/core/src/detect/contracts.ts";
+import { detectLanguages } from "../packages/core/src/detect/languages.ts";
+import { listFiles } from "../packages/core/src/detect/walk.ts";
 import { type Files, writeFiles } from "./fixtures/workspaces.ts";
 
 let dir: string;

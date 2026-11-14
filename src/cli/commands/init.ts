@@ -1,33 +1,33 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { setJsonc } from "../../config/jsonc.ts";
-import { findWorkspaceRoot, loadConfig, parseConfigText } from "../../config/load.ts";
-import { renderInitialConfig } from "../../config/render.ts";
-import { CONFIG_FILE } from "../../config/schema.ts";
-import { detectWorkspace } from "../../detect/workspace.ts";
-import { PreconditionError } from "../../errors.ts";
-import { gitOk } from "../../exec.ts";
-import { graphFile, updateGraph } from "../../graph/graph.ts";
-import { ensureNotNewer, readLock } from "../../lock/lock.ts";
-import type { SyncAction } from "../../managed/sync.ts";
-import { planSync } from "../../managed/sync.ts";
-import { unadoptedChanges } from "../../openspec/changes.ts";
-import { renderOpenspecTools } from "../../openspec/cli.ts";
-import { renderWorkspace } from "../../render/workspace.ts";
-import { checkTools, type ToolName } from "../../tools.ts";
-import { FACTORY_VERSION } from "../../version.ts";
-import { archiveLegacySetups } from "../../workspace/legacy.ts";
+import { setJsonc } from "@loomwright/core/config/jsonc";
+import { findWorkspaceRoot, loadConfig, parseConfigText } from "@loomwright/core/config/load";
+import { renderInitialConfig } from "@loomwright/core/config/render";
+import { CONFIG_FILE } from "@loomwright/core/config/schema";
+import { detectWorkspace } from "@loomwright/core/detect/workspace";
+import { PreconditionError } from "@loomwright/core/errors";
+import { gitOk } from "@loomwright/core/exec";
+import { graphFile, updateGraph } from "@loomwright/core/graph/graph";
+import { ensureNotNewer, readLock } from "@loomwright/core/lock/lock";
+import type { SyncAction } from "@loomwright/core/managed/sync";
+import { planSync } from "@loomwright/core/managed/sync";
+import { unadoptedChanges } from "@loomwright/core/openspec/changes";
+import { renderOpenspecTools } from "@loomwright/core/openspec/cli";
+import { renderWorkspace } from "@loomwright/core/render/workspace";
+import { checkTools, type ToolName } from "@loomwright/core/tools";
+import { FACTORY_VERSION } from "@loomwright/core/version";
+import { archiveLegacySetups } from "@loomwright/core/workspace/legacy";
 import {
   commitInstall,
   dirtyInstallPaths,
   planWorkspace,
   syncWorkspace,
-} from "../../workspace/sync.ts";
+} from "@loomwright/core/workspace/sync";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
 
 const OPENSPEC_CONFIG = "openspec/config.yaml";
 
-import { ExitCode } from "../exit-codes.ts";
+import { ExitCode } from "@loomwright/core/exit-codes";
 
 const HELP = `Usage: loomwright init [--plan] [--force] [--allow-downgrade] [--no-commit] [--no-graph] [--json]
 

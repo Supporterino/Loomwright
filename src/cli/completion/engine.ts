@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { findWorkspaceRoot } from "../../config/load.ts";
+import { findWorkspaceRoot } from "@loomwright/core/config/load";
 import type { Command, CommandOption, CompletionValue } from "../command.ts";
 import { completionCommands } from "./registry.ts";
 import { type ValueContext, valueCandidates } from "./values.ts";

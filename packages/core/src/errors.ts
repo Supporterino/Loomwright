@@ -1,4 +1,4 @@
-import { ExitCode } from "./cli/exit-codes.ts";
+import { ExitCode } from "./exit-codes.ts";
 
 /** Base class for every error the CLI expects and reports without a stack trace. */
 export class FactoryError extends Error {

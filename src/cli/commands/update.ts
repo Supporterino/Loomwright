@@ -1,14 +1,15 @@
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { findWorkspaceRoot } from "../../config/load.ts";
-import { CONFIG_FILE } from "../../config/schema.ts";
-import { PreconditionError } from "../../errors.ts";
-import { commitPaths } from "../../git/commit.ts";
-import { currentBranch, ensureClean } from "../../git/repo.ts";
-import { updateGraph } from "../../graph/graph.ts";
-import { ensureNotNewer } from "../../lock/lock.ts";
-import { renderOpenspecTools } from "../../openspec/cli.ts";
-import { checkTools } from "../../tools.ts";
+import { findWorkspaceRoot } from "@loomwright/core/config/load";
+import { CONFIG_FILE } from "@loomwright/core/config/schema";
+import { PreconditionError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { commitPaths } from "@loomwright/core/git/commit";
+import { currentBranch, ensureClean } from "@loomwright/core/git/repo";
+import { updateGraph } from "@loomwright/core/graph/graph";
+import { ensureNotNewer } from "@loomwright/core/lock/lock";
+import { renderOpenspecTools } from "@loomwright/core/openspec/cli";
+import { checkTools } from "@loomwright/core/tools";
 import {
   backup,
   changesInProgress,
@@ -19,11 +20,10 @@ import {
   requireInstalled,
   restoreBackup,
   UPDATE_COMMIT_PATHS,
-} from "../../update/update.ts";
-import { FACTORY_VERSION } from "../../version.ts";
-import { commitInstall, syncWorkspace } from "../../workspace/sync.ts";
+} from "@loomwright/core/update/update";
+import { FACTORY_VERSION } from "@loomwright/core/version";
+import { commitInstall, syncWorkspace } from "@loomwright/core/workspace/sync";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 async function workspaceRoot(io: Io): Promise<string> {
   const root = await findWorkspaceRoot(io.cwd);

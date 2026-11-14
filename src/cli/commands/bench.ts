@@ -8,12 +8,12 @@ import {
   runBench,
   SESSIONS_PER_RUN,
   TOKENS_PER_RUN_ESTIMATE,
-} from "../../bench/ponytail.ts";
-import { findWorkspaceRoot, loadConfig } from "../../config/load.ts";
-import { PreconditionError, UsageError } from "../../errors.ts";
-import { formatTokens } from "../../usage/usage.ts";
+} from "@loomwright/core/bench/ponytail";
+import { findWorkspaceRoot, loadConfig } from "@loomwright/core/config/load";
+import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { formatTokens } from "@loomwright/core/usage/usage";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const HELP = `Usage: loomwright bench ponytail [--runs N] [--case ID] [--levels L,…] [--yes] [--json]
 

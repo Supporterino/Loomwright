@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { loadRun } from "../src/state/run.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { loadRun } from "../packages/core/src/state/run.ts";
 import { ScriptedRuntime } from "./fixtures/scripted-runtime.ts";
 import {
   createSingleRepoFixture,

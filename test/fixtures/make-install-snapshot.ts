@@ -8,9 +8,9 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { gitOk } from "../../packages/core/src/exec.ts";
+import { FACTORY_VERSION } from "../../packages/core/src/version.ts";
 import { runCli } from "../../src/cli/main.ts";
-import { gitOk } from "../../src/exec.ts";
-import { FACTORY_VERSION } from "../../src/version.ts";
 import { createSingleRepoFixture } from "./workspaces.ts";
 
 const fx = await createSingleRepoFixture();

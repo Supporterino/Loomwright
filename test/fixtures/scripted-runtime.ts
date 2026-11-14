@@ -1,13 +1,13 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Handoff } from "../../src/handoff/schema.ts";
+import type { Handoff } from "../../packages/core/src/handoff/schema.ts";
 import type {
   AgentRuntime,
   AgentSession,
   SessionActivity,
   SessionSpec,
   Turn,
-} from "../../src/runtime/types.ts";
+} from "../../packages/core/src/runtime/types.ts";
 
 /**
  * A scripted agent runtime (ADR-0009): each prompt calls the script, which may edit files in

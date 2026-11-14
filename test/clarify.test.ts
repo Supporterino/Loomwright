@@ -2,9 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { runCli } from "../src/cli/main.ts";
-import type { Handoff } from "../src/handoff/schema.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import type { Handoff } from "../packages/core/src/handoff/schema.ts";
 import {
   askQuestions,
   mergeQuestionsBlock,
@@ -12,9 +11,10 @@ import {
   unansweredQuestions,
   upsertClarifications,
   writeClarifications,
-} from "../src/pipeline/clarify.ts";
-import { clarifyPrompt } from "../src/pipeline/prompts.ts";
-import type { Clarification } from "../src/state/run.ts";
+} from "../packages/core/src/pipeline/clarify.ts";
+import { clarifyPrompt } from "../packages/core/src/pipeline/prompts.ts";
+import type { Clarification } from "../packages/core/src/state/run.ts";
+import { runCli } from "../src/cli/main.ts";
 
 const handoff = (openQuestions: string[]): Handoff => ({
   status: "done",

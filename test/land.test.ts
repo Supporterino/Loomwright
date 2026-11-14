@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { loadConfig } from "../src/config/load.ts";
-import { branchAiRepo, branchSubmodule } from "../src/git/branching.ts";
-import { bumpPointers } from "../src/git/pointers.ts";
-import { changeBranch } from "../src/git/repo.ts";
-import { newRun, saveRun, TaskState } from "../src/state/run.ts";
+import { loadConfig } from "../packages/core/src/config/load.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { branchAiRepo, branchSubmodule } from "../packages/core/src/git/branching.ts";
+import { bumpPointers } from "../packages/core/src/git/pointers.ts";
+import { changeBranch } from "../packages/core/src/git/repo.ts";
+import { newRun, saveRun, TaskState } from "../packages/core/src/state/run.ts";
 import {
   createSingleRepoFixture,
   createSubmoduleFixture,

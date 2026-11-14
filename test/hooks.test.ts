@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { git } from "../src/exec.ts";
-import { agentGitEnv, CHAINED_HOOK, installPrePush, PRE_PUSH_HOOK } from "../src/git/hooks.ts";
+import { git } from "../packages/core/src/exec.ts";
+import {
+  agentGitEnv,
+  CHAINED_HOOK,
+  installPrePush,
+  PRE_PUSH_HOOK,
+} from "../packages/core/src/git/hooks.ts";
 import { createSubmoduleFixture, type Fixture, fixtureGit } from "./fixtures/workspaces.ts";
 import { gitOut } from "./helpers.ts";
 

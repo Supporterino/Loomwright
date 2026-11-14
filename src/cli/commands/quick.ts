@@ -1,8 +1,8 @@
-import { maybeExport } from "../../artifacts/export.ts";
-import { UsageError } from "../../errors.ts";
-import { quickChangeId, quickTask } from "../../pipeline/quick.ts";
+import { maybeExport } from "@loomwright/core/artifacts/export";
+import { UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { quickChangeId, quickTask } from "@loomwright/core/pipeline/quick";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 import { PROGRESS_OPTIONS, verbosityOf, withPipeline } from "./pipeline-commands.ts";
 
 const HELP = `Usage: loomwright quick "<task>" [--repo <name>] [--agent <id>] [--no-review] [--verbose|--quiet]

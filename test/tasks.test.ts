@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { contractOrderIssues, dependentsOf, findCycle, validateDag } from "../src/tasks/dag.ts";
-import { globsOverlap, matchGlob, touchesOverlap } from "../src/tasks/glob.ts";
-import { normalizeCheckboxes, parseTasks, setTaskChecked } from "../src/tasks/parse.ts";
+import {
+  contractOrderIssues,
+  dependentsOf,
+  findCycle,
+  validateDag,
+} from "../packages/core/src/tasks/dag.ts";
+import { globsOverlap, matchGlob, touchesOverlap } from "../packages/core/src/tasks/glob.ts";
+import {
+  normalizeCheckboxes,
+  parseTasks,
+  setTaskChecked,
+} from "../packages/core/src/tasks/parse.ts";
 
 const TASKS = `## 1. backend
 

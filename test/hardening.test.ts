@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { checkEdit, type SessionContext } from "../src/policy/scope.ts";
-import { checkShell, type ShellContext } from "../src/policy/shell.ts";
+import { checkEdit, type SessionContext } from "../packages/core/src/policy/scope.ts";
+import { checkShell, type ShellContext } from "../packages/core/src/policy/shell.ts";
 
 /**
  * Probes from the 2026-10-26 audit (docs/audit/2026-10-26.md, S1–S12). Each one bypassed the

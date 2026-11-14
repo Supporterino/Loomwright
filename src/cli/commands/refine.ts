@@ -1,7 +1,7 @@
-import { UsageError } from "../../errors.ts";
-import { refineRequest } from "../../pipeline/refine.ts";
+import { UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { refineRequest } from "@loomwright/core/pipeline/refine";
 import { type Command, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const HELP = `Usage: loomwright refine "<request>"
 

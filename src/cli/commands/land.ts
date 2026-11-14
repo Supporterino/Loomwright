@@ -1,9 +1,9 @@
-import { findWorkspaceRoot, loadConfig } from "../../config/load.ts";
-import { PreconditionError, UsageError } from "../../errors.ts";
-import { CHANGE_ID } from "../../git/repo.ts";
-import { landChange } from "../../pipeline/land.ts";
+import { findWorkspaceRoot, loadConfig } from "@loomwright/core/config/load";
+import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { CHANGE_ID } from "@loomwright/core/git/repo";
+import { landChange } from "@loomwright/core/pipeline/land";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 const OPTIONS = {
   "dry-run": {

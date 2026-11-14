@@ -1,9 +1,10 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { findWorkspaceRoot } from "../../config/load.ts";
-import { PreconditionError, UsageError } from "../../errors.ts";
-import { CHANGE_ID } from "../../git/repo.ts";
-import { retryTask } from "../../scheduler/scheduler.ts";
+import { findWorkspaceRoot } from "@loomwright/core/config/load";
+import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { CHANGE_ID } from "@loomwright/core/git/repo";
+import { retryTask } from "@loomwright/core/scheduler/scheduler";
 import {
   type ActiveLock,
   driverAlive,
@@ -11,18 +12,23 @@ import {
   readQueue,
   releaseActive,
   removeFromQueue,
-} from "../../state/active.ts";
-import { factoryDir, readOrCorrupt } from "../../state/files.ts";
-import { loadRun, type RunState, scanRuns, type TaskState, updateRun } from "../../state/run.ts";
+} from "@loomwright/core/state/active";
+import { factoryDir, readOrCorrupt } from "@loomwright/core/state/files";
+import {
+  loadRun,
+  type RunState,
+  scanRuns,
+  type TaskState,
+  updateRun,
+} from "@loomwright/core/state/run";
 import {
   formatTokens,
   summarizeUsage,
   summarizeWorkspaceUsage,
   totalTokens,
   usageLine,
-} from "../../usage/usage.ts";
+} from "@loomwright/core/usage/usage";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
-import { ExitCode } from "../exit-codes.ts";
 
 async function workspace(io: Io): Promise<string> {
   const root = await findWorkspaceRoot(io.cwd);

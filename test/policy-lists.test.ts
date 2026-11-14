@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { isProtectedPath, isSecretPath } from "../src/policy/paths.ts";
-import { alwaysDeny, ruleEffect } from "../src/policy/permissions.ts";
-import { fence } from "../src/util/fence.ts";
+import { isProtectedPath, isSecretPath } from "../packages/core/src/policy/paths.ts";
+import { alwaysDeny, ruleEffect } from "../packages/core/src/policy/permissions.ts";
+import { fence } from "../packages/core/src/util/fence.ts";
 
 /** Secret files as the plugin's parser sees them and as opencode's permission rules see them. */
 const SECRETS = [

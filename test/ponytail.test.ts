@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ponytailSection, vendoredFiles, verifyVendored } from "../src/addons/ponytail.ts";
-import { shortcutIn, shortcutsInDiff } from "../src/addons/shortcuts.ts";
-import { summarizeVariant } from "../src/bench/ponytail.ts";
-import { ExitCode } from "../src/cli/exit-codes.ts";
-import { FactoryConfig, type FactoryConfigInput } from "../src/config/schema.ts";
-import { readLock } from "../src/lock/lock.ts";
-import { renderWorkspace } from "../src/render/workspace.ts";
-import { loadRun } from "../src/state/run.ts";
+import {
+  ponytailSection,
+  vendoredFiles,
+  verifyVendored,
+} from "../packages/core/src/addons/ponytail.ts";
+import { shortcutIn, shortcutsInDiff } from "../packages/core/src/addons/shortcuts.ts";
+import { summarizeVariant } from "../packages/core/src/bench/ponytail.ts";
+import { FactoryConfig, type FactoryConfigInput } from "../packages/core/src/config/schema.ts";
+import { ExitCode } from "../packages/core/src/exit-codes.ts";
+import { readLock } from "../packages/core/src/lock/lock.ts";
+import { renderWorkspace } from "../packages/core/src/render/workspace.ts";
+import { loadRun } from "../packages/core/src/state/run.ts";
 import { factoryScript, type ScriptedTask } from "./fixtures/factory-script.ts";
 import { ScriptedRuntime } from "./fixtures/scripted-runtime.ts";
 import { createSingleRepoFixture, type Fixture, fixtureGit } from "./fixtures/workspaces.ts";

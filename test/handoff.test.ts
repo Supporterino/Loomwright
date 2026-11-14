@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { extractHandoff, promptForHandoff } from "../src/runtime/handoff.ts";
-import { type AgentSession, type Turn, ZERO_USAGE } from "../src/runtime/types.ts";
+import { extractHandoff, promptForHandoff } from "../packages/core/src/runtime/handoff.ts";
+import { type AgentSession, type Turn, ZERO_USAGE } from "../packages/core/src/runtime/types.ts";
 
 const usage = { ...ZERO_USAGE, input: 10 };
 const valid =
