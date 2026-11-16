@@ -426,8 +426,11 @@ function checkPackageManager(tool: string, args: readonly string[]): void {
     args[0] === "link"
   )
     block(`${tool} global installs change the machine, not the worktree`);
+  // For `bun` only the subcommand publishes; later positionals are test filters or package
+  // names (`bun test login`, `bun add login`).
+  const publishArgs = tool === "bun" ? (sub === undefined ? [] : [sub]) : args;
   if (
-    args.some(
+    publishArgs.some(
       (a) =>
         a === "publish" ||
         a === "login" ||

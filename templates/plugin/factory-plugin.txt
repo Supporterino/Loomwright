@@ -1658,7 +1658,8 @@ function checkPackageManager(tool, args) {
   const installSide = tool !== "bun" || sub !== undefined && BUN_GLOBAL_SUBCOMMANDS.has(sub);
   if (installSide && args.some((a) => a === "-g" || a === "--global" || a === "--location=global") || args[0] === "global" || args[0] === "link")
     block(`${tool} global installs change the machine, not the worktree`);
-  if (args.some((a) => a === "publish" || a === "login" || a === "adduser" || a === "unpublish" || a === "deprecate"))
+  const publishArgs = tool === "bun" ? sub === undefined ? [] : [sub] : args;
+  if (publishArgs.some((a) => a === "publish" || a === "login" || a === "adduser" || a === "unpublish" || a === "deprecate"))
     block(`${tool} publishing is not allowed`);
 }
 var BUN_INSTALL_SUBCOMMANDS = new Set(["install", "i", "add", "a", "remove", "rm", "update"]);

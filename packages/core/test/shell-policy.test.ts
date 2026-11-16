@@ -321,6 +321,13 @@ describe("package scripts", () => {
   test("bun test -g filters test names instead of installing globally", () => {
     expect(checkShell("bun test -g health", realCtx)).toEqual({ allowed: true });
   });
+
+  test("bun test and bun add treat login as a test filter or package, not publishing", () => {
+    for (const cmd of ["bun test login", "bun test --filter login", "bun test publish"]) {
+      expect(checkShell(cmd, realCtx)).toEqual({ allowed: true });
+    }
+    expect(checkShell("bun add login", scriptsCtx)).toEqual({ allowed: true });
+  });
 });
 
 describe("script files are inspected as code", () => {
