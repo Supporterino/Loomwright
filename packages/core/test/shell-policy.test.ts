@@ -27,6 +27,8 @@ const FILES: Record<string, string> = {
   [`${WT}/console-notes.ts`]: 'console.log("git push");\n',
   [`${WT}/scripts/comment.ts`]: "// git push\nexport const x = 1;\n",
   [`${WT}/scripts/block-comment.ts`]: "/* git push */\nexport const x = 1;\n",
+  [`${WT}/scripts/commented.sh`]:
+    "#!/bin/bash\nset -e\n# git push is handled by the release workflow\necho ok\n",
 };
 const ctx: ShellContext = {
   cwd: WT,
@@ -347,6 +349,10 @@ describe("script files are inspected as code", () => {
 
   test("git push in a line comment is allowed", () => {
     expect(verdict("bun scripts/comment.ts")).toEqual({ allowed: true });
+  });
+
+  test("a `#` comment does not block in a shell script", () => {
+    expect(verdict("bash scripts/commented.sh")).toEqual({ allowed: true });
   });
 
   test("git push in a block comment is allowed", () => {

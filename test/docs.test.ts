@@ -26,6 +26,10 @@ function isHistoricalSnapshot(file: string): boolean {
 const TRANSCRIPT_HEADER = /^Recorded .+ \(([^)]+?) ([\w.\-+]+)\)\.?$/m;
 const LEGACY_HEADER =
   "Recorded 2026-10-26 with `bun scripts/e2e-transcript.ts single` (ai-factory 0.2.0).";
+const E2E_TRANSCRIPTS: ReadonlyArray<readonly [file: string, layout: string]> = [
+  ["docs/e2e/single.md", "single"],
+  ["docs/e2e/submodules.md", "submodules"],
+];
 
 // The version in the header's parenthesis, whatever product recorded it.
 function transcriptVersion(text: string): string | undefined {
@@ -139,6 +143,34 @@ describe("documentation", () => {
     expect(isHistoricalTranscript(header)).toBe(false);
   });
 
+  test("the re-recorded transcripts are current", () => {
+    for (const [file, layout] of E2E_TRANSCRIPTS) {
+      const text = read(file);
+      const header = text.split("\n").find((line) => line.startsWith("Recorded ")) ?? "";
+      expect(header, file).toContain(`bun scripts/e2e-transcript.ts ${layout}`);
+      const version = transcriptVersion(text);
+      expect(version, file).toBeDefined();
+      if (version === undefined) continue;
+      expect(Bun.semver.order(version, RENAME_VERSION), file).toBeGreaterThan(0);
+      expect(isHistoricalTranscript(text), file).toBe(false);
+      expect(historyViolation(file, text), file).toBe(false);
+      expect(text, file).toContain("Loomwright");
+      expect(text, file).toContain("$ loomwright");
+    }
+  });
+
+  test("the real tree passes", () => {
+    const files = [
+      ...filesUnder("docs/decisions"),
+      ...filesUnder("docs/research"),
+      ...filesUnder("docs/audit"),
+      ...filesUnder("docs/e2e"),
+      ...filesUnder("test/fixtures").filter(isHistoricalSnapshot),
+    ];
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) expect(historyViolation(file, read(file)), file).toBe(false);
+  });
+
   test("the current ADR stays name-free", () => {
     const files = readdirSync(join(ROOT, "docs/decisions")).filter((name) =>
       name.startsWith("0044-"),
@@ -215,6 +247,18 @@ describe("compatibility surface", () => {
     ];
     for (const file of files) {
       expect(historyViolation(file, read(file)), file).toBe(false);
+    }
+  });
+
+  test("the pre-rename transcripts are re-recorded, not kept", () => {
+    for (const [file] of E2E_TRANSCRIPTS) {
+      const text = read(file);
+      const version = transcriptVersion(text);
+      expect(version, file).toBeDefined();
+      if (version === undefined) continue;
+      expect(Bun.semver.order(version, RENAME_VERSION), file).toBeGreaterThan(0);
+      expect(text, file).toContain("(Loomwright ");
+      expect(isHistoricalTranscript(text), file).toBe(false);
     }
   });
 
