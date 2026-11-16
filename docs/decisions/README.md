@@ -46,3 +46,5 @@ Short ADRs for every choice the build prompt did not lock. Format: Context / Dec
 | [0040](0040-review-loop.md)                     | Re-reviewing after a fix round                                     |
 | [0041](0041-unsandboxed-workspace.md)           | This workspace runs gates and shells unsandboxed                   |
 | [0042](0042-fewer-git-processes.md)             | Fewer git processes per command; parallel test files               |
+| [0043](0043-bun-workspaces.md)                  | Bun workspaces: protocol, core and cli packages                    |
+| [0044](0044-guard-script-resolution.md)         | Guard: Bun builtins, script cycles and JS/TS sinks                 |

@@ -13,12 +13,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bundlePlugin, PLUGIN_OUT } from "../scripts/build-plugin.ts";
-import { approvalFile, specHash } from "../src/approval/approval.ts";
-import { appendLog, pruneLogs } from "../src/logs/log.ts";
-import { redact, secretEnvValues } from "../src/logs/redact.ts";
-import { auditChanges, type SessionContext } from "../src/policy/scope.ts";
-import { sessionContextFile } from "../src/policy/session-files.ts";
+import { approvalFile, specHash } from "@loomwright/core/approval/approval";
+import { appendLog, pruneLogs } from "@loomwright/core/logs/log";
+import { redact, secretEnvValues } from "@loomwright/core/logs/redact";
+import { auditChanges, type SessionContext } from "@loomwright/core/policy/scope";
+import { sessionContextFile } from "@loomwright/core/policy/session-files";
+import { bundlePlugin, PLUGIN_OUT, writePluginBundle } from "../scripts/build-plugin.ts";
 import { writeFiles } from "./fixtures/workspaces.ts";
 
 type Hook = (event: {
@@ -32,6 +32,85 @@ type Hook = (event: {
 let ws: string;
 let wt: string;
 const hooks = new Map<string, Hook>();
+
+const ROOT = join(import.meta.dir, "..");
+const PLUGIN_DIR = join(ROOT, "templates", "plugin");
+const TMP_BUNDLE = /^factory-plugin\.txt\..*\.tmp$/;
+
+function filesUnder(dir: string): string[] {
+  return readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    return entry.isDirectory() ? filesUnder(path) : [path];
+  });
+}
+
+// File-writing calls and the index of the argument that names the destination.
+const WRITE_CALLS: Record<string, number> = {
+  writeFileSync: 0,
+  writeFile: 0,
+  appendFileSync: 0,
+  appendFile: 0,
+  copyFileSync: 1,
+  copyFile: 1,
+  outputFile: 0,
+  outputFileSync: 0,
+  renameSync: 1,
+  rename: 1,
+  writePluginBundle: 1,
+};
+const WRITE_CALL = new RegExp(`\\b(${Object.keys(WRITE_CALLS).join("|")})\\s*\\(`, "g");
+const TRACKED_BUNDLE = /templates\s*\/?\s*plugin\s*\/?\s*factory-plugin\.txt/;
+
+/** Arguments of the call whose `(` is at `openParen`, split at its top-level commas. */
+function callArguments(source: string, openParen: number): string[] {
+  const args: string[] = [];
+  let depth = 1;
+  let quote = "";
+  let current = "";
+  for (let i = openParen + 1; i < source.length; i += 1) {
+    const char = source[i] ?? "";
+    if (quote) {
+      current += char;
+      if (char === "\\") {
+        current += source[i + 1] ?? "";
+        i += 1;
+      } else if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === "(") depth += 1;
+    else if (char === ")") depth -= 1;
+    if (depth === 0 || (char === "," && depth === 1)) {
+      args.push(current);
+      current = "";
+      if (depth === 0) break;
+      continue;
+    }
+    current += char;
+  }
+  return args;
+}
+
+function namesTrackedBundle(text: string): boolean {
+  if (TRACKED_BUNDLE.test(text.replace(/["'`,\s]+/g, "/"))) return true;
+  if (/\bPLUGIN_OUT\b/.test(text)) return true;
+  return ["templates", "plugin", "factory-plugin.txt"].every((part) => text.includes(part));
+}
+
+/** True when `source` writes the tracked bundle, by `writePluginBundle` or a direct write. */
+function writesTrackedBundle(source: string): boolean {
+  for (const match of source.matchAll(WRITE_CALL)) {
+    const name = match[1] ?? "";
+    const openParen = (match.index ?? 0) + match[0].length - 1;
+    const destination = callArguments(source, openParen)[WRITE_CALLS[name] ?? 0] ?? "";
+    if (namesTrackedBundle(destination)) return true;
+  }
+  return false;
+}
 
 const ID = "add-x";
 const TASKS = "- [ ] 1.1 Add health\n  - repo: app\n  - deps: none\n  - touches: src/**\n";
@@ -120,14 +199,81 @@ afterAll(() => rmSync(ws, { recursive: true, force: true }));
 beforeEach(() => rmSync(approvalFile(ws, ID), { force: true }));
 
 describe("plugin bundle", () => {
-  test("the committed bundle is up to date (run `bun run build:plugin`)", async () => {
-    expect(readFileSync(PLUGIN_OUT, "utf8")).toBe(await bundlePlugin());
+  test("the committed bundle is current and carries the new reason (run `bun run build:plugin`)", async () => {
+    const bundle = readFileSync(PLUGIN_OUT, "utf8");
+    expect(bundle).toContain("expands into itself");
+    expect(bundle).toBe(await bundlePlugin());
+  });
+
+  test("an in-memory build leaves the tracked file alone", async () => {
+    const before = readFileSync(PLUGIN_OUT);
+    const entries = readdirSync(PLUGIN_DIR);
+    expect(await bundlePlugin()).toBe(before.toString("utf8"));
+    expect(readFileSync(PLUGIN_OUT).equals(before)).toBe(true);
+    const after = readdirSync(PLUGIN_DIR);
+    expect(after).toEqual(entries);
+    expect(after.filter((name) => TMP_BUNDLE.test(name))).toEqual([]);
+  });
+
+  test("no test writes the tracked bundle", () => {
+    const packageTests = readdirSync(join(ROOT, "packages"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `packages/${entry.name}/test`)
+      .filter((dir) => existsSync(join(ROOT, dir)));
+    const testWriters = [...filesUnder("test"), ...packageTests.flatMap(filesUnder)]
+      .filter((file) => file.endsWith(".test.ts"))
+      .filter((file) => writesTrackedBundle(readFileSync(join(ROOT, file), "utf8")));
+    expect(testWriters).toEqual([]);
+    // The only writer is the build script, run through `bun run build:plugin`.
+    const scriptWriters = filesUnder("scripts").filter((file) =>
+      writesTrackedBundle(readFileSync(join(ROOT, file), "utf8")),
+    );
+    expect(scriptWriters).toEqual(["scripts/build-plugin.ts"]);
+    expect(readFileSync(join(ROOT, "scripts", "build-plugin.ts"), "utf8")).toMatch(
+      /writePluginBundle\(await bundlePlugin\(\), PLUGIN_OUT\)/,
+    );
+  });
+
+  test("the write scan recognizes direct, joined, PLUGIN_OUT, copy and quoted-comma writes", () => {
+    // Split strings keep this test's own samples out of the scan above.
+    const call = (...parts: string[]): string => parts.join("");
+    const writers = [
+      call("writeFileSync", '("templates/plugin/factory-plugin.txt", "x")'),
+      call("writeFileSync", '(join(ROOT, "templates", "plugin", "factory-plugin.txt"), "x")'),
+      call("writePluginBundle", '("x", join(ROOT, "templates", "plugin", "factory-plugin.txt"))'),
+      call("writeFileSync", '(PLUGIN_OUT, "x")'),
+      call("copyFileSync", "(tmp, PLUGIN_OUT)"),
+      call("writePluginBundle", '("a, b", PLUGIN_OUT)'),
+    ];
+    for (const source of writers) expect(writesTrackedBundle(source)).toBe(true);
+    expect(
+      writesTrackedBundle(call("writeFileSync", '(join(root, "factory-plugin.txt"), "x")')),
+    ).toBe(false);
+    expect(
+      writesTrackedBundle(call("writeFileSync", '(file, readFileSync(PLUGIN_OUT, "utf8"))')),
+    ).toBe(false);
   });
 
   test("the bundled plugin names Loomwright", () => {
     const bundle = readFileSync(PLUGIN_OUT, "utf8");
     expect(bundle.startsWith("// Loomwright opencode plugin")).toBe(true);
     expect(bundle).toContain("Loomwright blocked this call:");
+  });
+
+  test("the bundle is written through a temp file, leaving none behind on failure", () => {
+    const root = mkdtempSync(join(tmpdir(), "loomwright-bundle-"));
+    try {
+      const out = join(root, "factory-plugin.txt");
+      writePluginBundle("// bundle\n", out);
+      expect(readFileSync(out, "utf8")).toBe("// bundle\n");
+      expect(readdirSync(root)).toEqual(["factory-plugin.txt"]);
+
+      mkdirSync(join(root, "occupied"));
+      expect(() => writePluginBundle("// bundle\n", join(root, "occupied"))).toThrow();
+      expect(readdirSync(root).sort()).toEqual(["factory-plugin.txt", "occupied"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

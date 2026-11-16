@@ -39,7 +39,7 @@ Run the CLI without installing it:
 bunx @loomwright/cli init
 ```
 
-`npx @loomwright/cli init` works too. The package is `@loomwright/cli`; its command is `loomwright`, so after `npm install --global @loomwright/cli` you run `loomwright init`. The old `ai-factory` binary still works as a deprecated alias. Note: the unscoped npm package `ai-factory` is an unrelated project. To run it from a checkout of this repository instead, build it with `bun install && bun run build`, then run `node dist/cli.js` (or `npm link` it).
+`npx @loomwright/cli init` works too. The package is `@loomwright/cli`; its command is `loomwright`, so after `npm install --global @loomwright/cli` you run `loomwright init`. The old `ai-factory` binary still works as a deprecated alias. Note: the unscoped npm package `ai-factory` is an unrelated project. To run it from a checkout of this repository instead, build it with `bun install && bun run build`, then run `node packages/cli/dist/cli.js` (or `npm link` it).
 
 `init` is idempotent. It detects the layout, languages, contracts and existing `opencode.json` instructions, and writes `factory.config.jsonc` from what it found, so edit that file afterwards. It also renders the agents, plugin, standards, skills and OpenSpec's commands into `.opencode/`, installs the `pre-push` hooks, builds the graph, writes `factory.lock.json`, and commits it all as `chore(factory): init vX.Y.Z`. On a first install it archives replaced custom agents, commands and skills under `.factory/legacy/<timestamp>/`; `init --plan` shows that plan without writing. Then check the setup:
 
@@ -232,23 +232,23 @@ Logs: `.factory/logs/<id>/` (redacted tool calls and gate results). Run state: `
 ## Adding a language profile
 
 A profile is the language's prose standard plus a machine-readable part: test globs, markers, gate commands and install steps.
-1. Add the id to `LANGUAGES` in `src/config/schema.ts`. Enum additions need no config migration, and the editor JSON schema is generated from it.
-2. Add detection in `src/detect/languages.ts`: the manifest or marker files that imply it.
+1. Add the id to `LANGUAGES` in `packages/core/src/config/schema.ts`. Enum additions need no config migration, and the editor JSON schema is generated from it.
+2. Add detection in `packages/core/src/detect/languages.ts`: the manifest or marker files that imply it.
 3. Write `templates/standards/<id>.md` from the language's primary docs:
    - a `<!-- Sources: [key] Title — URL -->` block under the title;
    - a `## Summary` of standalone bullets (they go into `AGENTS.md`);
    - under each section, a `<!-- [key] … -->` comment naming what grounds it, and `<!-- factory -->` after rules that come from the factory rather than a source.
 
    A test enforces the citations. The comments are stripped from agent prompts.
-4. Add the profile to `PROFILES` in `src/profiles/index.ts`:
+4. Add the profile to `PROFILES` in `packages/core/src/profiles/index.ts`:
    - `testGlobs`: what the tester may edit;
    - `markers` and `targets`: where gates run;
    - `extensions` and `binDirs`;
    - `gates`: per gate type, candidates in preference order, with optional `when` requirements and `scoped` per-task variants;
    - `install`: lockfile → command;
    - `supersedes` (optional): profiles whose target in the same directory this one replaces. The Tauri profile replaces Rust in `src-tauri/`, for example.
-5. If its package manager has a cache, add it to `cacheEnv` in `src/gates/install.ts`.
-6. Add tests: detection (`test/detect-units.test.ts`) and gate resolution (`test/gates-resolve.test.ts`).
+5. If its package manager has a cache, add it to `cacheEnv` in `packages/core/src/gates/install.ts`.
+6. Add tests: detection (`packages/core/test/detect-units.test.ts`) and gate resolution (`packages/core/test/gates-resolve.test.ts`).
 7. Add a changeset with `bun run changeset` (a user-facing change needs a release note). Workspaces pick up the new standard and their regenerated implementers with `loomwright update`, then `loomwright detect --apply` adds the language to the repos that use it.
 
 ## Development
@@ -256,11 +256,13 @@ A profile is the language's prose standard plus a machine-readable part: test gl
 ```bash
 bun install
 bun run check          # biome + tsc + bun test
-bun run build          # dist/cli.js and the bundled plugin
+bun run build          # packages/cli/dist/cli.js and the bundled plugin
 bun run changeset      # record a release note for this PR
-AI_FACTORY_E2E=1 bun test test/opencode-runtime.e2e.test.ts   # real opencode, stub model server
+AI_FACTORY_E2E=1 bun test packages/cli/test/opencode-runtime.e2e.test.ts   # real opencode, stub model server
 bun scripts/e2e-transcript.ts single        # re-record docs/e2e/single.md (also: submodules)
 ```
+
+The root is a private workspace manifest; the packages are `packages/protocol`, `packages/core` and `packages/cli`.
 
 The test suite builds fixture workspaces in temp dirs: a single TS repo, and an AI repo with Go, React and Helm submodules. It stubs the LLM with scripted handoffs. The manual end-to-end runs in [docs/e2e/](docs/e2e/) drive the real opencode server, git, OpenSpec, Graphify and gate toolchains, with a scripted role-aware model, so they cost nothing and can be reproduced. See ADR-0023 for what they cover and what they don't.
 
@@ -270,7 +272,7 @@ CI runs the full suite on Ubuntu and macOS, then smoke-tests the npm tarball and
 
 Changesets owns the version and the changelog. Release tooling runs on Node 24; the published CLI still supports Node >=20.3.
 1. Create `release/vX.Y.Z` from `main`.
-2. Run `bun run release:version`. It applies the pending changesets, writes `CHANGELOG.md`, syncs `src/version.ts` and regenerates the install snapshot.
+2. Run `bun run release:version`. It applies the pending changesets, writes `packages/cli/CHANGELOG.md` (the root `CHANGELOG.md` is a symlink to it), syncs `packages/core/src/version.ts` and regenerates the install snapshot.
 3. Review the changelog and the version files, then run `bun run check`.
 4. Commit, push and open a normal PR. CI runs on it.
 5. Merge the PR. The release workflow re-runs the checks, publishes the new version to npm with provenance, and creates the `X.Y.Z` GitHub Release and tag with the tarball attached.

@@ -9,9 +9,9 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { contentHash, isText } from "../src/addons/hash.ts";
-import { execOk } from "../src/exec.ts";
-import { PONYTAIL } from "../src/versions.ts";
+import { contentHash, isText } from "../packages/core/src/addons/hash.ts";
+import { execOk } from "../packages/core/src/exec.ts";
+import { PONYTAIL } from "../packages/core/src/versions.ts";
 
 export const VENDOR_DIR = join(import.meta.dir, "..", "templates", "addons", "ponytail");
 

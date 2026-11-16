@@ -3,6 +3,14 @@ dist/
 .factory/
 graphify-out/
 
+# Copied into packages/cli by `bun run build`; never committed.
+packages/cli/README.md
+packages/cli/LICENSE
+packages/cli/templates/
+
+# Written by `scripts/build-plugin.ts` before the rename; never committed.
+templates/plugin/*.tmp
+
 # ai-factory:start (managed)
 .factory/
 graphify-out/

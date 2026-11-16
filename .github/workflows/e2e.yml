@@ -31,4 +31,4 @@ jobs:
       - name: Run the real-runtime test with the stub model
         env:
           AI_FACTORY_E2E: "1"
-        run: bun test test/opencode-runtime.e2e.test.ts --timeout 120000
+        run: bun test packages/cli/test/opencode-runtime.e2e.test.ts --timeout 120000

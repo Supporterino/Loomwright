@@ -1,4 +1,4 @@
-import type { Finding } from "../../src/handoff/schema.ts";
+import type { Finding } from "@loomwright/core/handoff/schema";
 import type { Script, ScriptCall, ScriptStep } from "./scripted-runtime.ts";
 
 /** A scripted "team" of agents for one change, used by the pipeline tests. */

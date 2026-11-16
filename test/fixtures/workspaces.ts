@@ -12,7 +12,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { gitOk } from "../../src/exec.ts";
+import { ExecError } from "@loomwright/core/errors";
+import { gitOk } from "@loomwright/core/exec";
 
 /**
  * Fixture workspaces from §13, created in temp dirs:
@@ -46,7 +47,20 @@ export function writeFiles(root: string, files: Files): void {
 }
 
 export function fixtureGit(cwd: string, ...args: string[]): Promise<string> {
-  return gitOk(["-c", "protocol.file.allow=always", ...args], { cwd, env: FIXTURE_GIT_ENV });
+  const run = (): Promise<string> =>
+    gitOk(["-c", "protocol.file.allow=always", ...args], {
+      cwd,
+      env: FIXTURE_GIT_ENV,
+      // Local git calls take milliseconds. A hung one must not eat a test hook, whose own
+      // deadline is a fixed 60s whatever `--timeout` says.
+      timeoutMs: 20_000,
+    });
+  return run().catch((err: unknown) => {
+    // A `bun test --parallel` worker can lose a child's exit notification (oven-sh/bun#41024,
+    // #43697): the call times out although git finished, and a fresh child settles normally.
+    if (!(err instanceof ExecError)) throw err;
+    return run();
+  });
 }
 
 async function initRepo(dir: string, files: Files): Promise<void> {

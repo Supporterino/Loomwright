@@ -17,7 +17,7 @@
 | 6    | Paused        | `run`/`approve`/`resume`: the change paused (report written) or was aborted |
 | 10   | Drift         | `detect --check` found differences                                          |
 
-The source of truth is `src/cli/exit-codes.ts`; numbers are never reused.
+The source of truth is `packages/core/src/exit-codes.ts`; numbers are never reused.
 
 ## init
 

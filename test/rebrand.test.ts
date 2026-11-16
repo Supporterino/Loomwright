@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { renderInitialConfig } from "@loomwright/core/config/render";
+import { FactoryConfig } from "@loomwright/core/config/schema";
+import { agentGitEnv } from "@loomwright/core/git/hooks";
+import { BLOCK_MARKERS, renderWorkspace } from "@loomwright/core/render/workspace";
 import { parse as parseYaml } from "yaml";
-import { renderInitialConfig } from "../src/config/render.ts";
-import { FactoryConfig } from "../src/config/schema.ts";
-import { agentGitEnv } from "../src/git/hooks.ts";
-import { BLOCK_MARKERS, renderWorkspace } from "../src/render/workspace.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const M = "anthropic/claude-sonnet-5-5";

@@ -1,0 +1,27 @@
+{
+  "changeId": "restructure-into-bun-workspaces",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "15cf1b93442111773329e9f3ce983d50b09792cb",
+  "hash": "580ffbdb9b44e5df05e45e4b79097c1a2e523f57ecc12bc15383a719fd09d75e",
+  "approvedAt": "2026-11-16T08:57:37.164Z",
+  "history": [
+    {
+      "hash": "841269da648667c9ba8a8e7eb141462dfa1a20e96ce80b195414e19201d63a94",
+      "specCommit": "1bf9a85e348b71236f6eed23ee64474fe9d034fe",
+      "at": "2026-11-14T20:05:09.896Z",
+      "reason": "manual re-approval"
+    },
+    {
+      "hash": "aaa449d7ace22b662e9ad3760410e89056ee828ecf9787527d127de28c052caf",
+      "specCommit": "3a5dccd70e0251d22ce5d564ac6ed0e2e883c4ca",
+      "at": "2026-11-16T08:25:44.916Z",
+      "reason": "manual re-approval"
+    },
+    {
+      "hash": "2c0893280f6a710d85d446f5060c4393f119b573f7c0e6a8b875bef95648341e",
+      "specCommit": "8e07645a5b751cea86d454692b6deae283d857b3",
+      "at": "2026-11-16T08:36:48.594Z",
+      "reason": "manual re-approval"
+    }
+  ]
+}

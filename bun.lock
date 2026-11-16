@@ -3,11 +3,13 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@loomwright/cli",
+      "name": "loomwright",
       "devDependencies": {
         "@biomejs/biome": "2.6.2",
         "@changesets/cli": "3.0.3",
         "@fission-ai/openspec": "1.14.3",
+        "@loomwright/core": "workspace:*",
+        "@loomwright/protocol": "workspace:*",
         "@types/bun": "1.4.4",
         "@types/node": "26.6.5",
         "ajv": "8.20.0",
@@ -17,6 +19,22 @@
         "yaml": "2.9.1",
         "zod": "4.6.7",
       },
+    },
+    "packages/cli": {
+      "name": "@loomwright/cli",
+      "version": "1.0.0",
+      "bin": {
+        "loomwright": "./dist/cli.js",
+        "ai-factory": "./dist/cli.js",
+      },
+    },
+    "packages/core": {
+      "name": "@loomwright/core",
+      "version": "0.0.0",
+    },
+    "packages/protocol": {
+      "name": "@loomwright/protocol",
+      "version": "0.0.0",
     },
   },
   "packages": {
@@ -109,6 +127,12 @@
     "@inquirer/select": ["@inquirer/select@5.2.7", "", { "dependencies": { "@inquirer/ansi": "^2.0.9", "@inquirer/core": "^12.0.5", "@inquirer/figures": "^2.0.9", "@inquirer/type": "4.2.0" }, "peerDependencies": { "@types/node": ">=18" }, "optionalPeers": ["@types/node"] }, "sha512-pRDWO4dTqSAvFQdO8yclKMtXNDm9K9HmvWB5UZmT3clw2OlOBNXveHzhyFmO/0d0yJMqlPcNITus1Jtpm6t8VQ=="],
 
     "@inquirer/type": ["@inquirer/type@4.2.0", "", { "peerDependencies": { "@types/node": ">=18" }, "optionalPeers": ["@types/node"] }, "sha512-2rnHX8RPo4glJYqnFc/v3nQeIhDcjyRRyaT7MGcfL/8xv/8K03SXYoA2tX06WVSKywWOE/ncbG3dtuzLjR5TCQ=="],
+
+    "@loomwright/cli": ["@loomwright/cli@workspace:packages/cli"],
+
+    "@loomwright/core": ["@loomwright/core@workspace:packages/core"],
+
+    "@loomwright/protocol": ["@loomwright/protocol@workspace:packages/protocol"],
 
     "@manypkg/find-root": ["@manypkg/find-root@3.1.0", "", { "dependencies": { "@manypkg/tools": "^2.1.0" } }, "sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA=="],
 

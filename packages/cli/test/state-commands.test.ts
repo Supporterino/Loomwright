@@ -1,0 +1,155 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { ExitCode } from "@loomwright/core/exit-codes";
+import { claimActive, enqueue, readActive, readQueue } from "@loomwright/core/state/active";
+import { loadRun, newRun, saveRun, TaskState } from "@loomwright/core/state/run";
+import { FACTORY_VERSION } from "@loomwright/core/version";
+import { createSingleRepoFixture, type Fixture } from "../../../test/fixtures/workspaces.ts";
+import { cli } from "../../../test/helpers.ts";
+import { runCli } from "../src/main.ts";
+
+describe("status, retry and abort", () => {
+  let fx: Fixture;
+  beforeEach(async () => {
+    fx = await createSingleRepoFixture();
+    const run = newRun("add-x", "Add a health endpoint", "paused");
+    run.pausedReason = "failed: 1.1; cancelled: 1.2";
+    run.branches = { ".": { branch: "change/add-x", base: "0123456789abcdef" } };
+    const t = (id: string, status: TaskState["status"], extra: Partial<TaskState> = {}) =>
+      TaskState.parse({
+        id,
+        title: `Task ${id}`,
+        repo: "app",
+        deps: [],
+        touches: ["src/**"],
+        status,
+        ...extra,
+      });
+    run.tasks = [
+      t("1.1", "failed", {
+        failures: 4,
+        lastError: "lint; retry budget (3) exhausted",
+        lastGateOutput: "src/sum.ts:1 error",
+      }),
+      t("1.2", "cancelled", { deps: ["1.1"] }),
+      t("1.3", "merged", { commit: "abcdef0123456789" }),
+    ];
+    saveRun(fx.root, run);
+    saveRun(fx.root, newRun("next-thing", "later", "queued"));
+    await claimActive(fx.root, "add-x");
+    await enqueue(fx.root, "next-thing");
+  });
+  afterEach(() => fx.cleanup());
+
+  test("status shows the active change, the queue and the task DAG", async () => {
+    const run = await cli(fx.root, "status", "add-x");
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(run.out.split("\n")).toEqual([
+      `change add-x — paused (active, driven by pid ${process.pid}; factory ${FACTORY_VERSION})`,
+      "  paused: failed: 1.1; cancelled: 1.2",
+      "  branches: . change/add-x @0123456789ab",
+      "  tasks: 1/3 merged (merge seq 0)",
+      "    ✗ 1.1 app Task 1.1 — failed: lint; retry budget (3) exhausted",
+      "        src/sum.ts:1 error",
+      "    ⊘ 1.2 app Task 1.2 — cancelled (a dependency failed)",
+      "    ✓ 1.3 app Task 1.3 — merged abcdef012345",
+    ]);
+    const all = await cli(fx.root, "status", "--json");
+    const json = JSON.parse(all.out) as {
+      active: { changeId: string };
+      queue: string[];
+      runs: { id: string }[];
+    };
+    expect(json.active.changeId).toBe("add-x");
+    expect(json.queue).toEqual(["next-thing"]);
+    expect(json.runs.map((r) => r.id).sort()).toEqual(["add-x", "next-thing"]);
+  });
+
+  test("status --watch reprints frames until interrupted", async () => {
+    const out: string[] = [];
+    const code = await runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
+      cwd: fx.root,
+      out: (line) => out.push(line),
+      err: () => {},
+      signal: AbortSignal.timeout(80),
+    });
+    expect(code).toBe(ExitCode.Ok);
+    expect(out.filter((line) => line.startsWith("updated ")).length).toBeGreaterThanOrEqual(2);
+    expect(out.join("\n")).toContain("change add-x — paused");
+    expect((await cli(fx.root, "status", "add-x", "--watch", "--json")).code).toBe(ExitCode.Usage);
+  });
+
+  test("status shows the full suite, contract results and provisional pointers (audit G4)", async () => {
+    const run = newRun("closed-x", "Close it", "done");
+    run.fullSuite = { app: { passed: true, output: "" }, web: { passed: false, output: "x" } };
+    run.contractResults = {
+      "openapi backend:api/openapi.yaml": { passed: false, summary: "breaking: GET /x removed" },
+    };
+    run.pointerCommit = "fedcba9876543210";
+    run.pointers = ["repos/backend: 111111111111 → 222222222222"];
+    saveRun(fx.root, run);
+    const out = (await cli(fx.root, "status", "closed-x")).out.split("\n");
+    expect(out).toContain("  full suite: app ✓, web ✗");
+    expect(out).toContain(
+      "  contracts: openapi backend:api/openapi.yaml ✗ (breaking: GET /x removed)",
+    );
+    expect(out).toContain(
+      "  pointers: fedcba987654 (provisional; repos/backend: 111111111111 → 222222222222)",
+    );
+  });
+
+  test("retry requeues a failed task and its cancelled dependents", async () => {
+    expect((await cli(fx.root, "retry", "add-x", "--task", "1.3")).code).toBe(
+      ExitCode.Precondition,
+    );
+    const run = await cli(fx.root, "retry", "add-x", "--task", "1.1");
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(run.out).toContain("requeued 1.1 with a fresh retry budget (pending: 1.1, 1.2)");
+    const state = loadRun(fx.root, "add-x");
+    expect(state?.tasks.map((t) => [t.id, t.status, t.failures])).toEqual([
+      ["1.1", "pending", 0],
+      ["1.2", "pending", 0],
+      ["1.3", "merged", 0],
+    ]);
+  });
+
+  test("a corrupt run file or lock is reported, not a crash (audit P15)", async () => {
+    writeFileSync(join(fx.root, ".factory/runs/broken.json"), "{not json");
+    const all = await cli(fx.root, "status");
+    expect(all.err).toBe("");
+    expect(all.code).toBe(ExitCode.Ok);
+    expect(all.out).toContain("change add-x — paused");
+    expect(all.out).toContain("change broken — unreadable: .factory/runs/broken.json is corrupt");
+    const json = JSON.parse((await cli(fx.root, "status", "--json")).out) as {
+      runs: { id: string }[];
+      corrupt: { id: string; error: string }[];
+    };
+    expect(json.runs.map((r) => r.id).sort()).toEqual(["add-x", "next-thing"]);
+    expect(json.corrupt.map((c) => c.id)).toEqual(["broken"]);
+    const one = await cli(fx.root, "status", "broken");
+    expect(one.code).toBe(ExitCode.Precondition);
+    expect(one.err).toContain(".factory/runs/broken.json is corrupt");
+
+    writeFileSync(join(fx.root, ".factory/active.lock"), "");
+    const locked = await cli(fx.root, "status");
+    expect(locked.code).toBe(ExitCode.Ok);
+    expect(locked.out).toContain("active: unreadable: .factory/active.lock is corrupt");
+    const abort = await cli(fx.root, "abort", "add-x");
+    expect(abort.code).toBe(ExitCode.Precondition);
+    expect(abort.err).toContain(".factory/active.lock is corrupt");
+    expect(abort.err).toContain("rm .factory/active.lock");
+    // Refused before anything changed.
+    expect(loadRun(fx.root, "add-x")?.phase).toBe("paused");
+  });
+
+  test("abort marks the change, releases the lock and leaves the queue to the user", async () => {
+    const run = await cli(fx.root, "abort", "add-x");
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(run.out).toContain("kept branches: .: change/add-x");
+    expect(loadRun(fx.root, "add-x")).toMatchObject({ phase: "aborted", abortRequested: true });
+    expect(readActive(fx.root)).toBeUndefined();
+    expect(readQueue(fx.root).entries.map((e) => e.changeId)).toEqual(["next-thing"]);
+    expect((await cli(fx.root, "abort", "nope")).code).toBe(ExitCode.Precondition);
+  });
+});

@@ -1,0 +1,33 @@
+## 1. loomwright
+- [x] 1.1 Resolve `bun` subcommands against Bun's builtin set before `package.json`, and track expanded scripts so a cycle blocks with one reason naming the script and saying it expands into itself; add policy cases in `packages/core/test/shell-policy.test.ts` that use the repository's real root `package.json` for `bun test`, `bun run test`, `bun run check`, `bun run build` and `bun run test && bun run test`, plus self-referential, pre/post and ring cycles and the kept `bun run deploy`/`bun deploy` blocks
+  - repo: loomwright
+  - deps: none
+  - touches: packages/core/src/policy/shell.ts, packages/core/test/shell-policy.test.ts
+- [x] 1.2 Add `packages/core/src/policy/script-text.ts` with a JS/TS lexer that drops comments, blanks string and template literal contents, lexes `${…}` as code, and returns the joined literals of calls whose callee is an execution primitive; unit-test it in `packages/core/test/script-text.test.ts` (`execSync("git push")`, `spawnSync(["git","push"])`, `$`-tagged templates, prose passed to `console.log`/`note`, comment-only mentions, regex/division edge cases)
+  - repo: loomwright
+  - deps: none
+  - touches: packages/core/src/policy/script-text.ts, packages/core/test/script-text.test.ts
+- [x] 1.3 Use the lexer in `checkScriptFile` for `.js/.jsx/.mjs/.cjs/.ts/.tsx/.mts/.cts`, keep shell parsing and the whole-text scan for other interpreters, and add cases in `packages/core/test/shell-policy.test.ts` that read the real `scripts/e2e-transcript.ts` (allowed) and the same content plus an `execSync("git push")` (blocked)
+  - repo: loomwright
+  - deps: 1.1, 1.2
+  - touches: packages/core/src/policy/shell.ts, packages/core/test/shell-policy.test.ts
+- [x] 1.4 Regenerate `templates/plugin/factory-plugin.txt` with `bun run build:plugin`; in `test/plugin.test.ts` assert the bundle carries `expands into itself`, that `bundlePlugin()` leaves the tracked file byte-identical with no `*.tmp` sibling, and that no `*.test.ts` writes the tracked path
+  - repo: loomwright
+  - deps: 1.1, 1.3
+  - touches: templates/plugin/factory-plugin.txt, test/plugin.test.ts
+- [x] 1.5 Add `scripts/e2e-header.ts` with `headerLine(layout, version, date)`, use it in `scripts/e2e-transcript.ts`, and make `test/docs.test.ts` classify `docs/e2e/` transcripts by recorded version (≤ 0.12.0 or no header is historical) while `docs/decisions/`, `docs/research/` and `docs/audit/` stay strict; replace the `(ai-factory 0.2.0)` pin with classifier cases for historical, current, unversioned and strict-directory inputs
+  - repo: loomwright
+  - deps: none
+  - touches: test/docs.test.ts, scripts/e2e-header.ts, scripts/e2e-transcript.ts
+- [x] 1.6 Create `packages/cli/dist` in `scripts/write-dist-package.ts` behind an exported `writeDistPackage(out)`, drop the redundant `packages/cli/dist/` line from `.gitignore`, and update `test/publish.test.ts` to assert the new script behaviour and that `git check-ignore` still covers `packages/cli/dist/cli.js`
+  - repo: loomwright
+  - deps: none
+  - touches: scripts/write-dist-package.ts, test/publish.test.ts, .gitignore
+- [x] 1.7 Write `docs/decisions/0044-*.md` (Bun builtins vs scripts, cycle handling, exec-sink scanning) with its row in `docs/decisions/README.md`, keeping the capitalised product name out of the file, and add the `patch` changeset for `@loomwright/cli`
+  - repo: loomwright
+  - deps: none
+  - touches: docs/decisions/0044-*.md, docs/decisions/README.md, .changeset/**
+- [x] 1.8 Re-record both e2e transcripts with the real toolchain (`bun scripts/e2e-transcript.ts single`, then `submodules`) so each shows the current header, `$ loomwright …` and the fixed guard, confirm each ends with its final-report section (a partial recording is reverted), and confirm `bun test test/docs.test.ts` still passes; if opencode, OpenSpec or Graphify is unavailable, change nothing and report it instead
+  - repo: loomwright
+  - deps: 1.4, 1.5
+  - touches: docs/e2e/single.md, docs/e2e/submodules.md

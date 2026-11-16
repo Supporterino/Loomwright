@@ -1,0 +1,21 @@
+{
+  "changeId": "fix-guard-and-e2e-followups",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "99afb80ac946321df53e1e7180f40c9e3880ac11",
+  "hash": "833da72aa7848810895e4e6a2705217a4256689084675a9caa84c10a16b2ec13",
+  "approvedAt": "2026-11-16T14:22:16.922Z",
+  "history": [
+    {
+      "hash": "d61929f2d4acb6e61cfaee9ff33481a979596cd8048768314ab14fd896719063",
+      "specCommit": "0b6ad49af5194265714f97be5abc4362882ee3e8",
+      "at": "2026-11-16T11:58:54.985Z",
+      "reason": "manual re-approval"
+    },
+    {
+      "hash": "92ee4a7b351462c2768f515748f29ff7f8569d41562af9131c9e9d60696d8e4a",
+      "specCommit": "24263f671b5ca8f319a066206accdbeaf02b4f2d",
+      "at": "2026-11-16T13:42:29.183Z",
+      "reason": "manual re-approval"
+    }
+  ]
+}

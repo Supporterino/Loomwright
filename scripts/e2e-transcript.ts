@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
+import { headerLine } from "./e2e-header.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const layout = process.argv[2];
@@ -29,10 +30,10 @@ process.env.AI_FACTORY_OPENSPEC_BIN ??= join(ROOT, "node_modules/.bin/openspec")
 process.env.GIT_CONFIG_GLOBAL = join(ROOT, "test/fixtures/gitconfig");
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 
-const { runCli } = await import("../src/cli/main.ts");
-const { setJsonc } = await import("../src/config/jsonc.ts");
-const { git } = await import("../src/exec.ts");
-const { FACTORY_VERSION } = await import("../src/version.ts");
+const { runCli } = await import("../packages/cli/src/main.ts");
+const { setJsonc } = await import("../packages/core/src/config/jsonc.ts");
+const { git } = await import("../packages/core/src/exec.ts");
+const { FACTORY_VERSION } = await import("../packages/core/src/version.ts");
 const { startStubModel } = await import("../test/fixtures/stub-model.ts");
 const { stubTeam } = await import("../test/fixtures/stub-team.ts");
 const { createSingleRepoFixture, createSubmoduleFixture } = await import(
@@ -117,7 +118,7 @@ try {
   note(`# E2E: ${layout === "single" ? "single repo" : "AI repo with submodules"}`);
   note(
     [
-      `Recorded ${new Date().toISOString().slice(0, 10)} with \`bun scripts/e2e-transcript.ts ${layout}\` (Loomwright ${FACTORY_VERSION}).`,
+      headerLine(layout, FACTORY_VERSION, new Date().toISOString().slice(0, 10)),
       "",
       "**Real:**",
       `- the opencode server: ${await toolVersion([opencodeBin, "--version"])} with the factory's agents, permissions and guard plugin;`,

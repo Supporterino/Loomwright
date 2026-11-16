@@ -1,0 +1,1 @@
+{ "extends": "../../tsconfig.json", "include": ["src", "test", "../core/src/types/text.d.ts"] }
