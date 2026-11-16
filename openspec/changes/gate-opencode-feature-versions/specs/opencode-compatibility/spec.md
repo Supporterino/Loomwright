@@ -52,7 +52,7 @@ The factory SHALL keep a registry `OPENCODE_FEATURES` that maps each opencode-de
 
 ### Requirement: Only a config that enables a feature raises the required version
 
-`opencodeRequirement(config)` SHALL return `undefined` when no enabled feature needs a floor above `OPENCODE.min`, and SHALL return the highest enabled feature floor with a reason naming the feature otherwise. `config.mcp.roles` SHALL enable `mcp.roles` only when at least one role maps to a non-empty pattern list. The effective floor SHALL be the maximum of `OPENCODE.min` and every enabled feature's `min`. `syncWorkspace` SHALL pass the effective floor to `buildLock`, which SHALL write it as the opencode pin's `min`.
+`opencodeRequirement(config)` SHALL return `undefined` when no enabled feature needs a floor above `OPENCODE.min`, and SHALL return the highest enabled feature floor with a reason naming the feature otherwise. For `mcp.roles`, the only enabling input is the top-level `config.mcp.roles` map: it SHALL enable the feature only when at least one role maps to a non-empty pattern list. Per-agent `mcp` pattern lists (`config.agents[].mcp`) are out of scope for this change: they do not enable `mcp.roles`, do not raise the floor, and leave a workspace that configures MCP tools only through custom agents on the base floor of `2.1.2`. The effective floor SHALL be the maximum of `OPENCODE.min` and every enabled feature's `min`. `syncWorkspace` SHALL pass the effective floor to `buildLock`, which SHALL write it as the opencode pin's `min`.
 
 #### Scenario: an empty mcp.roles keeps the base floor
 
@@ -70,6 +70,12 @@ The factory SHALL keep a registry `OPENCODE_FEATURES` that maps each opencode-de
 
 - **WHEN** `opencodeRequirement` is called with `mcp.roles` mapping `implementer` to `[]`
 - **THEN** it returns `undefined`
+
+#### Scenario: agent-level MCP patterns keep the base floor
+
+- **WHEN** `opencodeRequirement` is called with an empty `mcp.roles` and a custom agent whose `mcp` list is `["mantine_*"]`
+- **THEN** it returns `undefined`
+- **AND** the effective floor is `2.1.2`
 
 #### Scenario: the lock records the effective floor
 

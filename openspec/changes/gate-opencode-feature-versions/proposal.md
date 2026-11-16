@@ -6,7 +6,7 @@ The opencode pin is `>= 2.1.2 < 2.3.0`, so a 2.3.0 install is refused as "newer 
 
 - The base opencode range becomes `>= 2.1.2 < 3.0.0` (`tested` stays 2.2.0), so every 2.x minor is accepted and 3.0.0 is the next breaking gate.
 - A new `OPENCODE_FEATURES` registry declares the floor each opencode-dependent feature needs; `mcp.roles` declares 2.2.0.
-- `opencodeRequirement(config)` returns the highest enabled feature floor (or nothing), and the effective floor is the maximum of that and the base floor.
+- `opencodeRequirement(config)` returns the highest enabled feature floor (or nothing), and the effective floor is the maximum of that and the base floor. Only the top-level `mcp.roles` map enables `mcp.roles`; per-agent `mcp` lists are out of scope here (see Design D2).
 - `checkTool`/`checkTools` accept an optional per-tool floor and reason, so messages name the feature.
 - `init` blocks below the effective floor, `update` warns, and `doctor` fails on an unmet feature floor and warns when the lock's floor is stale.
 - `factory.lock.json` records the effective opencode floor for the workspace.
@@ -31,4 +31,4 @@ None.
 - Contracts: none configured; no API schema, event or Helm value changes.
 - Data: no config schema or migration change; `mcp.roles` already exists. `factory.lock.json` keeps its format and records a different opencode `min` when the feature is enabled.
 - Protected: `.opencode/` and `factory.lock.json` are rendered by the installed CLI; this change does not edit them, and `loomwright update` regenerates the lock after landing.
-- Not changed: the manual E2E matrix stays at the versions verified end to end (2.1.2 and 2.2.0); 2.3.0 is accepted by the range, not added to the matrix without a verification run.
+- Not changed: the manual E2E matrix stays at the versions verified end to end (2.1.2 and 2.2.0); 2.3.0 is accepted by the range, not added to the matrix without a verification run. A per-agent `mcp` pattern list (`config.agents[].mcp`) does not raise the floor; extending the requirement to cover it is a follow-up outside this change.

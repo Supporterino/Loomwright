@@ -28,6 +28,14 @@ does not enable the feature. `opencodeRequirement` returns the highest enabled f
 reason; `undefined` means the base floor is enough. The reason is built from the feature id and
 its `why`, so init, update and doctor name what needs the upgrade.
 
+Only the config key enables the feature: `enabledOpencodeFeatures` reads `config.mcp.roles`, not
+`config.agents[].mcp`. A per-agent `mcp` pattern list (`CustomAgent.mcp`, rendered through
+`customAgentRules`) relies on the same 2.2.0 direct tool exposure, so a workspace whose MCP usage
+is only agent-level passes every check on 2.1.2 and its agent MCP tools stay hidden at runtime.
+Folding that case in would widen the `Pick` handed to `enabledOpencodeFeatures` to include
+`agents` and needs its own tests, which is a follow-up rather than part of this change; the spec
+therefore states the agent-level lists as out of scope instead of implying they are covered.
+
 Rejected: raising the global floor to 2.2.0 (forces every workspace to upgrade for a feature it
 does not use); a new per-feature config key (new schema surface and migration for one consumer);
 inferring the requirement from the rendered agents (the same information, but harder to test and
@@ -94,3 +102,9 @@ installed CLI; this change does not edit them.
   historical research and is not edited by this change.
 - `update` can write a lock floor that the installed opencode does not meet. That is deliberate:
   the lock records requirements, and `doctor` reports the gap until the tool is upgraded.
+- An agent-level `mcp` pattern list (`config.agents[].mcp`) needs the same 2.2.0 direct tool
+  exposure as `mcp.roles`, but only `config.mcp.roles` is an input to `opencodeRequirement` in
+  this change. A workspace that configures MCP tools only through custom agents therefore passes
+  `init`, `update` and `doctor` on 2.1.2, and those tools stay hidden at runtime. Covering it
+  means widening the `Pick` to include `agents` and adding tests for that case; it is a follow-up
+  and not part of this change's scope.
