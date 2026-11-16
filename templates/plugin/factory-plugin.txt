@@ -1694,9 +1694,9 @@ function bunRunScript(args, start) {
   }
   return;
 }
-function checkPackageManager(state, tool, args) {
+function checkPackageManager(state, tool, args, outer) {
   if (tool === "bunx") {
-    checkPackageManager(state, "bun", ["x", ...args]);
+    checkPackageManager(state, "bun", ["x", ...args], outer);
     return;
   }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
@@ -1717,7 +1717,13 @@ function checkPackageManager(state, tool, args) {
     if (++state.depth > 25)
       block("command nests too deeply to inspect");
     try {
-      scoped(state, () => checkSimple(state, { kind: "simple", assigns: [], words: wrapped, redirects: [], substitutions: [] }, undefined));
+      scoped(state, () => checkSimple(state, {
+        kind: "simple",
+        assigns: [],
+        words: wrapped,
+        redirects: [...outer.redirects],
+        substitutions: []
+      }, outer.stdin));
     } finally {
       state.depth--;
     }
@@ -2598,7 +2604,7 @@ function checkSimple(state, cmd, stdin) {
     return;
   }
   if (PACKAGE_MANAGERS.has(base))
-    checkPackageManager(state, base, args);
+    checkPackageManager(state, base, args, { redirects: cmd.redirects, stdin });
   const interpreter = base.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     const operands = [];
