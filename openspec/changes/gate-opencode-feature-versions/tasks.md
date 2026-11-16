@@ -1,0 +1,29 @@
+## 1. loomwright
+- [ ] 1.1 Widen the opencode base range to `>= 2.1.2 < 3.0.0`, replace the range comment and the `VersionRange.min` comment with the major-only policy, and add `packages/core/src/opencode-features.ts` with `OPENCODE_FEATURES` (`mcp.roles` → 2.2.0 with its `why`), `enabledOpencodeFeatures` (a role with an empty pattern list does not enable it) and `opencodeRequirement` (highest floor plus reason); unit-test the range, the registry invariant and the empty/non-empty/empty-list cases in `packages/core/test/opencode-features.test.ts`
+  - repo: loomwright
+  - deps: none
+  - touches: packages/core/src/versions.ts, packages/core/src/opencode-features.ts, packages/core/test/opencode-features.test.ts
+- [ ] 1.2 Add an optional `ToolRequirement` (`min`, `reason`) to `checkTool`/`checkTools` and append the reason to the below-floor problem; add `packages/core/test/tools.test.ts` with version stubs for 2.1.1, 2.1.2, 2.2.0, 2.2.7, 2.3.0, 2.99.0 and 3.0.0, asserting the accepted set, both rejections and the reason text
+  - repo: loomwright
+  - deps: 1.1
+  - touches: packages/core/src/tools.ts, packages/core/test/tools.test.ts
+- [ ] 1.3 Let `buildLock` take an optional opencode floor and have `syncWorkspace` write `opencodeRequirement(config)?.min ?? OPENCODE.min`; test the default and overridden pin in `packages/core/test/lock.test.ts`
+  - repo: loomwright
+  - deps: 1.1
+  - touches: packages/core/src/lock/lock.ts, packages/core/src/workspace/sync.ts, packages/core/test/lock.test.ts
+- [ ] 1.4 In `init`, read an existing `factory.config.jsonc` before the tool check, pass its `opencodeRequirement` to `checkTools`, and add a test that `mcp.roles` with opencode 2.1.2 exits 4 naming the feature while 2.2.0 succeeds and writes `tools.opencode.min` 2.2.0
+  - repo: loomwright
+  - deps: 1.1, 1.2, 1.3
+  - touches: packages/cli/src/commands/init.ts, packages/cli/test/init.test.ts
+- [ ] 1.5 In `update`, compute the requirement from `plan.config` and pass it to the warning-only tool check; add a test that `mcp.roles` with opencode 2.1.2 warns naming the feature, succeeds, and writes `tools.opencode.min` 2.2.0
+  - repo: loomwright
+  - deps: 1.1, 1.2, 1.3
+  - touches: packages/cli/src/commands/update.ts, packages/cli/test/update.test.ts
+- [ ] 1.6 In `doctor`, load the config before the tool check, pass the requirement to `checkTools`, add a `fail` for an unmet feature floor and a warning when the lock's opencode floor is behind the config; add tests for the fail, the stale-lock warning and the unchanged 2.1.2 base case
+  - repo: loomwright
+  - deps: 1.1, 1.2, 1.3
+  - touches: packages/core/src/doctor/doctor.ts, packages/cli/test/doctor.test.ts
+- [ ] 1.7 Update the README support table and `docs/cli.md` (init, update, doctor) to describe the 2.x range and the `mcp.roles` floor; add `docs/decisions/0045-*.md` with a name-free index row and a `patch` changeset for `@loomwright/cli`
+  - repo: loomwright
+  - deps: none
+  - touches: README.md, docs/cli.md, docs/decisions/0045-*.md, docs/decisions/README.md, .changeset/**
