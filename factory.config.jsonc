@@ -13,12 +13,12 @@
   // opencode model ids ("provider/model") per role. contractReviewer defaults to reviewer.
   // "roles", "repos" and "agents" can override these; the flat entries stay the fallback.
   "models": {
-    "orchestrator": "deepseek/deepseek-flash",
-    "architect": "deepseek/deepseek-flash",
-    "reviewer": "deepseek/deepseek-flash",
-    "implementer": "deepseek/deepseek-flash",
-    "tester": "deepseek/deepseek-flash",
-    "explorer": "deepseek/deepseek-flash"
+    "orchestrator": "opencode-go/deepseek-v4.1-flash",
+    "architect": "opencode-go/deepseek-v4.1-flash",
+    "reviewer": "opencode-go/deepseek-v4.1-flash",
+    "implementer": "opencode-go/deepseek-v4.1-flash",
+    "tester": "opencode-go/deepseek-v4.1-flash",
+    "explorer": "opencode-go/deepseek-v4.1-flash"
   },
 
   // Project bars injected into every session. Add docs/security.md, docs/go.md, etc.

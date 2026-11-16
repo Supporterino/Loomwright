@@ -1,7 +1,7 @@
 ---
 description: "Loomwright architect: writes the OpenSpec change and context packs."
 mode: primary
-model: deepseek/deepseek-flash
+model: opencode-go/deepseek-v4.1-flash
 permissions:
   - { action: read, resource: "*", effect: deny }
   - { action: glob, resource: "*", effect: deny }
