@@ -44,6 +44,15 @@ function isTestFile(file: string): boolean {
   return /^packages\/[^/]+\/test\//.test(file);
 }
 
+/** Text assets under root `templates/` that packages may import across the boundary. */
+function isTemplateTextAsset(resolved: string): boolean {
+  if (!resolved.startsWith("templates/")) return false;
+  // The ponytail add-on ships its license as a text asset without an extension.
+  if (posix.basename(resolved) === "LICENSE") return true;
+  const extension = posix.extname(resolved).toLowerCase();
+  return extension === ".md" || extension === ".txt";
+}
+
 function forbiddenRule(from: PackageName, to: PackageName): string | undefined {
   if (from === to) return undefined;
   switch (from) {
@@ -88,7 +97,7 @@ export function checkImports(files: readonly ImportEdge[]): Violation[] {
     if (specifier.startsWith("./") || specifier.startsWith("../")) {
       const resolved = posix.normalize(posix.join(posix.dirname(file), specifier));
       const insidePackage = resolved.startsWith(`packages/${from}/`);
-      const rootTemplates = resolved.startsWith("templates/");
+      const rootTemplates = isTemplateTextAsset(resolved);
       // Shared fixtures and setup stay at the root, so package tests may reach test/.
       const rootTestAssets = isTestFile(file) && resolved.startsWith("test/");
       if (insidePackage || rootTemplates || rootTestAssets) continue;
@@ -181,6 +190,13 @@ describe("dependency rule", () => {
       },
     ];
     expect(checkImports(edges)).toEqual([]);
+  });
+
+  test("a non-text import from root templates is rejected", () => {
+    const violations = checkImports([
+      { file: "packages/core/src/x.ts", specifier: "../../../templates/x.ts" },
+    ]);
+    expect(violations.map((violation) => violation.rule)).toEqual(["escape"]);
   });
 
   test("package tests may reach the shared root test support", () => {
