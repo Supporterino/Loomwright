@@ -318,6 +318,14 @@ describe("package scripts", () => {
     }
   });
 
+  test("bun x inspects the wrapped command instead of stopping at x", () => {
+    expect(reason("bun x npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of ["bun x npm install -g left-pad", "bun x bun add --global left-pad"]) {
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    }
+    expect(checkShell("bun x tsc", scriptsCtx)).toEqual({ allowed: true });
+  });
+
   test("bun test -g filters test names instead of installing globally", () => {
     expect(checkShell("bun test -g health", realCtx)).toEqual({ allowed: true });
   });

@@ -1660,11 +1660,28 @@ var BUN_GLOBAL_SUBCOMMANDS = new Set([
   "link",
   "unlink"
 ]);
-function checkPackageManager(tool, args) {
+function checkPackageManager(state, tool, args) {
   const sub = positionals(args)[0];
   const installSide = tool !== "bun" || sub !== undefined && BUN_GLOBAL_SUBCOMMANDS.has(sub);
   if (installSide && args.some((a) => a === "-g" || a === "--global" || a === "--location=global") || args[0] === "global" || args[0] === "link")
     block(`${tool} global installs change the machine, not the worktree`);
+  if (tool === "bun" && sub === "x") {
+    let i = args.indexOf(sub) + 1;
+    while (i < args.length && (args[i] ?? "").startsWith("-")) {
+      i += args[i] === "-p" || args[i] === "--package" ? 2 : 1;
+    }
+    const wrapped = args.slice(i);
+    if (wrapped.length === 0)
+      return;
+    if (++state.depth > 25)
+      block("command nests too deeply to inspect");
+    try {
+      scoped(state, () => checkSimple(state, { kind: "simple", assigns: [], words: wrapped, redirects: [], substitutions: [] }, undefined));
+    } finally {
+      state.depth--;
+    }
+    return;
+  }
   const publishArgs = tool === "bun" ? sub === undefined ? [] : [sub] : args;
   if (publishArgs.some((a) => a === "publish" || a === "login" || a === "adduser" || a === "unpublish" || a === "deprecate"))
     block(`${tool} publishing is not allowed`);
@@ -2539,7 +2556,7 @@ function checkSimple(state, cmd, stdin) {
     return;
   }
   if (PACKAGE_MANAGERS.has(base))
-    checkPackageManager(base, args);
+    checkPackageManager(state, base, args);
   const interpreter = base.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     const operands = [];

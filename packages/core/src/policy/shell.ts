@@ -416,7 +416,7 @@ const BUN_GLOBAL_SUBCOMMANDS = new Set([
  * `bun` is both a runtime and a package manager, and the interpreter branch returns before the
  * `bun` case, so this runs before that branch.
  */
-function checkPackageManager(tool: string, args: readonly string[]): void {
+function checkPackageManager(state: State, tool: string, args: readonly string[]): void {
   const sub = positionals(args)[0];
   const installSide = tool !== "bun" || (sub !== undefined && BUN_GLOBAL_SUBCOMMANDS.has(sub));
   if (
@@ -426,6 +426,30 @@ function checkPackageManager(tool: string, args: readonly string[]): void {
     args[0] === "link"
   )
     block(`${tool} global installs change the machine, not the worktree`);
+  // `bun x <command>` runs whatever it wraps, so the wrapped command gets the same checks.
+  if (tool === "bun" && sub === "x") {
+    // Skip `bun x`'s own leading flags (`--bun`, `-p/--package <pkg>`) to reach the command.
+    let i = args.indexOf(sub) + 1;
+    while (i < args.length && (args[i] ?? "").startsWith("-")) {
+      i += args[i] === "-p" || args[i] === "--package" ? 2 : 1;
+    }
+    const wrapped = args.slice(i);
+    if (wrapped.length === 0) return;
+    if (++state.depth > 25) block("command nests too deeply to inspect");
+    // A subprocess cannot change this shell's directory, so a wrapped `cd` must not either.
+    try {
+      scoped(state, () =>
+        checkSimple(
+          state,
+          { kind: "simple", assigns: [], words: wrapped, redirects: [], substitutions: [] },
+          undefined,
+        ),
+      );
+    } finally {
+      state.depth--;
+    }
+    return;
+  }
   // For `bun` only the subcommand publishes; later positionals are test filters or package
   // names (`bun test login`, `bun add login`).
   const publishArgs = tool === "bun" ? (sub === undefined ? [] : [sub]) : args;
@@ -1371,7 +1395,7 @@ function checkSimple(
     state.cwd = undefined;
     return;
   }
-  if (PACKAGE_MANAGERS.has(base)) checkPackageManager(base, args);
+  if (PACKAGE_MANAGERS.has(base)) checkPackageManager(state, base, args);
   const interpreter = base.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     // -i edits the operands in place: they are writes.
