@@ -1,6 +1,6 @@
+import { git } from "@loomwright/core/exec";
+import type { AgentRuntime } from "@loomwright/core/runtime/types";
 import { runCli } from "../packages/cli/src/main.ts";
-import { git } from "../packages/core/src/exec.ts";
-import type { AgentRuntime } from "../packages/core/src/runtime/types.ts";
 
 export interface Run {
   code: number;

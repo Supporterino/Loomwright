@@ -1,16 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { appendJsonc, parseJsonc, setJsonc } from "@loomwright/core/config/jsonc";
+import { parseConfigText } from "@loomwright/core/config/load";
+import { FactoryConfig, type FactoryConfigInput, modelFor } from "@loomwright/core/config/schema";
+import { ConfigError } from "@loomwright/core/errors";
+import { FACTORY_VERSION, PACKAGE_NAME, runVersion } from "@loomwright/core/version";
+import { PONYTAIL } from "@loomwright/core/versions";
 import { PROTOCOL_VERSION } from "@loomwright/protocol";
-import { appendJsonc, parseJsonc, setJsonc } from "../packages/core/src/config/jsonc.ts";
-import { parseConfigText } from "../packages/core/src/config/load.ts";
-import {
-  FactoryConfig,
-  type FactoryConfigInput,
-  modelFor,
-} from "../packages/core/src/config/schema.ts";
-import { ConfigError } from "../packages/core/src/errors.ts";
-import { FACTORY_VERSION, PACKAGE_NAME, runVersion } from "../packages/core/src/version.ts";
-import { PONYTAIL } from "../packages/core/src/versions.ts";
 import { cli } from "./helpers.ts";
 
 const MODELS = {

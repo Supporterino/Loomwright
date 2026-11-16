@@ -1,4 +1,4 @@
-import type { Finding } from "../../packages/core/src/handoff/schema.ts";
+import type { Finding } from "@loomwright/core/handoff/schema";
 import type { StubRequest, StubStep } from "./stub-model.ts";
 
 /**

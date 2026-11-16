@@ -13,11 +13,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { approvalFile, specHash } from "../packages/core/src/approval/approval.ts";
-import { appendLog, pruneLogs } from "../packages/core/src/logs/log.ts";
-import { redact, secretEnvValues } from "../packages/core/src/logs/redact.ts";
-import { auditChanges, type SessionContext } from "../packages/core/src/policy/scope.ts";
-import { sessionContextFile } from "../packages/core/src/policy/session-files.ts";
+import { approvalFile, specHash } from "@loomwright/core/approval/approval";
+import { appendLog, pruneLogs } from "@loomwright/core/logs/log";
+import { redact, secretEnvValues } from "@loomwright/core/logs/redact";
+import { auditChanges, type SessionContext } from "@loomwright/core/policy/scope";
+import { sessionContextFile } from "@loomwright/core/policy/session-files";
 import { bundlePlugin, PLUGIN_OUT } from "../scripts/build-plugin.ts";
 import { writeFiles } from "./fixtures/workspaces.ts";
 
