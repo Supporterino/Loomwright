@@ -48,10 +48,14 @@ export const Lock = z.strictObject({
 });
 export type Lock = z.infer<typeof Lock>;
 
-/** The lock this factory version writes, with the given managed entries. */
+/**
+ * The lock this factory version writes, with the given managed entries. `opencodeMin` is the
+ * workspace's effective floor (see `opencodeRequirement`); the default is the base range.
+ */
 export function buildLock(
   managed: Readonly<Record<string, LockEntry>>,
   addons: Lock["addons"] = {},
+  opencodeMin: string = OPENCODE.min,
 ): Lock {
   const sorted = Object.fromEntries(Object.entries(managed).sort(([a], [b]) => a.localeCompare(b)));
   return {
@@ -60,7 +64,7 @@ export function buildLock(
     configSchemaVersion: CONFIG_SCHEMA_VERSION,
     tools: {
       git: { min: GIT.min, tested: GIT.tested },
-      opencode: { min: OPENCODE.min, maxExclusive: OPENCODE.maxExclusive, tested: OPENCODE.tested },
+      opencode: { min: opencodeMin, maxExclusive: OPENCODE.maxExclusive, tested: OPENCODE.tested },
       openspec: { min: OPENSPEC.min, maxExclusive: OPENSPEC.maxExclusive, tested: OPENSPEC.tested },
       graphify: { min: GRAPHIFY.min, maxExclusive: GRAPHIFY.maxExclusive, tested: GRAPHIFY.tested },
     },
