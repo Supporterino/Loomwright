@@ -30,7 +30,7 @@
   - repo: loomwright
   - deps: 1.6
   - touches: README.md, ARCHITECTURE.md, docs/cli.md, docs/plan.md, docs/decisions/**
-- [ ] 1.8 Run the acceptance verification and re-record the e2e transcripts
+- [ ] 1.8 Run the acceptance verification
   - repo: loomwright
   - deps: 1.7
   - touches: docs/e2e/**
