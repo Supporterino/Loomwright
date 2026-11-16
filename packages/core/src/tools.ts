@@ -71,8 +71,24 @@ export type ToolStatus =
   | { tool: ToolName; ok: true; version: string }
   | { tool: ToolName; ok: false; version?: string; problem: string; fix: string };
 
-export async function checkTool(name: ToolName, cwd: string): Promise<ToolStatus> {
+/** A caller's extra version floor, above the tool's static min. */
+export interface ToolRequirement {
+  /** Floor this caller needs, at or above the tool's static min. */
+  readonly min: string;
+  /** Why the floor exists (e.g. "mcp.roles needs opencode >= 2.2.0: …"); appended to the problem. */
+  readonly reason: string;
+}
+
+export async function checkTool(
+  name: ToolName,
+  cwd: string,
+  requirement?: ToolRequirement,
+): Promise<ToolStatus> {
   const spec = TOOL_SPECS[name];
+  const floor =
+    requirement !== undefined && compareVersions(requirement.min, spec.min) > 0
+      ? requirement.min
+      : spec.min;
   const res = await exec([toolBin(name), "--version"], {
     cwd,
     env: toolEnv(name),
@@ -82,12 +98,13 @@ export async function checkTool(name: ToolName, cwd: string): Promise<ToolStatus
   if (version === undefined) {
     return { tool: name, ok: false, problem: "not found", fix: spec.install };
   }
-  if (compareVersions(version, spec.min) < 0) {
+  if (compareVersions(version, floor) < 0) {
+    const reason = requirement === undefined ? "" : ` — ${requirement.reason}`;
     return {
       tool: name,
       ok: false,
       version,
-      problem: `${version} < ${spec.min}`,
+      problem: `${version} < ${floor}${reason}`,
       fix: spec.install,
     };
   }
@@ -103,6 +120,10 @@ export async function checkTool(name: ToolName, cwd: string): Promise<ToolStatus
   return { tool: name, ok: true, version };
 }
 
-export function checkTools(names: readonly ToolName[], cwd: string): Promise<ToolStatus[]> {
-  return Promise.all(names.map((n) => checkTool(n, cwd)));
+export function checkTools(
+  names: readonly ToolName[],
+  cwd: string,
+  requirements: Partial<Record<ToolName, ToolRequirement>> = {},
+): Promise<ToolStatus[]> {
+  return Promise.all(names.map((n) => checkTool(n, cwd, requirements[n])));
 }
