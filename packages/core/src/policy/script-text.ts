@@ -5,8 +5,8 @@
  * bodies are lexed as code. A slash in code position opens a regex literal, so quotes and
  * comment markers inside one stay inert.
  *
- * shortcut: a regex directly after `}` or `++` is read as division, upgrade with a real parser
- * when the guard must see those.
+ * shortcut: a regex directly after `}` is read as division, upgrade with a real parser when the
+ * guard must see those.
  */
 export function execSinkLiterals(source: string): string[] {
   const results: Sink[] = [];
@@ -227,6 +227,13 @@ export function execSinkLiterals(source: string): string[] {
       i += 1;
       continue;
     }
+    if ((ch === "+" || ch === "-") && source[i + 1] === ch) {
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexAllowed = false; // `a++ / b` divides; no expression starts after `++`
+      i += 2;
+      continue;
+    }
     if (ch === "+") {
       const sink = currentSink();
       if (sink !== undefined) {
@@ -243,7 +250,7 @@ export function execSinkLiterals(source: string): string[] {
       while (i < source.length && isIdentChar(source[i] ?? "")) i += 1;
       breakChain(currentSink());
       prevWord = source.slice(start, i);
-      regexAllowed = !REGEX_PREFIX_WORDS.has(prevWord);
+      regexAllowed = REGEX_PREFIX_WORDS.has(prevWord);
       continue;
     }
     breakChain(currentSink());

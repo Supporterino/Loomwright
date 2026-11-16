@@ -905,6 +905,13 @@ function execSinkLiterals(source) {
       i += 1;
       continue;
     }
+    if ((ch === "+" || ch === "-") && source[i + 1] === ch) {
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexAllowed = false;
+      i += 2;
+      continue;
+    }
     if (ch === "+") {
       const sink = currentSink();
       if (sink !== undefined) {
@@ -922,7 +929,7 @@ function execSinkLiterals(source) {
         i += 1;
       breakChain(currentSink());
       prevWord = source.slice(start, i);
-      regexAllowed = !REGEX_PREFIX_WORDS.has(prevWord);
+      regexAllowed = REGEX_PREFIX_WORDS.has(prevWord);
       continue;
     }
     breakChain(currentSink());

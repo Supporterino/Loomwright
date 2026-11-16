@@ -82,6 +82,15 @@ describe("script text", () => {
     expect(scan('const r = a / b / c;\nspawnSync(["git", "push"]);')).toEqual(["git push"]);
   });
 
+  test("division before a sink on the same line is not read as a regex literal", () => {
+    expect(scan('const x = a / b; execSync("git push");')).toEqual(["git push"]);
+    expect(scan('const x = 1 / 2; execSync("git push");')).toEqual(["git push"]);
+  });
+
+  test("postfix increment before division is not read as a regex literal", () => {
+    expect(scan('i++ / 2; execSync("git push");')).toEqual(["git push"]);
+  });
+
   test("escaped quotes in a sink literal stay scannable", () => {
     expect(scan('execSync("a\\"git push")')).toEqual(['a"git push']);
   });
