@@ -69,10 +69,12 @@ reported case, because the `git push` lives in a `note([…])` string, not a com
 `Bun.Transpiler` (pulls a runtime API into policy code that also ships in the node-target CLI
 bundle, and a full AST does not solve the sink question anyway).
 
-Trade-off: a literal `git push` in a JS/TS file that reaches a sink through a variable was
-already undetected and stays undetected; a literal passed to a non-execution function is no
-longer blocked. Both are false positives by definition, and the Python/shell paths are
-unchanged.
+Trade-off: narrowing to exec-sink arguments gives up one deny the whole-text scan made — a
+literal assigned in the file and passed through a variable (`const c = "git push";
+execSync(c)`) is no longer caught, because the lexer only joins literals written inside the
+call. A literal that reaches a sink from outside the file (argv, stdin, another module) was and
+stays undetected, and a literal passed to a non-execution function is no longer blocked. The
+last two are false positives by definition, and the Python/shell paths are unchanged.
 
 ### D4 — Version-gate `docs/e2e/`, keep the rest strict
 
@@ -136,8 +138,9 @@ None. No API schema, event, Helm value or workspace format changes; `factory.con
   normal code, but it is a lexer, not a parser.
 - `bun --cwd <dir> <subcommand>` and `bun --filter <name> <subcommand>` put a non-subcommand
   first, so they are accepted without inspection — unchanged from today and out of scope.
-- A `git push` literal in a JS/TS file that reaches a spawn through a variable stays
-  undetected, as today.
+- A `git push` literal assigned to a variable and then passed to an execution primitive
+  (`const c = "git push"; execSync(c)`) is no longer detected, where the whole-text scan caught
+  it; a literal that reaches a spawn from outside the file stays undetected, as today.
 - A re-recorded transcript embeds the machine's tool versions, the recording date, wall time and
   stub request counts, so the two files are environment-specific and will differ again on the
   next recording. If opencode, OpenSpec or Graphify is unavailable the recording task leaves the
