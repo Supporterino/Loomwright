@@ -396,6 +396,49 @@ function checkRecursiveSearch(state: State, base: string, args: readonly string[
   }
 }
 
+/** Package managers whose global installs and publishing the guard refuses. */
+const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+/** Bun subcommands where `-g` means a global install; `bun test -g` filters test names. */
+const BUN_GLOBAL_SUBCOMMANDS = new Set([
+  "install",
+  "i",
+  "add",
+  "a",
+  "remove",
+  "rm",
+  "update",
+  "link",
+  "unlink",
+]);
+
+/**
+ * Global installs and publishing change the machine or the registry, never the worktree.
+ * `bun` is both a runtime and a package manager, and the interpreter branch returns before the
+ * `bun` case, so this runs before that branch.
+ */
+function checkPackageManager(tool: string, args: readonly string[]): void {
+  const sub = positionals(args)[0];
+  const installSide = tool !== "bun" || (sub !== undefined && BUN_GLOBAL_SUBCOMMANDS.has(sub));
+  if (
+    (installSide &&
+      args.some((a) => a === "-g" || a === "--global" || a === "--location=global")) ||
+    args[0] === "global" ||
+    args[0] === "link"
+  )
+    block(`${tool} global installs change the machine, not the worktree`);
+  if (
+    args.some(
+      (a) =>
+        a === "publish" ||
+        a === "login" ||
+        a === "adduser" ||
+        a === "unpublish" ||
+        a === "deprecate",
+    )
+  )
+    block(`${tool} publishing is not allowed`);
+}
+
 /** A project script `npm run X` / `pnpm X` / `yarn X` / `bun run X` runs (with pre/post). */
 function checkPackageScript(state: State, tool: string, args: readonly string[]): void {
   const pos = positionals(args);
@@ -1308,6 +1351,7 @@ function checkSimple(
     state.cwd = undefined;
     return;
   }
+  if (PACKAGE_MANAGERS.has(base)) checkPackageManager(base, args);
   const interpreter = base.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     // -i edits the operands in place: they are writes.
@@ -1508,24 +1552,6 @@ function checkSimple(
     case "pnpm":
     case "yarn":
     case "bun":
-      if (
-        args.some((a) => a === "-g" || a === "--global" || a === "--location=global") ||
-        args[0] === "global" ||
-        args[0] === "link"
-      )
-        return block(`${base} global installs change the machine, not the worktree`);
-      if (
-        args.some(
-          (a) =>
-            a === "publish" ||
-            a === "login" ||
-            a === "adduser" ||
-            a === "unpublish" ||
-            a === "deprecate",
-        )
-      ) {
-        return block(`${base} publishing is not allowed`);
-      }
       checkPackageScript(state, base, args);
       return;
     case "make":

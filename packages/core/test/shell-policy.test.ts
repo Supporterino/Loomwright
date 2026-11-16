@@ -295,6 +295,22 @@ describe("package scripts", () => {
     expect(reason("pnpm sneaky", scriptsCtx)).toContain("git push");
     expect(checkShell("npm run lint", scriptsCtx)).toEqual({ allowed: true });
   });
+
+  test("bun publish and bun global installs are blocked like npm", () => {
+    expect(reason("bun publish", scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of [
+      "bun add -g left-pad",
+      "bun add --global left-pad",
+      "bun i -g",
+      "bun link",
+    ]) {
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    }
+  });
+
+  test("bun test -g filters test names instead of installing globally", () => {
+    expect(checkShell("bun test -g health", realCtx)).toEqual({ allowed: true });
+  });
 });
 
 describe("script files are inspected as code", () => {

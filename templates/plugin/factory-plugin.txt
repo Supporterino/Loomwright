@@ -1573,6 +1573,26 @@ function checkRecursiveSearch(state, base, args) {
       block(`searches \`${root}\`, which contains secret file \`${found}\`; search specific directories instead`);
   }
 }
+var PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+var BUN_GLOBAL_SUBCOMMANDS = new Set([
+  "install",
+  "i",
+  "add",
+  "a",
+  "remove",
+  "rm",
+  "update",
+  "link",
+  "unlink"
+]);
+function checkPackageManager(tool, args) {
+  const sub = positionals(args)[0];
+  const installSide = tool !== "bun" || sub !== undefined && BUN_GLOBAL_SUBCOMMANDS.has(sub);
+  if (installSide && args.some((a) => a === "-g" || a === "--global" || a === "--location=global") || args[0] === "global" || args[0] === "link")
+    block(`${tool} global installs change the machine, not the worktree`);
+  if (args.some((a) => a === "publish" || a === "login" || a === "adduser" || a === "unpublish" || a === "deprecate"))
+    block(`${tool} publishing is not allowed`);
+}
 function checkPackageScript(state, tool, args) {
   const pos = positionals(args);
   const sub = pos[0];
@@ -2435,6 +2455,8 @@ function checkSimple(state, cmd, stdin) {
     state.cwd = undefined;
     return;
   }
+  if (PACKAGE_MANAGERS.has(base))
+    checkPackageManager(base, args);
   const interpreter = base.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     const operands = [];
@@ -2640,11 +2662,6 @@ function checkSimple(state, cmd, stdin) {
     case "pnpm":
     case "yarn":
     case "bun":
-      if (args.some((a) => a === "-g" || a === "--global" || a === "--location=global") || args[0] === "global" || args[0] === "link")
-        return block(`${base} global installs change the machine, not the worktree`);
-      if (args.some((a) => a === "publish" || a === "login" || a === "adduser" || a === "unpublish" || a === "deprecate")) {
-        return block(`${base} publishing is not allowed`);
-      }
       checkPackageScript(state, base, args);
       return;
     case "make":
