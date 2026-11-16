@@ -50,12 +50,12 @@ const WRITE_CALLS: Record<string, number> = {
   writeFile: 0,
   appendFileSync: 0,
   appendFile: 0,
-  copyFileSync: 0,
-  copyFile: 0,
+  copyFileSync: 1,
+  copyFile: 1,
   outputFile: 0,
   outputFileSync: 0,
-  renameSync: 0,
-  rename: 0,
+  renameSync: 1,
+  rename: 1,
   writePluginBundle: 1,
 };
 const WRITE_CALL = new RegExp(`\\b(${Object.keys(WRITE_CALLS).join("|")})\\s*\\(`, "g");
@@ -65,9 +65,23 @@ const TRACKED_BUNDLE = /templates\s*\/?\s*plugin\s*\/?\s*factory-plugin\.txt/;
 function callArguments(source: string, openParen: number): string[] {
   const args: string[] = [];
   let depth = 1;
+  let quote = "";
   let current = "";
   for (let i = openParen + 1; i < source.length; i += 1) {
     const char = source[i] ?? "";
+    if (quote) {
+      current += char;
+      if (char === "\\") {
+        current += source[i + 1] ?? "";
+        i += 1;
+      } else if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      current += char;
+      continue;
+    }
     if (char === "(") depth += 1;
     else if (char === ")") depth -= 1;
     if (depth === 0 || (char === "," && depth === 1)) {
@@ -220,7 +234,7 @@ describe("plugin bundle", () => {
     );
   });
 
-  test("the write scan recognizes direct, joined and PLUGIN_OUT writes", () => {
+  test("the write scan recognizes direct, joined, PLUGIN_OUT, copy and quoted-comma writes", () => {
     // Split strings keep this test's own samples out of the scan above.
     const call = (...parts: string[]): string => parts.join("");
     const writers = [
@@ -228,6 +242,8 @@ describe("plugin bundle", () => {
       call("writeFileSync", '(join(ROOT, "templates", "plugin", "factory-plugin.txt"), "x")'),
       call("writePluginBundle", '("x", join(ROOT, "templates", "plugin", "factory-plugin.txt"))'),
       call("writeFileSync", '(PLUGIN_OUT, "x")'),
+      call("copyFileSync", "(tmp, PLUGIN_OUT)"),
+      call("writePluginBundle", '("a, b", PLUGIN_OUT)'),
     ];
     for (const source of writers) expect(writesTrackedBundle(source)).toBe(true);
     expect(
