@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { headerLine } from "../scripts/e2e-header.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const RENAME_VERSION = "0.12.0";
@@ -20,6 +21,33 @@ function filesUnder(dir: string): string[] {
 function isHistoricalSnapshot(file: string): boolean {
   const version = /^test\/fixtures\/install-(.+)\.json$/.exec(file)?.[1];
   return version !== undefined && Bun.semver.order(version, RENAME_VERSION) <= 0;
+}
+
+const TRANSCRIPT_HEADER = /^Recorded .+ \(([^)]+?) ([\w.\-+]+)\)\.?$/m;
+const LEGACY_HEADER =
+  "Recorded 2026-10-26 with `bun scripts/e2e-transcript.ts single` (ai-factory 0.2.0).";
+
+// The version in the header's parenthesis, whatever product recorded it.
+function transcriptVersion(text: string): string | undefined {
+  return TRANSCRIPT_HEADER.exec(text)?.[2];
+}
+
+// Transcripts recorded at or before the rename — or without a parseable version — are historical.
+function isHistoricalTranscript(text: string): boolean {
+  const version = transcriptVersion(text);
+  if (version === undefined) return true;
+  try {
+    return Bun.semver.order(version, RENAME_VERSION) <= 0;
+  } catch {
+    // An unparseable version is history, like a missing one.
+    return true;
+  }
+}
+
+// Only docs/e2e/ is gated by the recorded version; every other scanned directory stays strict.
+function historyViolation(file: string, text: string): boolean {
+  const historical = file.startsWith("docs/e2e/") ? isHistoricalTranscript(text) : true;
+  return historical && text.includes("Loomwright");
 }
 
 describe("documentation", () => {
@@ -104,11 +132,17 @@ describe("documentation", () => {
     expect(index).toContain("Bun workspaces: protocol, core and cli packages");
   });
 
+  test("the recorder's header classifies as current", () => {
+    const header = headerLine("single", "1.0.0", "2026-01-01");
+    expect(header).toContain("bun scripts/e2e-transcript.ts single");
+    expect(header).toContain("(Loomwright 1.0.0)");
+    expect(isHistoricalTranscript(header)).toBe(false);
+  });
+
   test("historical material is untouched", () => {
     expect(read("docs/decisions/0042-fewer-git-processes.md")).toContain(
       "`test/pipeline.test.ts` ran 7,215 git processes",
     );
-    expect(read("docs/e2e/single.md")).toContain("(ai-factory 0.2.0)");
     const snapshot = read("test/fixtures/install-0.12.0.json");
     expect(snapshot).toContain("# Managed by ai-factory");
     expect(snapshot).not.toContain("packages/");
@@ -164,7 +198,45 @@ describe("compatibility surface", () => {
       ...filesUnder("test/fixtures").filter(isHistoricalSnapshot),
     ];
     for (const file of files) {
-      expect(read(file), file).not.toContain("Loomwright");
+      expect(historyViolation(file, read(file)), file).toBe(false);
+    }
+  });
+
+  test("a pre-rename transcript stays historical", () => {
+    const text = `${LEGACY_HEADER}\n# E2E: single repo\n`;
+    expect(transcriptVersion(text)).toBe("0.2.0");
+    expect(isHistoricalTranscript(text)).toBe(true);
+    expect(historyViolation("docs/e2e/single.md", text)).toBe(false);
+  });
+
+  test("a historical transcript naming the product fails", () => {
+    const text = `${LEGACY_HEADER}\nLoomwright\n`;
+    expect(historyViolation("docs/e2e/single.md", text)).toBe(true);
+  });
+
+  test("a current transcript may name the product", () => {
+    const text = `${headerLine("single", "1.0.0", "2026-01-01")}\n\n$ loomwright init\n\nLoomwright\n`;
+    expect(isHistoricalTranscript(text)).toBe(false);
+    expect(historyViolation("docs/e2e/single.md", text)).toBe(false);
+  });
+
+  test("a transcript without a version is history", () => {
+    const text = "# E2E: single repo\n\nLoomwright\n";
+    expect(transcriptVersion(text)).toBeUndefined();
+    expect(historyViolation("docs/e2e/single.md", text)).toBe(true);
+    expect(
+      isHistoricalTranscript("Recorded 2026-01-01 with `bun scripts/x.ts` (Loomwright main)"),
+    ).toBe(true);
+  });
+
+  test("decisions, research and audit stay strict", () => {
+    const text = `${headerLine("single", "1.0.0", "2026-01-01")}\n\nLoomwright\n`;
+    for (const file of [
+      "docs/decisions/0099-x.md",
+      "docs/research/transcripts.md",
+      "docs/audit/report.md",
+    ]) {
+      expect(historyViolation(file, text), file).toBe(true);
     }
   });
 

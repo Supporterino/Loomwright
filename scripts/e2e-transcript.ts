@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
+import { headerLine } from "./e2e-header.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const layout = process.argv[2];
@@ -117,7 +118,7 @@ try {
   note(`# E2E: ${layout === "single" ? "single repo" : "AI repo with submodules"}`);
   note(
     [
-      `Recorded ${new Date().toISOString().slice(0, 10)} with \`bun scripts/e2e-transcript.ts ${layout}\` (Loomwright ${FACTORY_VERSION}).`,
+      headerLine(layout, FACTORY_VERSION, new Date().toISOString().slice(0, 10)),
       "",
       "**Real:**",
       `- the opencode server: ${await toolVersion([opencodeBin, "--version"])} with the factory's agents, permissions and guard plugin;`,
