@@ -439,14 +439,35 @@ function checkPackageManager(tool: string, args: readonly string[]): void {
     block(`${tool} publishing is not allowed`);
 }
 
+/** Bun subcommands that install; `bun install` and friends run the project's lifecycle hooks. */
+const BUN_INSTALL_SUBCOMMANDS = new Set(["install", "i", "add", "a", "remove", "rm", "update"]);
+
+/** Expands the named `scripts` entries; a script reaching its own expansion is a cycle. */
+function expandScripts(
+  state: State,
+  dir: string,
+  scripts: Record<string, unknown>,
+  keys: readonly string[],
+): void {
+  for (const key of keys) {
+    const body = scripts[key];
+    if (typeof body !== "string") continue;
+    const expansion = `${dir}\0${key}`;
+    if (state.expanding.has(expansion)) block(`script \`${key}\` expands into itself`);
+    state.expanding.add(expansion);
+    try {
+      checkScript(state, body);
+    } finally {
+      state.expanding.delete(expansion);
+    }
+  }
+}
+
 /** A project script `npm run X` / `pnpm X` / `yarn X` / `bun run X` runs (with pre/post). */
 function checkPackageScript(state: State, tool: string, args: readonly string[]): void {
   const pos = positionals(args);
   const sub = pos[0];
   if (sub === undefined || state.cwd === undefined) return;
-  // Bun runs its own subcommands (`test`, `build`, `install`, …) even when a script has that
-  // name; expanding the script would run the script body instead of the builtin.
-  if (tool === "bun" && sub !== "run" && BUN_BUILTINS.has(sub)) return;
   const dir = state.cwd;
   const text = state.ctx.readFile?.(join(dir, "package.json"));
   let scripts: Record<string, unknown> = {};
@@ -456,6 +477,14 @@ function checkPackageScript(state: State, tool: string, args: readonly string[])
         ? {}
         : (JSON.parse(text) as { scripts?: Record<string, unknown> }).scripts) ?? {};
   } catch {
+    return;
+  }
+  // Bun runs its own subcommands (`test`, `build`, `install`, …) even when a script has that
+  // name; expanding the script would run the script body instead of the builtin. Installs still
+  // run the project's `preinstall`/`postinstall` hooks, so those stay inspected.
+  if (tool === "bun" && sub !== "run" && BUN_BUILTINS.has(sub)) {
+    if (BUN_INSTALL_SUBCOMMANDS.has(sub))
+      expandScripts(state, dir, scripts, ["preinstall", "postinstall"]);
     return;
   }
   const NPM_RUN = new Set(["run", "run-script", "rum", "urn"]);
@@ -480,19 +509,7 @@ function checkPackageScript(state: State, tool: string, args: readonly string[])
     checkScriptFile(state, name, "other");
     return;
   }
-  for (const key of [`pre${name}`, name, `post${name}`]) {
-    const body = scripts[key];
-    if (typeof body !== "string") continue;
-    // A script that reaches itself through its own expansion is a cycle, not deep nesting.
-    const expansion = `${dir}\0${key}`;
-    if (state.expanding.has(expansion)) block(`script \`${key}\` expands into itself`);
-    state.expanding.add(expansion);
-    try {
-      checkScript(state, body);
-    } finally {
-      state.expanding.delete(expansion);
-    }
-  }
+  expandScripts(state, dir, scripts, [`pre${name}`, name, `post${name}`]);
 }
 
 interface MakeRule {

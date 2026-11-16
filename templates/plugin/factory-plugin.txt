@@ -1661,12 +1661,27 @@ function checkPackageManager(tool, args) {
   if (args.some((a) => a === "publish" || a === "login" || a === "adduser" || a === "unpublish" || a === "deprecate"))
     block(`${tool} publishing is not allowed`);
 }
+var BUN_INSTALL_SUBCOMMANDS = new Set(["install", "i", "add", "a", "remove", "rm", "update"]);
+function expandScripts(state, dir, scripts, keys) {
+  for (const key of keys) {
+    const body = scripts[key];
+    if (typeof body !== "string")
+      continue;
+    const expansion = `${dir}\x00${key}`;
+    if (state.expanding.has(expansion))
+      block(`script \`${key}\` expands into itself`);
+    state.expanding.add(expansion);
+    try {
+      checkScript(state, body);
+    } finally {
+      state.expanding.delete(expansion);
+    }
+  }
+}
 function checkPackageScript(state, tool, args) {
   const pos = positionals(args);
   const sub = pos[0];
   if (sub === undefined || state.cwd === undefined)
-    return;
-  if (tool === "bun" && sub !== "run" && BUN_BUILTINS.has(sub))
     return;
   const dir = state.cwd;
   const text = state.ctx.readFile?.(join7(dir, "package.json"));
@@ -1674,6 +1689,11 @@ function checkPackageScript(state, tool, args) {
   try {
     scripts = (text === undefined ? {} : JSON.parse(text).scripts) ?? {};
   } catch {
+    return;
+  }
+  if (tool === "bun" && sub !== "run" && BUN_BUILTINS.has(sub)) {
+    if (BUN_INSTALL_SUBCOMMANDS.has(sub))
+      expandScripts(state, dir, scripts, ["preinstall", "postinstall"]);
     return;
   }
   const NPM_RUN = new Set(["run", "run-script", "rum", "urn"]);
@@ -1702,20 +1722,7 @@ function checkPackageScript(state, tool, args) {
     checkScriptFile(state, name, "other");
     return;
   }
-  for (const key of [`pre${name}`, name, `post${name}`]) {
-    const body = scripts[key];
-    if (typeof body !== "string")
-      continue;
-    const expansion = `${dir}\x00${key}`;
-    if (state.expanding.has(expansion))
-      block(`script \`${key}\` expands into itself`);
-    state.expanding.add(expansion);
-    try {
-      checkScript(state, body);
-    } finally {
-      state.expanding.delete(expansion);
-    }
-  }
+  expandScripts(state, dir, scripts, [`pre${name}`, name, `post${name}`]);
 }
 function parseMakefile(text) {
   const vars = new Map;

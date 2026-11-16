@@ -268,6 +268,15 @@ describe("package scripts", () => {
     }
   });
 
+  test("bun install still inspects the preinstall and postinstall hooks", () => {
+    for (const hook of ["preinstall", "postinstall"]) {
+      const lifecycleCtx = pkgCtx({ install: "echo ok", [hook]: "git push" });
+      expect(reason("bun install", lifecycleCtx)).toContain("git push");
+      expect(reason("bun i", lifecycleCtx)).toContain("git push");
+    }
+    expect(checkShell("bun install", pkgCtx({ install: "git push" }))).toEqual({ allowed: true });
+  });
+
   test.each(["bun run deploy", "bun deploy"])("%s stays blocked by the script body", (cmd) => {
     expect(reason(cmd, scriptsCtx)).toContain("git push");
   });
