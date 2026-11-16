@@ -64,6 +64,24 @@ describe("script text", () => {
     expect(scan("const re = /ab+/;")).toEqual([]);
   });
 
+  test("a quote inside a regex literal does not open a string", () => {
+    expect(scan('const re = /"anthropic\\/[^"]+"/g;\nspawnSync(["git", "push"]);')).toEqual([
+      "git push",
+    ]);
+  });
+
+  test("a quote and a slash inside a regex character class stay inert", () => {
+    expect(scan(`const re = /[/'"]/;\nspawnSync(["git", "push"]);`)).toEqual(["git push"]);
+  });
+
+  test("a `//` inside a regex literal does not start a comment", () => {
+    expect(scan('const re = /https?:\\/\\//g;\nspawnSync(["git", "push"]);')).toEqual(["git push"]);
+  });
+
+  test("division is not read as a regex literal", () => {
+    expect(scan('const r = a / b / c;\nspawnSync(["git", "push"]);')).toEqual(["git push"]);
+  });
+
   test("escaped quotes in a sink literal stay scannable", () => {
     expect(scan('execSync("a\\"git push")')).toEqual(['a"git push']);
   });

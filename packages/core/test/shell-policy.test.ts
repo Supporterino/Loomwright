@@ -8,11 +8,10 @@ const E2E_TRANSCRIPT = readFileSync(
   join(import.meta.dir, "../../../scripts/e2e-transcript.ts"),
   "utf8",
 );
-// The lexer does not parse regex literals, so the statement goes in as code before the
-// recorder's quoted regex rather than after it.
+// The spawn goes in after the recorder's quoted regex, so regex literals cannot hide it.
 const E2E_WITH_SPAWN = E2E_TRANSCRIPT.replace(
-  "  note(plan.intro);",
-  '  note(plan.intro);\n  execSync("git push");\n',
+  "  note(plan.configNote);",
+  '  note(plan.configNote);\n  execSync("git push");\n',
 );
 const FILES: Record<string, string> = {
   [`${WT}/scripts/test.sh`]: "#!/bin/sh\ngo test ./...\n",
@@ -327,7 +326,7 @@ describe("script files are inspected as code", () => {
     expect(verdict("bun scripts/e2e-transcript.ts single")).toEqual({ allowed: true });
   });
 
-  test('the same recorder plus execSync("git push") is blocked', () => {
+  test("a real spawn of git push after the recorder's quoted regex is blocked", () => {
     expect(reason("bun scripts/e2e-extra.ts")).toContain("git push");
   });
 

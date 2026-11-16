@@ -2,8 +2,11 @@
  * Literal text of every call whose callee is an execution primitive, in source order.
  *
  * Comments are dropped, string and template text is blanked from the code pass, and `${…}`
- * bodies are lexed as code. Regex literals are not told apart from division: a `//` or `/*`
- * inside one may be read as a comment, which is accepted (see the `agent-shell-guard` design).
+ * bodies are lexed as code. A slash in code position opens a regex literal, so quotes and
+ * comment markers inside one stay inert.
+ *
+ * shortcut: a regex directly after `}` or `++` is read as division, upgrade with a real parser
+ * when the guard must see those.
  */
 export function execSinkLiterals(source: string): string[] {
   const results: Sink[] = [];
@@ -15,6 +18,9 @@ export function execSinkLiterals(source: string): string[] {
   let stringQuote = "";
   let stringSink: Sink | undefined;
   let stringText = "";
+  /** The next slash starts a regex literal rather than division. */
+  let regexAllowed = true;
+  let regexInClass = false;
 
   const currentSink = (): Sink | undefined => sinks.at(-1);
 
@@ -98,10 +104,35 @@ export function execSinkLiterals(source: string): string[] {
         frame.text = "";
         frame.depth = 1;
         prevWord = undefined;
+        regexAllowed = true;
         mode = "code";
         i += 2;
       } else {
         frame.text += ch;
+        i += 1;
+      }
+      continue;
+    }
+
+    if (mode === "regex") {
+      if (ch === "\\") {
+        i += source[i + 1] === undefined ? 1 : 2;
+      } else if (ch === "\n") {
+        mode = "code"; // unterminated: the rest is code again
+        regexAllowed = true;
+        i += 1;
+      } else if (ch === "[") {
+        regexInClass = true;
+        i += 1;
+      } else if (ch === "]") {
+        regexInClass = false;
+        i += 1;
+      } else if (ch === "/" && !regexInClass) {
+        mode = "code";
+        regexAllowed = false;
+        i += 1;
+        while (i < source.length && isIdentChar(source[i] ?? "")) i += 1; // flags
+      } else {
         i += 1;
       }
       continue;
@@ -121,11 +152,20 @@ export function execSinkLiterals(source: string): string[] {
       i += 2;
       continue;
     }
+    if (ch === "/" && regexAllowed) {
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexInClass = false;
+      mode = "regex";
+      i += 1;
+      continue;
+    }
     if (ch === "'" || ch === '"') {
       stringQuote = ch;
       stringSink = currentSink();
       stringText = "";
       prevWord = undefined;
+      regexAllowed = false;
       mode = "string";
       i += 1;
       continue;
@@ -136,6 +176,7 @@ export function execSinkLiterals(source: string): string[] {
       sinks.push(sink);
       templates.push({ sink, depth: 0, text: "" });
       prevWord = undefined;
+      regexAllowed = false;
       mode = "template";
       i += 1;
       continue;
@@ -146,6 +187,7 @@ export function execSinkLiterals(source: string): string[] {
       sinks.push(sink);
       breakChain(sink);
       prevWord = undefined;
+      regexAllowed = true;
       i += 1;
       continue;
     }
@@ -153,6 +195,14 @@ export function execSinkLiterals(source: string): string[] {
       sinks.pop();
       breakChain(currentSink());
       prevWord = undefined;
+      regexAllowed = false;
+      i += 1;
+      continue;
+    }
+    if (ch === "]") {
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexAllowed = false;
       i += 1;
       continue;
     }
@@ -161,6 +211,7 @@ export function execSinkLiterals(source: string): string[] {
       if (frame !== undefined && frame.depth > 0) frame.depth += 1;
       breakChain(currentSink());
       prevWord = undefined;
+      regexAllowed = true;
       i += 1;
       continue;
     }
@@ -172,6 +223,7 @@ export function execSinkLiterals(source: string): string[] {
       }
       breakChain(currentSink());
       prevWord = undefined;
+      regexAllowed = false;
       i += 1;
       continue;
     }
@@ -182,6 +234,7 @@ export function execSinkLiterals(source: string): string[] {
         sink.afterPart = false;
       }
       prevWord = undefined;
+      regexAllowed = true;
       i += 1;
       continue;
     }
@@ -190,10 +243,12 @@ export function execSinkLiterals(source: string): string[] {
       while (i < source.length && isIdentChar(source[i] ?? "")) i += 1;
       breakChain(currentSink());
       prevWord = source.slice(start, i);
+      regexAllowed = !REGEX_PREFIX_WORDS.has(prevWord);
       continue;
     }
     breakChain(currentSink());
     prevWord = undefined;
+    regexAllowed = true;
     i += 1;
   }
 
@@ -204,7 +259,7 @@ export function execSinkLiterals(source: string): string[] {
   return results.map((sink) => sink.text.trim());
 }
 
-type Mode = "code" | "string" | "line" | "block" | "template";
+type Mode = "code" | "string" | "line" | "block" | "template" | "regex";
 
 interface Sink {
   /** Literal text of this call so far, parts separated by a space unless glued by `+`. */
@@ -233,6 +288,24 @@ const EXEC_PRIMITIVES: ReadonlySet<string> = new Set([
   "Function",
   "sh",
   "$",
+]);
+
+/** Words after which an expression starts, so a slash opens a regex literal. */
+const REGEX_PREFIX_WORDS: ReadonlySet<string> = new Set([
+  "await",
+  "case",
+  "delete",
+  "do",
+  "else",
+  "in",
+  "instanceof",
+  "new",
+  "of",
+  "return",
+  "throw",
+  "typeof",
+  "void",
+  "yield",
 ]);
 
 function isIdentChar(ch: string): boolean {
