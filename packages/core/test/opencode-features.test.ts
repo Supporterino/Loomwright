@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { FactoryConfig } from "../src/config/schema.ts";
 import {
   enabledOpencodeFeatures,
   OPENCODE_FEATURES,
@@ -6,6 +7,20 @@ import {
 } from "../src/opencode-features.ts";
 import { compareVersions } from "../src/tools.ts";
 import { OPENCODE } from "../src/versions.ts";
+
+const M = "anthropic/claude-sonnet-5-5";
+
+/** A real parsed config so the agent `mcp` list is validated, not just spread in as a literal. */
+function agentConfig(mcp: string[]): FactoryConfig {
+  return FactoryConfig.parse({
+    schemaVersion: 2,
+    layout: "single",
+    repos: [{ name: "app", path: ".", languages: ["typescript"] }],
+    models: { orchestrator: M, architect: M, reviewer: M, implementer: M, tester: M, explorer: M },
+    mcp: { roles: {} },
+    agents: [{ id: "custom", phase: "implementer", prompt: "Do the work.", mcp }],
+  });
+}
 
 describe("opencode base range", () => {
   test("the base range accepts every 2.x minor and stops at 3.0.0", () => {
@@ -34,7 +49,9 @@ describe("OPENCODE_FEATURES", () => {
 
 describe("opencodeRequirement", () => {
   test("an empty mcp.roles keeps the base floor", () => {
-    expect(opencodeRequirement({ mcp: { roles: {} } })).toBeUndefined();
+    const requirement = opencodeRequirement({ mcp: { roles: {} } });
+    expect(requirement).toBeUndefined();
+    expect(requirement?.min ?? OPENCODE.min).toBe("2.1.2");
   });
 
   test("one role with a pattern needs 2.2.0", () => {
@@ -48,6 +65,14 @@ describe("opencodeRequirement", () => {
 
   test("an empty pattern list does not enable the feature", () => {
     expect(opencodeRequirement({ mcp: { roles: { implementer: [] } } })).toBeUndefined();
+  });
+
+  test("agent-level MCP patterns keep the base floor", () => {
+    const config = agentConfig(["mantine_*"]);
+    expect(config.agents[0]?.mcp).toEqual(["mantine_*"]);
+    const requirement = opencodeRequirement(config);
+    expect(requirement).toBeUndefined();
+    expect(requirement?.min ?? OPENCODE.min).toBe("2.1.2");
   });
 });
 
