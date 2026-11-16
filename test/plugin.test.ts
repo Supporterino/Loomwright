@@ -33,6 +33,17 @@ let ws: string;
 let wt: string;
 const hooks = new Map<string, Hook>();
 
+const ROOT = join(import.meta.dir, "..");
+const PLUGIN_DIR = join(ROOT, "templates", "plugin");
+const TMP_BUNDLE = /^factory-plugin\.txt\..*\.tmp$/;
+
+function filesUnder(dir: string): string[] {
+  return readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    return entry.isDirectory() ? filesUnder(path) : [path];
+  });
+}
+
 const ID = "add-x";
 const TASKS = "- [ ] 1.1 Add health\n  - repo: app\n  - deps: none\n  - touches: src/**\n";
 
@@ -120,8 +131,39 @@ afterAll(() => rmSync(ws, { recursive: true, force: true }));
 beforeEach(() => rmSync(approvalFile(ws, ID), { force: true }));
 
 describe("plugin bundle", () => {
-  test("the committed bundle is up to date (run `bun run build:plugin`)", async () => {
-    expect(readFileSync(PLUGIN_OUT, "utf8")).toBe(await bundlePlugin());
+  test("the committed bundle is current and carries the new reason (run `bun run build:plugin`)", async () => {
+    const bundle = readFileSync(PLUGIN_OUT, "utf8");
+    expect(bundle).toContain("expands into itself");
+    expect(bundle).toBe(await bundlePlugin());
+  });
+
+  test("an in-memory build leaves the tracked file alone", async () => {
+    const before = readFileSync(PLUGIN_OUT);
+    const entries = readdirSync(PLUGIN_DIR);
+    expect(await bundlePlugin()).toBe(before.toString("utf8"));
+    expect(readFileSync(PLUGIN_OUT).equals(before)).toBe(true);
+    const after = readdirSync(PLUGIN_DIR);
+    expect(after).toEqual(entries);
+    expect(after.filter((name) => TMP_BUNDLE.test(name))).toEqual([]);
+  });
+
+  test("no test writes the tracked bundle", () => {
+    const packageTests = readdirSync(join(ROOT, "packages"), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `packages/${entry.name}/test`)
+      .filter((dir) => existsSync(join(ROOT, dir)));
+    const sources = [...filesUnder("test"), ...packageTests.flatMap(filesUnder)]
+      .filter((file) => file.endsWith(".test.ts"))
+      .map((file) => readFileSync(join(ROOT, file), "utf8"))
+      .join("\n");
+    // The paren is escaped so this test's own patterns cannot match themselves.
+    expect(sources).not.toMatch(/writePluginBundle\([^)]*PLUGIN_OUT\b/);
+    expect(sources).not.toMatch(/writePluginBundle\([^)]*"templates\/plugin\/factory-plugin\.txt"/);
+    expect(sources).not.toMatch(/writeFileSync\(PLUGIN_OUT\b/);
+    // The only writer is the build script, run through `bun run build:plugin`.
+    expect(readFileSync(join(ROOT, "scripts", "build-plugin.ts"), "utf8")).toContain(
+      "writePluginBundle(await bundlePlugin(), PLUGIN_OUT)",
+    );
   });
 
   test("the bundled plugin names Loomwright", () => {
