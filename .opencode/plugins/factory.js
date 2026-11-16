@@ -1,15 +1,15 @@
-// Loomwright opencode plugin — generated from src/plugin/entry.ts; do not edit.
+// Loomwright opencode plugin — generated from packages/core/src/plugin/entry.ts; do not edit.
 // @bun
-// src/plugin/entry.ts
+// packages/core/src/plugin/entry.ts
 import { existsSync as existsSync4, readdirSync as readdirSync3, readFileSync as readFileSync3, statSync as statSync3 } from "fs";
 import { isAbsolute as isAbsolute4, join as join8, relative as relative3, resolve as resolve5 } from "path";
 
-// src/approval/approval.ts
+// packages/core/src/approval/approval.ts
 import { createHash } from "crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 
-// src/tasks/parse.ts
+// packages/core/src/tasks/parse.ts
 var TASK_LINE = /^- \[( |x|X)\] (\d+(?:\.\d+)+)\s+(.+?)\s*$/;
 function normalizeCheckboxes(text) {
   return text.split(`
@@ -17,7 +17,7 @@ function normalizeCheckboxes(text) {
 `);
 }
 
-// src/approval/approval.ts
+// packages/core/src/approval/approval.ts
 function parseApproval(value) {
   if (typeof value !== "object" || value === null)
     return;
@@ -89,7 +89,7 @@ function checkApprovalHash(root, id) {
   return { valid: true, approval };
 }
 
-// src/logs/log.ts
+// packages/core/src/logs/log.ts
 import {
   appendFileSync,
   existsSync as existsSync2,
@@ -101,7 +101,7 @@ import {
 } from "fs";
 import { join as join2 } from "path";
 
-// src/logs/redact.ts
+// packages/core/src/logs/redact.ts
 var MARK = (kind) => `[REDACTED:${kind}]`;
 var PATTERNS = [
   [
@@ -146,7 +146,7 @@ function redact(text, envValues = [], options = {}) {
   return out;
 }
 
-// src/logs/log.ts
+// packages/core/src/logs/log.ts
 function redactValue(value, env, heuristic) {
   if (typeof value === "string")
     return redact(value, env, { heuristic });
@@ -170,7 +170,7 @@ function appendLog(root, changeId, entry, options = {}) {
 `);
 }
 
-// src/policy/paths.ts
+// packages/core/src/policy/paths.ts
 var PROTECTED = [
   /^openspec\/specs(\/|$)/i,
   /^\.opencode(\/|$)/i,
@@ -249,7 +249,7 @@ function isGeneratedLockfile(path) {
   return GENERATED_LOCKFILES.has(p.slice(p.lastIndexOf("/") + 1).toLowerCase());
 }
 
-// src/policy/realpath.ts
+// packages/core/src/policy/realpath.ts
 import { lstatSync, readlinkSync, realpathSync } from "fs";
 import { basename, dirname as dirname2, join as join3, resolve } from "path";
 function realPathOf(abs, depth = 0) {
@@ -279,7 +279,7 @@ function realPathOf(abs, depth = 0) {
   return abs;
 }
 
-// src/policy/sandbox.ts
+// packages/core/src/policy/sandbox.ts
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
 import { isAbsolute, join as join4, resolve as resolve2 } from "path";
 var SANDBOX_EXEC = "/usr/bin/sandbox-exec";
@@ -423,10 +423,10 @@ function checkoutPolicy(workspace, dir, extra = [], home = process.env.HOME) {
   };
 }
 
-// src/policy/scope.ts
+// packages/core/src/policy/scope.ts
 import { isAbsolute as isAbsolute2, normalize, relative, resolve as resolve3 } from "path";
 
-// src/tasks/glob.ts
+// packages/core/src/tasks/glob.ts
 var cache = new Map;
 function globRegExp(glob) {
   const cached = cache.get(glob);
@@ -466,7 +466,7 @@ function opencodeGlobRegExp(glob) {
   return new RegExp(`^${body}$`);
 }
 
-// src/policy/scope.ts
+// packages/core/src/policy/scope.ts
 var ROLES = [
   "orchestrator",
   "architect",
@@ -563,7 +563,7 @@ function patchPaths(patchText) {
   return [...out];
 }
 
-// src/policy/secrets.ts
+// packages/core/src/policy/secrets.ts
 import { join as join5 } from "path";
 var GLOB = /[*?[]/;
 function segmentRegExp(segment) {
@@ -678,14 +678,14 @@ function mentionedSecret(code) {
   return code.match(MENTION)?.[1];
 }
 
-// src/policy/session-files.ts
+// packages/core/src/policy/session-files.ts
 import { join as join6 } from "path";
 var sessionContextFile = (workspace, sessionId) => join6(workspace, ".factory", "sessions", `${sessionId}.json`);
 
-// src/policy/shell.ts
+// packages/core/src/policy/shell.ts
 import { basename as basename2, dirname as dirname3, isAbsolute as isAbsolute3, join as join7, normalize as normalize2, relative as relative2, resolve as resolve4 } from "path";
 
-// src/policy/shell-parse.ts
+// packages/core/src/policy/shell-parse.ts
 class ShellParseError extends Error {
 }
 var OPS = ["&&", "||", ";;", ";", "|&", "|", "&", "(", ")", `
@@ -1059,7 +1059,7 @@ function parseScript(src) {
   return new Parser(new Lexer(src).lex()).script(false);
 }
 
-// src/policy/shell.ts
+// packages/core/src/policy/shell.ts
 class Blocked extends Error {
 }
 function block(reason) {
@@ -2512,7 +2512,7 @@ function checkShell(command, ctx) {
   }
 }
 
-// src/plugin/entry.ts
+// packages/core/src/plugin/entry.ts
 var FACTORY_AGENTS = new Set([
   "orchestrator",
   "architect",
