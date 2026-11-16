@@ -1,0 +1,15 @@
+{
+  "changeId": "gate-opencode-feature-versions",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "5eb314db57e78a9268dde700a83df9d1a6a11e45",
+  "hash": "767041e82efdd841e0766daf1a12a339deae999c08b9a0903230d7efaa6ca456",
+  "approvedAt": "2026-11-16T18:27:07.380Z",
+  "history": [
+    {
+      "hash": "ad3249131b78d0e80937db14abf8b5a6a8acaacf5fdf31459361f618766a9165",
+      "specCommit": "7e31c69eb368903d9c7fee25bd4f342d5ea35e3d",
+      "at": "2026-11-16T17:37:43.435Z",
+      "reason": "reword: review findings applied"
+    }
+  ]
+}
