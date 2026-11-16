@@ -57,6 +57,76 @@ describe("documentation", () => {
     expect(read("docs/plan.md").startsWith("# Loomwright v1 build plan")).toBe(true);
   });
 
+  test("current-facing docs use the new paths", () => {
+    const readme = read("README.md");
+    expect(readme).toContain("packages/core/src/config/schema.ts");
+    expect(readme).toContain("packages/core/test/detect-units.test.ts");
+    expect(readme).toContain("packages/cli/dist/cli.js");
+    expect(readme).toContain("packages/core/src/version.ts");
+    expect(readme).toContain("packages/protocol");
+    expect(readme).not.toMatch(/`src\//);
+    expect(readme).not.toMatch(/`test\//);
+
+    const architecture = read("ARCHITECTURE.md");
+    expect(architecture).toContain("packages/cli/src/");
+    expect(architecture).toContain("packages/cli/dist/cli.js");
+    expect(architecture).toContain("packages/core/src/pipeline/");
+    expect(architecture).toContain("packages/core/src/plugin/entry.ts");
+    expect(architecture).toContain("packages/core/src/migrations/NNN-*.ts");
+    expect(architecture).toContain("cli → core → protocol");
+    expect(architecture).not.toMatch(/`src\//);
+
+    expect(read("docs/cli.md")).toContain("packages/core/src/exit-codes.ts");
+
+    const plan = read("docs/plan.md");
+    expect(plan).toContain("## Modules (`packages/`)");
+    expect(plan).toContain("packages/cli/src/");
+    expect(plan).toContain("packages/core/src/plugin/entry.ts");
+    expect(plan).not.toMatch(/`src\//);
+  });
+
+  test("ADR-0043 records the layout and the rule", () => {
+    const adr = read("docs/decisions/0043-bun-workspaces.md");
+    expect(adr.startsWith("# 0043 — ")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).toContain("packages/protocol");
+    expect(adr).toContain("packages/core");
+    expect(adr).toContain("packages/cli");
+    expect(adr).toContain("cli → core → protocol");
+    expect(adr).toContain("packages/core/src/plugin/entry.ts");
+    expect(adr).not.toContain("Loomwright");
+
+    const index = read("docs/decisions/README.md");
+    expect(index).toContain("| [0043](0043-bun-workspaces.md)");
+    expect(index).toContain("Bun workspaces: protocol, core and cli packages");
+  });
+
+  test("historical material is untouched", () => {
+    expect(read("docs/decisions/0042-fewer-git-processes.md")).toContain(
+      "`test/pipeline.test.ts` ran 7,215 git processes",
+    );
+    expect(read("docs/e2e/single.md")).toContain("(ai-factory 0.2.0)");
+    const snapshot = read("test/fixtures/install-0.12.0.json");
+    expect(snapshot).toContain("# Managed by ai-factory");
+    expect(snapshot).not.toContain("packages/");
+  });
+
+  test("the plugin output path and id are unchanged", () => {
+    const plan = read("docs/plan.md");
+    expect(plan).toContain("`.opencode/plugins/factory.js`");
+    expect(plan).toContain("`bun scripts/build-plugin.ts`");
+
+    const architecture = read("ARCHITECTURE.md");
+    expect(architecture).toContain("packages/core/src/plugin/entry.ts");
+    expect(architecture).toContain("`.opencode/plugins/factory.js`");
+
+    const bundle = read("templates/plugin/factory-plugin.txt");
+    expect(bundle).toContain("generated from packages/core/src/plugin/entry.ts");
+    expect(bundle).toContain('id: "ai-factory"');
+  });
+
   test("the fleet update example uses the new package", () => {
     const fleet = read("docs/fleet-update.sh");
     expect(fleet).toMatch(/bunx "@loomwright\/cli@\$\{version\}"/);

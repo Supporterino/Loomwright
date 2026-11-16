@@ -2,31 +2,31 @@
 
 Status: approved 2026-10-23. Slices 1–13 done. Inputs: [research/tooling.md](research/tooling.md), [decisions/](decisions/).
 
-## Modules (`src/`)
+## Modules (`packages/`)
 
-| Module                    | Responsibility                                                                                                               |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `cli/`                    | Command parsing (one file per command), `--json`, exit codes                                                                 |
-| `exec.ts`                 | The single shell-out wrapper: timeout, captured output, env presets (OpenSpec/Graphify quiet env, agent git env)             |
-| `config/`                 | zod schema, JSONC read and comment-preserving edit (`jsonc-parser`), `migrations/NNN-*.ts`                                   |
-| `detect/`                 | Layout, languages per repo/sub-path, contract proposals, diff against config                                                 |
-| `templates/` + `render/`  | Agents, plugin, standards, AGENTS.md block, hooks, OpenSpec config, handoff schema; deterministic rendering                  |
-| `lock/` + `managed/`      | `factory.lock.json`, managed-file hashes, 3-way merge (`git merge-file`), backups, rollback                                  |
-| `git/`                    | Branching (incl. detached HEAD), worktrees, merge queue, commits with `Change-Id`, pointer bumps, `repoint`                  |
-| `openspec/` + `approval/` | Typed wrappers over `openspec … --json`, design checks, approval hash                                                        |
-| `tasks/` + `scheduler/`   | `tasks.md` parser + checkbox mirror, DAG and contract-order validation, `touches` overlap, the scheduler                     |
-| `state/`                  | Atomic run state, file locks, active lock and queue, corrupt-file reporting                                                  |
-| `gates/`                  | Resolution (override → repo script → profile), check-only guard, affected selection, output compaction, installs and caches  |
-| `runtime/`                | `AgentRuntime`: `OpencodeRuntime` (private `opencode serve`, REST via `fetch`, ADR-0019) and `ScriptedRuntime`; rate limiter |
-| `pipeline/`               | The phase state machine from intake to close; context packs; handoff validation and repair                                   |
-| `policy/` + `logs/`       | Pure edit-scope rules, shell parser and blocklist (incl. evasions), secret detection, the Seatbelt sandbox; redaction        |
-| `contracts/`              | OpenAPI / JSON-Schema / proto breaking-change diff + consumer validation                                                     |
-| `graph/`                  | Build, coalesced update worker, query helpers for packs                                                                      |
-| `usage/`                  | Event capture, aggregation, report section, waste detection                                                                  |
-| `addons/` + `bench/`      | Ponytail: verify, vendor, render, `shortcut:` harvest; the A/B bench                                                         |
-| `doctor/`                 | All checks, with the resolved gate table                                                                                     |
+| Module                                                        | Responsibility                                                                                                               |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `packages/cli/src/`                                           | Command parsing (one file per command), `--json`, exit codes                                                                 |
+| `packages/core/src/exec.ts`                                   | The single shell-out wrapper: timeout, captured output, env presets (OpenSpec/Graphify quiet env, agent git env)             |
+| `packages/core/src/config/`                                   | zod schema, JSONC read and comment-preserving edit (`jsonc-parser`), `migrations/NNN-*.ts`                                   |
+| `packages/core/src/detect/`                                   | Layout, languages per repo/sub-path, contract proposals, diff against config                                                 |
+| `templates/` + `packages/core/src/render/`                    | Agents, plugin, standards, AGENTS.md block, hooks, OpenSpec config, handoff schema; deterministic rendering                  |
+| `packages/core/src/lock/` + `packages/core/src/managed/`      | `factory.lock.json`, managed-file hashes, 3-way merge (`git merge-file`), backups, rollback                                  |
+| `packages/core/src/git/`                                      | Branching (incl. detached HEAD), worktrees, merge queue, commits with `Change-Id`, pointer bumps, `repoint`                  |
+| `packages/core/src/openspec/` + `packages/core/src/approval/` | Typed wrappers over `openspec … --json`, design checks, approval hash                                                        |
+| `packages/core/src/tasks/` + `packages/core/src/scheduler/`   | `tasks.md` parser + checkbox mirror, DAG and contract-order validation, `touches` overlap, the scheduler                     |
+| `packages/core/src/state/`                                    | Atomic run state, file locks, active lock and queue, corrupt-file reporting                                                  |
+| `packages/core/src/gates/`                                    | Resolution (override → repo script → profile), check-only guard, affected selection, output compaction, installs and caches  |
+| `packages/core/src/runtime/`                                  | `AgentRuntime`: `OpencodeRuntime` (private `opencode serve`, REST via `fetch`, ADR-0019) and `ScriptedRuntime`; rate limiter |
+| `packages/core/src/pipeline/`                                 | The phase state machine from intake to close; context packs; handoff validation and repair                                   |
+| `packages/core/src/policy/` + `packages/core/src/logs/`       | Pure edit-scope rules, shell parser and blocklist (incl. evasions), secret detection, the Seatbelt sandbox; redaction        |
+| `packages/core/src/contracts/`                                | OpenAPI / JSON-Schema / proto breaking-change diff + consumer validation                                                     |
+| `packages/core/src/graph/`                                    | Build, coalesced update worker, query helpers for packs                                                                      |
+| `packages/core/src/usage/`                                    | Event capture, aggregation, report section, waste detection                                                                  |
+| `packages/core/src/addons/` + `packages/core/src/bench/`      | Ponytail: verify, vendor, render, `shortcut:` harvest; the A/B bench                                                         |
+| `packages/core/src/doctor/`                                   | All checks, with the resolved gate table                                                                                     |
 
-The plugin (`src/plugin/entry.ts`) is bundled with the `policy/` code it uses into `.opencode/plugins/factory.js` (`bun scripts/build-plugin.ts`; a test keeps the committed bundle current) and imports nothing from opencode at runtime.
+The plugin (`packages/core/src/plugin/entry.ts`) is bundled with the `policy/` code it uses into `.opencode/plugins/factory.js` (`bun scripts/build-plugin.ts`; a test keeps the committed bundle current) and imports nothing from opencode at runtime.
 
 ## Milestones (vertical slices, each green and committed)
 
