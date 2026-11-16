@@ -4,11 +4,28 @@ import { join } from "node:path";
 import { checkShell, type ShellContext } from "../src/policy/shell.ts";
 
 const WT = "/ws/.factory/worktrees/add-x/backend/1.1";
+const E2E_TRANSCRIPT = readFileSync(
+  join(import.meta.dir, "../../../scripts/e2e-transcript.ts"),
+  "utf8",
+);
+// The lexer does not parse regex literals, so the statement goes in as code before the
+// recorder's quoted regex rather than after it.
+const E2E_WITH_SPAWN = E2E_TRANSCRIPT.replace(
+  "  note(plan.intro);",
+  '  note(plan.intro);\n  execSync("git push");\n',
+);
 const FILES: Record<string, string> = {
   [`${WT}/scripts/test.sh`]: "#!/bin/sh\ngo test ./...\n",
   [`${WT}/scripts/release.sh`]: "#!/bin/bash\nset -e\ngit fetch\ngit push --tags\n",
   [`${WT}/tools/deploy.py`]: "import subprocess\nsubprocess.run(['git', 'push'])\n",
   [`${WT}/main.go`]: "package main\n",
+  [`${WT}/scripts/e2e-transcript.ts`]: E2E_TRANSCRIPT,
+  [`${WT}/scripts/e2e-extra.ts`]: E2E_WITH_SPAWN,
+  [`${WT}/scripts/publish.ts`]: 'spawnSync(["git", "push"]);\n',
+  [`${WT}/notes.ts`]: 'note("the guard blocks git push");\n',
+  [`${WT}/console-notes.ts`]: 'console.log("git push");\n',
+  [`${WT}/scripts/comment.ts`]: "// git push\nexport const x = 1;\n",
+  [`${WT}/scripts/block-comment.ts`]: "/* git push */\nexport const x = 1;\n",
 };
 const ctx: ShellContext = {
   cwd: WT,
@@ -276,5 +293,53 @@ describe("package scripts", () => {
   test("pnpm expands a same-named script and npm runs the lint script", () => {
     expect(reason("pnpm sneaky", scriptsCtx)).toContain("git push");
     expect(checkShell("npm run lint", scriptsCtx)).toEqual({ allowed: true });
+  });
+});
+
+describe("script files are inspected as code", () => {
+  const reason = (cmd: string): string => {
+    const v = verdict(cmd);
+    expect(v.allowed).toBe(false);
+    if (v.allowed) throw new Error(`expected \`${cmd}\` to be blocked`);
+    return v.reason;
+  };
+
+  test("the real e2e recorder is allowed although its prose names git push", () => {
+    expect(verdict("bun scripts/e2e-transcript.ts single")).toEqual({ allowed: true });
+  });
+
+  test('the same recorder plus execSync("git push") is blocked', () => {
+    expect(reason("bun scripts/e2e-extra.ts")).toContain("git push");
+  });
+
+  test('a spawnSync(["git", "push"]) script is blocked', () => {
+    expect(reason("bun scripts/publish.ts")).toContain("git push");
+  });
+
+  test("git push inside a note(...) argument is allowed", () => {
+    expect(verdict("bun notes.ts")).toEqual({ allowed: true });
+  });
+
+  test("git push inside a console.log(...) argument is allowed", () => {
+    expect(verdict("bun console-notes.ts")).toEqual({ allowed: true });
+  });
+
+  test("git push in a line comment is allowed", () => {
+    expect(verdict("bun scripts/comment.ts")).toEqual({ allowed: true });
+  });
+
+  test("git push in a block comment is allowed", () => {
+    expect(verdict("bun scripts/block-comment.ts")).toEqual({ allowed: true });
+  });
+
+  test("bash and python script files are still scanned whole", () => {
+    expect(reason("bash scripts/release.sh")).toContain("git push");
+    expect(reason("python3 tools/deploy.py")).toContain("git push");
+  });
+
+  test("inline node -e with joined strings is blocked by the whole-text scan", () => {
+    expect(reason("node -e \"require('child_process').execSync('git pu' + 'sh')\"")).toContain(
+      "git push",
+    );
   });
 });

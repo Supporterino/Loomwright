@@ -1,5 +1,6 @@
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { isProtectedPath, isSecretPath } from "./paths.ts";
+import { execSinkLiterals } from "./script-text.ts";
 import { findSecretUnder, globMatchesSecret, mentionedSecret } from "./secrets.ts";
 import {
   type Command,
@@ -195,6 +196,14 @@ const BREW_READ_ONLY_SUBCOMMANDS = new Set([
   "tap-info",
 ]);
 const BREW_GLOBAL_FLAGS = new Set(["-v", "--verbose", "-d", "--debug", "-q", "--quiet"]);
+
+/**
+ * `.js`/`.jsx`/`.ts`/`.tsx` and their module variants (`.mjs`/`.cjs`/`.mts`/`.cts`).
+ * These are parsed by the literal lexer instead of the whole-text scan.
+ */
+function isJsLike(path: string): boolean {
+  return /\.[cm]?[jt]sx?$/.test(path);
+}
 
 /**
  * Literal text checks for code we cannot parse (inline Python/Node, interpreter scripts).
@@ -419,12 +428,12 @@ function checkPackageScript(state: State, tool: string, args: readonly string[])
   if (tool === "npm") name = NPM_RUN.has(sub) ? pos[1] : NPM_LIFECYCLE[sub];
   else if (sub === "run") name = pos[1];
   else if (sub in scripts) name = sub;
-  else if (tool === "bun" && /\.[cm]?[jt]sx?$/.test(sub)) {
+  else if (tool === "bun" && isJsLike(sub)) {
     checkScriptFile(state, sub, "other");
     return;
   }
   if (name === undefined) return;
-  if (tool === "bun" && !(name in scripts) && /\.[cm]?[jt]sx?$/.test(name)) {
+  if (tool === "bun" && !(name in scripts) && isJsLike(name)) {
     checkScriptFile(state, name, "other");
     return;
   }
@@ -943,6 +952,11 @@ function checkScriptFile(state: State, word: string, interpreter: "shell" | "oth
     interpreter === "shell" ? shebang === "" || /\b(sh|bash|zsh|dash|ksh)\b/.test(shebang) : false;
   if (isShell) {
     checkScript(state, text);
+  } else if (isJsLike(word)) {
+    for (const literal of execSinkLiterals(text)) {
+      const found = scanText(literal);
+      if (found) block(`${word}: ${found}`);
+    }
   } else {
     const found = scanText(text);
     if (found) block(`${word}: ${found}`);
