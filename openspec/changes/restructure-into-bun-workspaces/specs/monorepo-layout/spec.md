@@ -42,7 +42,7 @@ The root `package.json` SHALL be a private workspace manifest and declare `works
 
 ### Requirement: Dependencies flow cli → core → protocol
 
-Source imports under `packages/` MUST follow `cli → core → protocol`: `packages/cli` MAY import `@loomwright/core`; `packages/core` MAY import `@loomwright/protocol`; `packages/protocol` MUST NOT import `@loomwright/core` or `@loomwright/cli`; `packages/core` MUST NOT import `@loomwright/cli`; and `packages/cli` MUST NOT import `@loomwright/protocol` directly. A relative import MUST NOT leave its package, except for text imports of the root `templates/` assets. A bun:test that reads the real tree, backed by a pure checker with unit cases, MUST fail the suite on any violation.
+Source imports under `packages/` MUST follow `cli → core → protocol`: `packages/cli` MAY import `@loomwright/core`; `packages/core` MAY import `@loomwright/protocol`; `packages/protocol` MUST NOT import `@loomwright/core` or `@loomwright/cli`; `packages/core` MUST NOT import `@loomwright/cli`; and `packages/cli` MUST NOT import `@loomwright/protocol` directly. A relative import MUST NOT leave its package, except for text imports of the root `templates/` assets and, from a package's test files, the shared root `test/` support (`test/setup.ts`, `test/helpers.ts`, `test/fixtures/**`). A bun:test that reads the real tree, backed by a pure checker with unit cases, MUST fail the suite on any violation.
 
 #### Scenario: allowed edges are accepted
 
@@ -73,6 +73,12 @@ Source imports under `packages/` MUST follow `cli → core → protocol`: `packa
 
 - **WHEN** the checker sees `packages/core/src/render/workspace.ts` importing `../../../../templates/agents/architect.md`
 - **THEN** it reports no violation
+
+#### Scenario: package tests may reach the shared root test support
+
+- **WHEN** the checker sees `packages/cli/test/completion.test.ts` importing `../../../test/fixtures/workspaces.ts`
+- **THEN** it reports no violation
+- **AND** the same relative import from `packages/cli/src` is reported as an escape
 
 #### Scenario: the real tree obeys the rule
 
@@ -165,7 +171,7 @@ Tests SHALL live under `packages/core/test` or `packages/cli/test` according to 
 - **WHEN** the test tree is listed
 - **THEN** `packages/core/test/` contains the engine tests, for example `tasks.test.ts` and `gates-resolve.test.ts`
 - **AND** `packages/cli/test/` contains the command tests, for example `cli-usage.test.ts` and `completion.test.ts`
-- **AND** no test that moved imports `../src/`
+- **AND** every moved test reaches its own package through `../src/`; none imports the removed root `src/`
 
 #### Scenario: shared fixtures and setup stay at the root
 

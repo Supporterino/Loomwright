@@ -10,7 +10,7 @@ The CLI, the engine and the opencode plugin still live in one package, so the en
 - Move the engine out of `src/` into `packages/core/src` and the command layer into `packages/cli/src` with `git mv`, keeping `templates/`, `docs/` and `scripts/` at the repository root.
 - Extract the two core-to-CLI references into core: `ExitCode` moves to core and `Io`/`RuntimeFactory` move to a core `io.ts`; the CLI re-exports `Io` for its command modules.
 - Keep the opencode plugin in `core` at `packages/core/src/plugin/entry.ts`, still bundled to `templates/plugin/factory-plugin.txt` at the repository root.
-- Enforce `cli → core → protocol` with a test that reads the import graph and fails CI on a reverse edge or a relative escape; `templates/` text imports remain the only allowed escape.
+- Enforce `cli → core → protocol` with a test that reads the import graph and fails CI on a reverse edge or a relative escape; `templates/` text imports and, from test files, the shared root `test/` support remain the allowed escapes.
 - Move tests next to the package they test, keep `test/setup.ts`, `test/helpers.ts` and `test/fixtures/**` shared at the root, and add a repo-level architecture test.
 - Move the published manifest to `packages/cli`, keep the tarball file list identical, update build/release/CI paths, per-package tsconfigs, Changesets patterns, README/ARCHITECTURE/docs paths and add ADR-0043.
 - Record the baseline before the first move and report the protected-file follow-ups (`loomwright update` for the committed plugin bundle) instead of editing those files.

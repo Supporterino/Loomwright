@@ -71,7 +71,7 @@ Rejected: duplicating `ExitCode` or `Io` (drift) and putting `Io` in protocol (i
 
 ### 7. Dependency rule enforced by a test, not only by tsconfig paths
 
-`test/architecture.test.ts` walks every `.ts` file under `packages/`, extracts static imports and applies the allowed-edge table. Relative imports may not leave the package except for root `templates/` text assets. The checker is a pure function with unit cases, so a synthetic violation fails a test rather than only the real tree. tsconfig `paths` make the editor fast; they do not enforce direction.
+`test/architecture.test.ts` walks every `.ts` file under `packages/`, extracts static imports and applies the allowed-edge table. Relative imports may not leave the package except for root `templates/` text assets and, from test files, the shared root `test/` support. The checker is a pure function with unit cases, so a synthetic violation fails a test rather than only the real tree. tsconfig `paths` make the editor fast; they do not enforce direction.
 
 Rejected: a Biome `noRestrictedImports` rule (per-package configuration, weak on relative escapes) and package `exports` alone (they cannot stop a relative path).
 
@@ -104,7 +104,8 @@ No protected file is edited. The moved paths are checked as follows:
 - `factory.config.jsonc`: `instructions` is empty, `graph.exclude` already matches `**/dist/**` (which covers `packages/cli/dist`), and `gates.overrides` is empty. No edit.
 - `factory.lock.json`: contains no source paths. Its hash for `.opencode/plugins/factory.js` changes after the next `loomwright update`, not here.
 - `.opencode/plugins/factory.js`: still the old bundle. The final report must ask for `loomwright update` after landing to regenerate it and refresh the lock.
-- `.opencode/` standards and agents, `AGENTS.md`, `openspec/specs/`: no moved source path. No edit.
+- `.opencode/` standards and agents, `openspec/specs/`: no moved source path. No edit.
+- `AGENTS.md`: names the old layout (`src/cli/`, `src/config/`, `src/policy/`, `src/plugin/`, `src/version.ts`, `test/gates-resolve.test.ts`, `test/opencode-runtime.e2e.test.ts`). It is protected, so the final report lists the `packages/cli/src/…`, `packages/core/src/…` and `packages/*/test/…` rewrite as a post-landing follow-up and does not edit it here.
 - `openspec/config.yaml`: workspace layout stays `single`; no edit.
 
 ## Risks
