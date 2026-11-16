@@ -183,6 +183,24 @@ describe("dependency rule", () => {
     expect(checkImports(edges)).toEqual([]);
   });
 
+  test("package tests may reach the shared root test support", () => {
+    const allowed = checkImports([
+      {
+        file: "packages/cli/test/completion.test.ts",
+        specifier: "../../../test/fixtures/workspaces.ts",
+      },
+    ]);
+    expect(allowed).toEqual([]);
+
+    const escaped = checkImports([
+      {
+        file: "packages/cli/src/completion.ts",
+        specifier: "../../../test/fixtures/workspaces.ts",
+      },
+    ]);
+    expect(escaped.map((violation) => violation.rule)).toEqual(["escape"]);
+  });
+
   test("the real tree obeys the rule", () => {
     const edges = edgesOf(typescriptFiles(join(repoRoot, "packages")));
     expect(checkImports(edges)).toEqual([]);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { appendJsonc, parseJsonc, setJsonc } from "@loomwright/core/config/jsonc";
 import { parseConfigText } from "@loomwright/core/config/load";
 import { FactoryConfig, type FactoryConfigInput, modelFor } from "@loomwright/core/config/schema";
@@ -259,6 +259,17 @@ test("the root manifest declares the workspaces and publishes nothing", () => {
   expect(pkg).not.toHaveProperty("publishConfig");
 });
 
+test("the root manifest keeps the root scripts and devDependencies", () => {
+  const pkg = rootPackageJson();
+  expect(pkg.scripts?.build).toBeDefined();
+  expect(pkg.scripts?.check).toBeDefined();
+  expect(pkg.scripts?.test).toBe("bun test --timeout 60000 --parallel");
+  expect(pkg.devDependencies?.typescript).toBeDefined();
+  expect(pkg.devDependencies?.["@types/bun"]).toBeDefined();
+  expect(pkg.devDependencies?.["@loomwright/core"]).toBe("workspace:*");
+  expect(pkg.devDependencies?.["@loomwright/protocol"]).toBe("workspace:*");
+});
+
 test("the bundle entry is unchanged", () => {
   const pkg = rootPackageJson();
   expect(pkg.scripts?.build).toContain("packages/cli/src/bin.ts");
@@ -297,6 +308,11 @@ test("core exposes subpath exports", () => {
   const core = readManifest("../packages/core/package.json");
   expect(core.exports?.["./*"]).toBe("./src/*.ts");
   expect(core.exports?.["."]).toBeUndefined();
+  // `@loomwright/core/policy/permissions` resolves straight to its module; no barrel is needed.
+  expect(existsSync(new URL("../packages/core/src/index.ts", import.meta.url))).toBe(false);
+  expect(existsSync(new URL("../packages/core/src/policy/permissions.ts", import.meta.url))).toBe(
+    true,
+  );
 });
 
 test("the published CLI identity is unchanged", () => {
@@ -323,6 +339,10 @@ test("Changesets sees package changes", () => {
     readFileSync(new URL("../.changeset/config.json", import.meta.url), "utf8"),
   ) as { changedFilePatterns?: string[] };
   expect(config.changedFilePatterns).toContain("packages/**");
+  // Private packages cannot be published, so a bump only touches the CLI package.
+  expect(readManifest("../packages/core/package.json").private).toBe(true);
+  expect(readManifest("../packages/protocol/package.json").private).toBe(true);
+  expect(readManifest("../packages/cli/package.json").private).toBeUndefined();
 });
 
 test("the published manifest does not own the gates", () => {
@@ -340,4 +360,14 @@ test("gate scripts keep their exact definitions", () => {
   expect(pkg.scripts?.typecheck).toBe("tsc --noEmit");
   expect(pkg.scripts?.test).toBe("bun test --timeout 60000 --parallel");
   expect(pkg.scripts?.["test:serial"]).toBe("bun test --timeout 60000");
+});
+
+test("protected configuration is checked for moved paths", () => {
+  const text = readFileSync(new URL("../factory.config.jsonc", import.meta.url), "utf8");
+  const config = parseConfigText(text, "factory.config.jsonc");
+  // No instructions point at the removed root `src/`; nothing in the file needs an edit.
+  expect(config.instructions.workspace).toEqual([]);
+  expect(config.instructions.repos).toEqual({});
+  expect(config.graph.exclude).toContain("**/dist/**");
+  expect(config.gates.overrides).toEqual({});
 });
