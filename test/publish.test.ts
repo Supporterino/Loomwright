@@ -17,6 +17,7 @@ import { FACTORY_VERSION } from "@loomwright/core/version";
 import { bundlePlugin } from "../scripts/build-plugin.ts";
 import { preparePackage } from "../scripts/prepare-package.ts";
 import { syncVersion } from "../scripts/sync-version.ts";
+import { writeDistPackage } from "../scripts/write-dist-package.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const CLI = join(ROOT, "packages", "cli");
@@ -244,15 +245,43 @@ describe("published package", () => {
     expect(run.stdout.trim()).toBe(FACTORY_VERSION);
   });
 
-  test("the generated package files are ignored", () => {
-    const ignore = read(ROOT, ".gitignore");
+  test("the dist package writer works from a clean tree", () => {
+    const root = tempRoot();
+    const target = join(root, "packages", "cli", "dist", "package.json");
+    expect(existsSync(dirname(target))).toBe(false);
+
+    writeDistPackage(target);
+
+    expect(readFileSync(target, "utf8")).toBe('{ "type": "module" }\n');
+  });
+
+  test("a second run of the dist package writer is a no-op success", () => {
+    const root = tempRoot();
+    const target = join(root, "packages", "cli", "dist", "package.json");
+    writeDistPackage(target);
+
+    writeDistPackage(target);
+
+    expect(readFileSync(target, "utf8")).toBe('{ "type": "module" }\n');
+  });
+
+  test("the redundant packages/cli/dist line is gone from .gitignore", () => {
+    const lines = read(ROOT, ".gitignore").split("\n");
     for (const path of [
       "packages/cli/README.md",
       "packages/cli/LICENSE",
       "packages/cli/templates/",
-      "packages/cli/dist/",
     ]) {
-      expect(ignore).toContain(path);
+      expect(lines).toContain(path);
+    }
+    expect(lines.filter((line) => line === "dist/")).toHaveLength(1);
+    expect(lines).not.toContain("packages/cli/dist/");
+  });
+
+  test("the dist output is still ignored", () => {
+    for (const path of ["packages/cli/dist/cli.js", "packages/cli/README.md"]) {
+      const ignored = spawnSync("git", ["check-ignore", "-q", path], { cwd: ROOT });
+      expect(ignored.status).toBe(0);
     }
   });
 
