@@ -29,6 +29,12 @@ describe("script text", () => {
     expect(scan('execSync("git " + "push")')).toEqual(["git push"]);
   });
 
+  test("adjacent `+` literals concatenate without a space", () => {
+    expect(scan('spawnSync("git", ["pu" + "sh"])')).toEqual(["git push"]);
+    expect(scan('execSync("gi" + "t " + "push")')).toEqual(["git push"]);
+    expect(scan('execSync("git" + " " + "push")')).toEqual(["git push"]);
+  });
+
   test("prose passed to a non-execution call does not block", () => {
     expect(scan('console.log("git push")')).toEqual([]);
     expect(scan('note(["git push"])')).toEqual([]);

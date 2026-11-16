@@ -19,12 +19,22 @@ export function execSinkLiterals(source: string): string[] {
   const currentSink = (): Sink | undefined => sinks.at(-1);
 
   const addPart = (sink: Sink | undefined, text: string): void => {
-    const part = text.trim();
-    if (sink !== undefined && part !== "") sink.parts.push(part);
+    if (sink === undefined) return;
+    if (sink.glue) sink.text += text;
+    else if (text.trim() !== "") sink.text = sink.text === "" ? text : `${sink.text} ${text}`;
+    sink.glue = false;
+    sink.afterPart = true;
+  };
+
+  /** A token that is neither whitespace, a comment nor `+` ends a `+` chain. */
+  const breakChain = (sink: Sink | undefined): void => {
+    if (sink === undefined) return;
+    sink.glue = false;
+    sink.afterPart = false;
   };
 
   const openSink = (): Sink => {
-    const sink: Sink = { parts: [] };
+    const sink: Sink = { text: "", glue: false, afterPart: false };
     results.push(sink);
     return sink;
   };
@@ -134,12 +144,14 @@ export function execSinkLiterals(source: string): string[] {
       const callee = prevWord;
       const sink = callee !== undefined && EXEC_PRIMITIVES.has(callee) ? openSink() : currentSink();
       sinks.push(sink);
+      breakChain(sink);
       prevWord = undefined;
       i += 1;
       continue;
     }
     if (ch === ")") {
       sinks.pop();
+      breakChain(currentSink());
       prevWord = undefined;
       i += 1;
       continue;
@@ -147,6 +159,7 @@ export function execSinkLiterals(source: string): string[] {
     if (ch === "{") {
       const frame = templates.at(-1);
       if (frame !== undefined && frame.depth > 0) frame.depth += 1;
+      breakChain(currentSink());
       prevWord = undefined;
       i += 1;
       continue;
@@ -157,6 +170,17 @@ export function execSinkLiterals(source: string): string[] {
         frame.depth -= 1;
         if (frame.depth === 0) mode = "template";
       }
+      breakChain(currentSink());
+      prevWord = undefined;
+      i += 1;
+      continue;
+    }
+    if (ch === "+") {
+      const sink = currentSink();
+      if (sink !== undefined) {
+        sink.glue = sink.afterPart;
+        sink.afterPart = false;
+      }
       prevWord = undefined;
       i += 1;
       continue;
@@ -164,9 +188,11 @@ export function execSinkLiterals(source: string): string[] {
     if (isIdentChar(ch)) {
       const start = i;
       while (i < source.length && isIdentChar(source[i] ?? "")) i += 1;
+      breakChain(currentSink());
       prevWord = source.slice(start, i);
       continue;
     }
+    breakChain(currentSink());
     prevWord = undefined;
     i += 1;
   }
@@ -175,13 +201,18 @@ export function execSinkLiterals(source: string): string[] {
   const tail = templates.at(-1);
   if (tail !== undefined) addPart(tail.sink, tail.text);
 
-  return results.map((sink) => sink.parts.join(" "));
+  return results.map((sink) => sink.text.trim());
 }
 
 type Mode = "code" | "string" | "line" | "block" | "template";
 
 interface Sink {
-  readonly parts: string[];
+  /** Literal text of this call so far, parts separated by a space unless glued by `+`. */
+  text: string;
+  /** The next literal part is joined with `+`, so it appends without a separator. */
+  glue: boolean;
+  /** The previous significant token was a literal part, so a following `+` concatenates. */
+  afterPart: boolean;
 }
 
 interface TemplateFrame {

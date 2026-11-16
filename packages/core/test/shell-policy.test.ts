@@ -22,6 +22,7 @@ const FILES: Record<string, string> = {
   [`${WT}/scripts/e2e-transcript.ts`]: E2E_TRANSCRIPT,
   [`${WT}/scripts/e2e-extra.ts`]: E2E_WITH_SPAWN,
   [`${WT}/scripts/publish.ts`]: 'spawnSync(["git", "push"]);\n',
+  [`${WT}/scripts/split-push.ts`]: 'spawnSync("git", ["pu" + "sh"]);\n',
   [`${WT}/notes.ts`]: 'note("the guard blocks git push");\n',
   [`${WT}/console-notes.ts`]: 'console.log("git push");\n',
   [`${WT}/scripts/comment.ts`]: "// git push\nexport const x = 1;\n",
@@ -314,6 +315,10 @@ describe("script files are inspected as code", () => {
 
   test('a spawnSync(["git", "push"]) script is blocked', () => {
     expect(reason("bun scripts/publish.ts")).toContain("git push");
+  });
+
+  test("a script that splits `git push` across `+` literals is blocked", () => {
+    expect(reason("bun scripts/split-push.ts")).toContain("git push");
   });
 
   test("git push inside a note(...) argument is allowed", () => {

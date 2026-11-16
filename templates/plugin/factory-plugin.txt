@@ -698,12 +698,23 @@ function execSinkLiterals(source) {
   let stringText = "";
   const currentSink = () => sinks.at(-1);
   const addPart = (sink, text) => {
-    const part = text.trim();
-    if (sink !== undefined && part !== "")
-      sink.parts.push(part);
+    if (sink === undefined)
+      return;
+    if (sink.glue)
+      sink.text += text;
+    else if (text.trim() !== "")
+      sink.text = sink.text === "" ? text : `${sink.text} ${text}`;
+    sink.glue = false;
+    sink.afterPart = true;
+  };
+  const breakChain = (sink) => {
+    if (sink === undefined)
+      return;
+    sink.glue = false;
+    sink.afterPart = false;
   };
   const openSink = () => {
-    const sink = { parts: [] };
+    const sink = { text: "", glue: false, afterPart: false };
     results.push(sink);
     return sink;
   };
@@ -812,12 +823,14 @@ function execSinkLiterals(source) {
       const callee = prevWord;
       const sink = callee !== undefined && EXEC_PRIMITIVES.has(callee) ? openSink() : currentSink();
       sinks.push(sink);
+      breakChain(sink);
       prevWord = undefined;
       i += 1;
       continue;
     }
     if (ch === ")") {
       sinks.pop();
+      breakChain(currentSink());
       prevWord = undefined;
       i += 1;
       continue;
@@ -826,6 +839,7 @@ function execSinkLiterals(source) {
       const frame = templates.at(-1);
       if (frame !== undefined && frame.depth > 0)
         frame.depth += 1;
+      breakChain(currentSink());
       prevWord = undefined;
       i += 1;
       continue;
@@ -837,6 +851,17 @@ function execSinkLiterals(source) {
         if (frame.depth === 0)
           mode = "template";
       }
+      breakChain(currentSink());
+      prevWord = undefined;
+      i += 1;
+      continue;
+    }
+    if (ch === "+") {
+      const sink = currentSink();
+      if (sink !== undefined) {
+        sink.glue = sink.afterPart;
+        sink.afterPart = false;
+      }
       prevWord = undefined;
       i += 1;
       continue;
@@ -845,9 +870,11 @@ function execSinkLiterals(source) {
       const start = i;
       while (i < source.length && isIdentChar(source[i] ?? ""))
         i += 1;
+      breakChain(currentSink());
       prevWord = source.slice(start, i);
       continue;
     }
+    breakChain(currentSink());
     prevWord = undefined;
     i += 1;
   }
@@ -856,7 +883,7 @@ function execSinkLiterals(source) {
   const tail = templates.at(-1);
   if (tail !== undefined)
     addPart(tail.sink, tail.text);
-  return results.map((sink) => sink.parts.join(" "));
+  return results.map((sink) => sink.text.trim());
 }
 var EXEC_PRIMITIVES = new Set([
   "exec",
