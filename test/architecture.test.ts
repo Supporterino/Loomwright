@@ -53,6 +53,15 @@ function isTemplateTextAsset(resolved: string): boolean {
   return extension === ".md" || extension === ".txt";
 }
 
+/** Shared root `test/` support a package test may import: setup, helpers and fixtures. */
+function isRootTestSupport(resolved: string): boolean {
+  return (
+    resolved === "test/setup.ts" ||
+    resolved === "test/helpers.ts" ||
+    resolved.startsWith("test/fixtures/")
+  );
+}
+
 function forbiddenRule(from: PackageName, to: PackageName): string | undefined {
   if (from === to) return undefined;
   switch (from) {
@@ -98,8 +107,8 @@ export function checkImports(files: readonly ImportEdge[]): Violation[] {
       const resolved = posix.normalize(posix.join(posix.dirname(file), specifier));
       const insidePackage = resolved.startsWith(`packages/${from}/`);
       const rootTemplates = isTemplateTextAsset(resolved);
-      // Shared fixtures and setup stay at the root, so package tests may reach test/.
-      const rootTestAssets = isTestFile(file) && resolved.startsWith("test/");
+      // Shared fixtures and setup stay at the root, so package tests may reach those only.
+      const rootTestAssets = isTestFile(file) && isRootTestSupport(resolved);
       if (insidePackage || rootTemplates || rootTestAssets) continue;
       violations.push({
         file,
@@ -215,6 +224,13 @@ describe("dependency rule", () => {
       },
     ]);
     expect(escaped.map((violation) => violation.rule)).toEqual(["escape"]);
+  });
+
+  test("package tests may not reach another root suite", () => {
+    const violations = checkImports([
+      { file: "packages/cli/test/x.test.ts", specifier: "../../../test/docs.test.ts" },
+    ]);
+    expect(violations.map((violation) => violation.rule)).toEqual(["escape"]);
   });
 
   test("the real tree obeys the rule", () => {
