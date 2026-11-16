@@ -270,9 +270,9 @@ describe(`update from a ${SNAPSHOT.version} install`, () => {
 });
 
 describe("compatibility surface", () => {
-  test("an old install still updates", async () => {
+  test.each(["0.12.0", "1.0.0"])("a v%s install still updates", async (version) => {
     const snapshot = JSON.parse(
-      readFileSync(join(import.meta.dir, "../../../test/fixtures/install-0.12.0.json"), "utf8"),
+      readFileSync(join(import.meta.dir, `../../../test/fixtures/install-${version}.json`), "utf8"),
     ) as { version: string; files: Record<string, string> };
     const base = mkdtempSync(join(tmpdir(), "loomwright-previous-"));
     const root = join(base, "app");
