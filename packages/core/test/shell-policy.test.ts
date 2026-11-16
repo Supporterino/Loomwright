@@ -357,6 +357,15 @@ describe("package scripts", () => {
     expect(checkShell("bun x tsc", scriptsCtx)).toEqual({ allowed: true });
   });
 
+  test("bunx, the alias for bun x, inspects the wrapped command too", () => {
+    expect(reason("bunx npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(reason("bunx npm install -g left-pad", scriptsCtx)).toContain(
+      "global installs change the machine",
+    );
+    expect(reason("bunx sh -c 'git push'", scriptsCtx)).toContain("git push");
+    expect(checkShell("bunx tsc", scriptsCtx)).toEqual({ allowed: true });
+  });
+
   test("bun test -g filters test names instead of installing globally", () => {
     expect(checkShell("bun test -g health", realCtx)).toEqual({ allowed: true });
     expect(checkShell("bun --cwd . test -g health", realCtx)).toEqual({ allowed: true });

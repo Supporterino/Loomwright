@@ -1648,7 +1648,7 @@ function checkRecursiveSearch(state, base, args) {
       block(`searches \`${root}\`, which contains secret file \`${found}\`; search specific directories instead`);
   }
 }
-var PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+var PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx"]);
 var BUN_GLOBAL_SUBCOMMANDS = new Set([
   "install",
   "i",
@@ -1695,6 +1695,10 @@ function bunRunScript(args, start) {
   return;
 }
 function checkPackageManager(state, tool, args) {
+  if (tool === "bunx") {
+    checkPackageManager(state, "bun", ["x", ...args]);
+    return;
+  }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
   const sub = cmd?.word;
   const known = tool !== "bun" || sub !== undefined && BUN_BUILTINS.has(sub);

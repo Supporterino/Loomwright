@@ -397,7 +397,7 @@ function checkRecursiveSearch(state: State, base: string, args: readonly string[
 }
 
 /** Package managers whose global installs and publishing the guard refuses. */
-const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun"]);
+const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx"]);
 /** Bun subcommands where `-g` means a global install; `bun test -g` filters test names. */
 const BUN_GLOBAL_SUBCOMMANDS = new Set([
   "install",
@@ -457,6 +457,11 @@ function bunRunScript(args: readonly string[], start: number): string | undefine
  * `bun` case, so this runs before that branch.
  */
 function checkPackageManager(state: State, tool: string, args: readonly string[]): void {
+  // `bunx` is Bun's documented alias for `bun x`: whatever it wraps gets the same checks.
+  if (tool === "bunx") {
+    checkPackageManager(state, "bun", ["x", ...args]);
+    return;
+  }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
   const sub = cmd?.word;
   // A first word that is not a known builtin may be the value of an option this list does not
