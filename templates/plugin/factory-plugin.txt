@@ -1682,6 +1682,18 @@ function bunSubcommand(args) {
   }
   return;
 }
+function bunRunScript(args, start) {
+  for (let i = start;i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (a === "--")
+      return args[i + 1];
+    if (!a.startsWith("-") || a === "-")
+      return a;
+    if (!a.includes("=") && BUN_GLOBAL_VALUE_FLAGS.has(a))
+      i++;
+  }
+  return;
+}
 function checkPackageManager(state, tool, args) {
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
   const sub = cmd?.word;
@@ -1730,7 +1742,8 @@ function expandScripts(state, dir, scripts, keys) {
 }
 function checkPackageScript(state, tool, args) {
   const pos = positionals(args);
-  const sub = pos[0];
+  const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
+  const sub = cmd === undefined ? pos[0] : cmd.word;
   if (sub === undefined || state.cwd === undefined)
     return;
   const dir = state.cwd;
@@ -1759,7 +1772,7 @@ function checkPackageScript(state, tool, args) {
   if (tool === "npm")
     name = NPM_RUN.has(sub) ? pos[1] : NPM_LIFECYCLE[sub];
   else if (sub === "run")
-    name = pos[1];
+    name = cmd === undefined ? pos[1] : bunRunScript(args, cmd.index + 1);
   else if (sub in scripts)
     name = sub;
   else if (tool === "bun" && isJsLike(sub)) {

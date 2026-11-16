@@ -332,6 +332,23 @@ describe("package scripts", () => {
     }
   });
 
+  test("a value-taking flag before bun run does not shift the script name", () => {
+    const flaggedCtx = pkgCtx({ deploy: "git push", test: "git push" });
+    for (const cmd of [
+      "bun --cwd . run deploy",
+      "bun --filter x run test",
+      "bun run --filter x test",
+    ]) {
+      expect(reason(cmd, flaggedCtx)).toContain("git push");
+    }
+  });
+
+  test("bun --cwd . install inspects the preinstall and postinstall hooks", () => {
+    for (const hook of ["preinstall", "postinstall"]) {
+      expect(reason("bun --cwd . install", pkgCtx({ [hook]: "git push" }))).toContain("git push");
+    }
+  });
+
   test("bun x inspects the wrapped command instead of stopping at x", () => {
     expect(reason("bun x npm publish", scriptsCtx)).toContain("publishing is not allowed");
     for (const cmd of ["bun x npm install -g left-pad", "bun x bun add --global left-pad"]) {

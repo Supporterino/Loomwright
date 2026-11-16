@@ -440,6 +440,17 @@ function bunSubcommand(args: readonly string[]): BunSubcommand | undefined {
   return undefined;
 }
 
+/** The script word after `bun run`, skipping the options `run` accepts before the script name. */
+function bunRunScript(args: readonly string[], start: number): string | undefined {
+  for (let i = start; i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (a === "--") return args[i + 1];
+    if (!a.startsWith("-") || a === "-") return a;
+    if (!a.includes("=") && BUN_GLOBAL_VALUE_FLAGS.has(a)) i++;
+  }
+  return undefined;
+}
+
 /**
  * Global installs and publishing change the machine or the registry, never the worktree.
  * `bun` is both a runtime and a package manager, and the interpreter branch returns before the
@@ -530,7 +541,10 @@ function expandScripts(
 /** A project script `npm run X` / `pnpm X` / `yarn X` / `bun run X` runs (with pre/post). */
 function checkPackageScript(state: State, tool: string, args: readonly string[]): void {
   const pos = positionals(args);
-  const sub = pos[0];
+  // Bun's global options can sit before the subcommand (`bun --cwd . run deploy`), so the raw
+  // positionals would read the option's value (`.`) as the subcommand.
+  const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
+  const sub = cmd === undefined ? pos[0] : cmd.word;
   if (sub === undefined || state.cwd === undefined) return;
   const dir = state.cwd;
   const text = state.ctx.readFile?.(join(dir, "package.json"));
@@ -562,7 +576,7 @@ function checkPackageScript(state: State, tool: string, args: readonly string[])
   };
   let name: string | undefined;
   if (tool === "npm") name = NPM_RUN.has(sub) ? pos[1] : NPM_LIFECYCLE[sub];
-  else if (sub === "run") name = pos[1];
+  else if (sub === "run") name = cmd === undefined ? pos[1] : bunRunScript(args, cmd.index + 1);
   else if (sub in scripts) name = sub;
   else if (tool === "bun" && isJsLike(sub)) {
     checkScriptFile(state, sub, "other");
