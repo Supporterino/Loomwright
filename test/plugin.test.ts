@@ -44,6 +44,60 @@ function filesUnder(dir: string): string[] {
   });
 }
 
+// File-writing calls and the index of the argument that names the destination.
+const WRITE_CALLS: Record<string, number> = {
+  writeFileSync: 0,
+  writeFile: 0,
+  appendFileSync: 0,
+  appendFile: 0,
+  copyFileSync: 0,
+  copyFile: 0,
+  outputFile: 0,
+  outputFileSync: 0,
+  renameSync: 0,
+  rename: 0,
+  writePluginBundle: 1,
+};
+const WRITE_CALL = new RegExp(`\\b(${Object.keys(WRITE_CALLS).join("|")})\\s*\\(`, "g");
+const TRACKED_BUNDLE = /templates\s*\/?\s*plugin\s*\/?\s*factory-plugin\.txt/;
+
+/** Arguments of the call whose `(` is at `openParen`, split at its top-level commas. */
+function callArguments(source: string, openParen: number): string[] {
+  const args: string[] = [];
+  let depth = 1;
+  let current = "";
+  for (let i = openParen + 1; i < source.length; i += 1) {
+    const char = source[i] ?? "";
+    if (char === "(") depth += 1;
+    else if (char === ")") depth -= 1;
+    if (depth === 0 || (char === "," && depth === 1)) {
+      args.push(current);
+      current = "";
+      if (depth === 0) break;
+      continue;
+    }
+    current += char;
+  }
+  return args;
+}
+
+function namesTrackedBundle(text: string): boolean {
+  if (TRACKED_BUNDLE.test(text.replace(/["'`,\s]+/g, "/"))) return true;
+  if (/\bPLUGIN_OUT\b/.test(text)) return true;
+  return ["templates", "plugin", "factory-plugin.txt"].every((part) => text.includes(part));
+}
+
+/** True when `source` writes the tracked bundle, by `writePluginBundle` or a direct write. */
+function writesTrackedBundle(source: string): boolean {
+  for (const match of source.matchAll(WRITE_CALL)) {
+    const name = match[1] ?? "";
+    const openParen = (match.index ?? 0) + match[0].length - 1;
+    const destination = callArguments(source, openParen)[WRITE_CALLS[name] ?? 0] ?? "";
+    if (namesTrackedBundle(destination)) return true;
+  }
+  return false;
+}
+
 const ID = "add-x";
 const TASKS = "- [ ] 1.1 Add health\n  - repo: app\n  - deps: none\n  - touches: src/**\n";
 
@@ -152,18 +206,36 @@ describe("plugin bundle", () => {
       .filter((entry) => entry.isDirectory())
       .map((entry) => `packages/${entry.name}/test`)
       .filter((dir) => existsSync(join(ROOT, dir)));
-    const sources = [...filesUnder("test"), ...packageTests.flatMap(filesUnder)]
+    const testWriters = [...filesUnder("test"), ...packageTests.flatMap(filesUnder)]
       .filter((file) => file.endsWith(".test.ts"))
-      .map((file) => readFileSync(join(ROOT, file), "utf8"))
-      .join("\n");
-    // The paren is escaped so this test's own patterns cannot match themselves.
-    expect(sources).not.toMatch(/writePluginBundle\([^)]*PLUGIN_OUT\b/);
-    expect(sources).not.toMatch(/writePluginBundle\([^)]*"templates\/plugin\/factory-plugin\.txt"/);
-    expect(sources).not.toMatch(/writeFileSync\(PLUGIN_OUT\b/);
+      .filter((file) => writesTrackedBundle(readFileSync(join(ROOT, file), "utf8")));
+    expect(testWriters).toEqual([]);
     // The only writer is the build script, run through `bun run build:plugin`.
-    expect(readFileSync(join(ROOT, "scripts", "build-plugin.ts"), "utf8")).toContain(
-      "writePluginBundle(await bundlePlugin(), PLUGIN_OUT)",
+    const scriptWriters = filesUnder("scripts").filter((file) =>
+      writesTrackedBundle(readFileSync(join(ROOT, file), "utf8")),
     );
+    expect(scriptWriters).toEqual(["scripts/build-plugin.ts"]);
+    expect(readFileSync(join(ROOT, "scripts", "build-plugin.ts"), "utf8")).toMatch(
+      /writePluginBundle\(await bundlePlugin\(\), PLUGIN_OUT\)/,
+    );
+  });
+
+  test("the write scan recognizes direct, joined and PLUGIN_OUT writes", () => {
+    // Split strings keep this test's own samples out of the scan above.
+    const call = (...parts: string[]): string => parts.join("");
+    const writers = [
+      call("writeFileSync", '("templates/plugin/factory-plugin.txt", "x")'),
+      call("writeFileSync", '(join(ROOT, "templates", "plugin", "factory-plugin.txt"), "x")'),
+      call("writePluginBundle", '("x", join(ROOT, "templates", "plugin", "factory-plugin.txt"))'),
+      call("writeFileSync", '(PLUGIN_OUT, "x")'),
+    ];
+    for (const source of writers) expect(writesTrackedBundle(source)).toBe(true);
+    expect(
+      writesTrackedBundle(call("writeFileSync", '(join(root, "factory-plugin.txt"), "x")')),
+    ).toBe(false);
+    expect(
+      writesTrackedBundle(call("writeFileSync", '(file, readFileSync(PLUGIN_OUT, "utf8"))')),
+    ).toBe(false);
   });
 
   test("the bundled plugin names Loomwright", () => {
