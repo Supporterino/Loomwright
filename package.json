@@ -17,7 +17,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun scripts/build-plugin.ts && bun build packages/cli/src/bin.ts --target=node --outfile packages/cli/dist/cli.js && bun scripts/write-dist-package.ts",
+    "build": "bun scripts/build-plugin.ts && bun build packages/cli/src/bin.ts --target=node --outfile packages/cli/dist/cli.js && bun scripts/write-dist-package.ts && bun scripts/prepare-package.ts",
     "dev": "bun packages/cli/src/bin.ts",
     "test": "bun test --timeout 60000 --parallel",
     "test:serial": "bun test --timeout 60000",
@@ -30,9 +30,7 @@
     "changeset": "changeset",
     "release:version": "changeset version && bun scripts/sync-version.ts && bun scripts/release-snapshot.ts",
     "build:plugin": "bun scripts/build-plugin.ts",
-    "vendor:ponytail": "bun scripts/vendor-ponytail.ts",
-    "prepack": "bun run build",
-    "prepublishOnly": "bun run check"
+    "vendor:ponytail": "bun scripts/vendor-ponytail.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",

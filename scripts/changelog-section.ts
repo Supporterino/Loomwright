@@ -27,6 +27,6 @@ if (import.meta.main) {
     console.error("usage: bun scripts/changelog-section.ts <version>");
     process.exit(1);
   }
-  const text = readFileSync(join(import.meta.dir, "..", "CHANGELOG.md"), "utf8");
+  const text = readFileSync(join(import.meta.dir, "..", "packages", "cli", "CHANGELOG.md"), "utf8");
   process.stdout.write(`${changelogSection(text, version)}\n`);
 }
