@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -109,6 +110,53 @@ describe("published package", () => {
     if (pack.status !== 0) throw new Error(`npm pack failed: ${pack.stderr}`);
 
     expect(packPaths(pack.stdout).sort()).toEqual(BASELINE_TARBALL);
+  });
+
+  test("packing from packages/cli without a prior build reaches dist/cli.js", () => {
+    const root = tempRoot();
+    write(
+      root,
+      "package.json",
+      JSON.stringify({
+        name: "fixture",
+        private: true,
+        scripts: { build: "bun scripts/build.ts" },
+      }),
+    );
+    write(
+      root,
+      "scripts/build.ts",
+      [
+        'import { mkdirSync, writeFileSync } from "node:fs";',
+        'mkdirSync("packages/cli/dist", { recursive: true });',
+        'writeFileSync("packages/cli/dist/cli.js", "// bundle\\n");',
+        'writeFileSync("packages/cli/dist/package.json", \'{ "type": "module" }\\n\');',
+        "",
+      ].join("\n"),
+    );
+    mkdirSync(join(root, "packages", "cli"), { recursive: true });
+    copyFileSync(join(CLI, "package.json"), join(root, "packages/cli/package.json"));
+    write(root, "packages/cli/README.md", "# Readme\n");
+    write(root, "packages/cli/LICENSE", "MIT\n");
+    const bundle = join(root, "packages", "cli", "dist", "cli.js");
+    expect(existsSync(bundle)).toBe(false);
+
+    const pack = spawnSync("npm", ["pack", "--dry-run"], {
+      cwd: join(root, "packages/cli"),
+      encoding: "utf8",
+    });
+    if (pack.status !== 0) throw new Error(`npm pack failed: ${pack.stderr}`);
+
+    expect(existsSync(bundle)).toBe(true);
+  });
+
+  test("publishing from packages/cli runs the root gate first", () => {
+    const manifest: unknown = JSON.parse(read(ROOT, "packages/cli/package.json"));
+    if (!isRecord(manifest) || !isRecord(manifest.scripts)) {
+      throw new Error("packages/cli/package.json has no scripts object");
+    }
+    expect(manifest.scripts.prepack).toBe("cd ../.. && bun run build");
+    expect(manifest.scripts.prepublishOnly).toBe("cd ../.. && bun run check");
   });
 
   test("the version flag and both binaries still work", () => {

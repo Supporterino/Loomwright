@@ -24,6 +24,10 @@
     "LICENSE",
     "templates/addons/ponytail/LICENSE"
   ],
+  "scripts": {
+    "prepack": "cd ../.. && bun run build",
+    "prepublishOnly": "cd ../.. && bun run check"
+  },
   "engines": {
     "node": ">=20.3",
     "bun": ">=1.3.0"

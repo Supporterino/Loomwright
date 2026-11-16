@@ -1,8 +1,8 @@
 /**
  * Copies the repository-level files the published package ships into packages/cli, so
  * `npm pack` in packages/cli produces the same tarball as before the workspace split.
- * These copies are build artifacts: packing without `bun run build` produces a short
- * tarball (README.md, LICENSE and the ponytail licence missing).
+ * These copies are build artifacts: packing with `npm pack --ignore-scripts` and no prior
+ * build produces a short tarball (README.md, LICENSE and the ponytail licence missing).
  *
  *   bun run build
  */
