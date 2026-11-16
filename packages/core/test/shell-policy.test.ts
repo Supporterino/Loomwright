@@ -318,6 +318,18 @@ describe("package scripts", () => {
     }
   });
 
+  test("a value-taking flag before the subcommand does not hide publish or -g", () => {
+    for (const cmd of ["bun --cwd . publish", "bun --cwd=. publish"]) {
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    }
+    for (const cmd of [
+      "bun --cwd . add -g left-pad",
+      "bun --filter workspace add --global left-pad",
+    ]) {
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    }
+  });
+
   test("bun x inspects the wrapped command instead of stopping at x", () => {
     expect(reason("bun x npm publish", scriptsCtx)).toContain("publishing is not allowed");
     for (const cmd of ["bun x npm install -g left-pad", "bun x bun add --global left-pad"]) {
@@ -328,6 +340,7 @@ describe("package scripts", () => {
 
   test("bun test -g filters test names instead of installing globally", () => {
     expect(checkShell("bun test -g health", realCtx)).toEqual({ allowed: true });
+    expect(checkShell("bun --cwd . test -g health", realCtx)).toEqual({ allowed: true });
   });
 
   test("bun test and bun add treat login as a test filter or package, not publishing", () => {

@@ -411,25 +411,61 @@ const BUN_GLOBAL_SUBCOMMANDS = new Set([
   "unlink",
 ]);
 
+/** Bun's global options that take a value, so the value is not the subcommand (`bun --cwd . publish`). */
+const BUN_GLOBAL_VALUE_FLAGS = new Set([
+  "-c",
+  "--config",
+  "--cwd",
+  "--env-file",
+  "--filter",
+  "--preload",
+]);
+
+interface BunSubcommand {
+  readonly index: number;
+  readonly word: string;
+}
+
+/** The first word Bun reads as a subcommand, after skipping its global options and their values. */
+function bunSubcommand(args: readonly string[]): BunSubcommand | undefined {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (a === "--") {
+      const next = args[i + 1];
+      return next === undefined ? undefined : { index: i + 1, word: next };
+    }
+    if (!a.startsWith("-") || a === "-") return { index: i, word: a };
+    if (!a.includes("=") && BUN_GLOBAL_VALUE_FLAGS.has(a)) i++;
+  }
+  return undefined;
+}
+
 /**
  * Global installs and publishing change the machine or the registry, never the worktree.
  * `bun` is both a runtime and a package manager, and the interpreter branch returns before the
  * `bun` case, so this runs before that branch.
  */
 function checkPackageManager(state: State, tool: string, args: readonly string[]): void {
-  const sub = positionals(args)[0];
+  const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
+  const sub = cmd?.word;
+  // A first word that is not a known builtin may be the value of an option this list does not
+  // cover, so fall back to scanning every argument rather than letting it hide a later deny.
+  const known = tool !== "bun" || (sub !== undefined && BUN_BUILTINS.has(sub));
   const installSide = tool !== "bun" || (sub !== undefined && BUN_GLOBAL_SUBCOMMANDS.has(sub));
+  const globalWord =
+    tool === "bun"
+      ? sub === "global" || sub === "link"
+      : args[0] === "global" || args[0] === "link";
   if (
-    (installSide &&
+    ((installSide || !known) &&
       args.some((a) => a === "-g" || a === "--global" || a === "--location=global")) ||
-    args[0] === "global" ||
-    args[0] === "link"
+    globalWord
   )
     block(`${tool} global installs change the machine, not the worktree`);
   // `bun x <command>` runs whatever it wraps, so the wrapped command gets the same checks.
-  if (tool === "bun" && sub === "x") {
+  if (cmd?.word === "x") {
     // Skip `bun x`'s own leading flags (`--bun`, `-p/--package <pkg>`) to reach the command.
-    let i = args.indexOf(sub) + 1;
+    let i = cmd.index + 1;
     while (i < args.length && (args[i] ?? "").startsWith("-")) {
       i += args[i] === "-p" || args[i] === "--package" ? 2 : 1;
     }
@@ -451,8 +487,9 @@ function checkPackageManager(state: State, tool: string, args: readonly string[]
     return;
   }
   // For `bun` only the subcommand publishes; later positionals are test filters or package
-  // names (`bun test login`, `bun add login`).
-  const publishArgs = tool === "bun" ? (sub === undefined ? [] : [sub]) : args;
+  // names (`bun test login`, `bun add login`). An unrecognised first word keeps the whole-args
+  // scan so a flag value cannot hide `publish`.
+  const publishArgs = tool === "bun" && known && sub !== undefined ? [sub] : args;
   if (
     publishArgs.some(
       (a) =>
