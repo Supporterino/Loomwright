@@ -198,8 +198,8 @@
       "template": "plugin",
       "templateVersion": "1.0.0",
       "mode": "file",
-      "sha256": "bc86fe8ba238ec4294f0169db311aabc0ffb4993fc4f66ffa6fbdb34c571a35f",
-      "blob": "58b02d39eff93b404fc54c6a17d5a9e90bef6550"
+      "sha256": "5b1efb6aaeab6a9c82e6767bd67e82ba4e2e85be932023c5b37c871e7da063b6",
+      "blob": "7f664226b6e7f026ed35bbf03df43ba6a8476b44"
     },
     ".opencode/schemas/factory.config.schema.json": {
       "template": "config-schema",

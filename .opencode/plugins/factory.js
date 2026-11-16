@@ -685,6 +685,298 @@ var sessionContextFile = (workspace, sessionId) => join6(workspace, ".factory", 
 // packages/core/src/policy/shell.ts
 import { basename as basename2, dirname as dirname3, isAbsolute as isAbsolute3, join as join7, normalize as normalize2, relative as relative2, resolve as resolve4 } from "path";
 
+// packages/core/src/policy/script-text.ts
+function execSinkLiterals(source) {
+  const results = [];
+  const sinks = [];
+  const templates = [];
+  let mode = "code";
+  let i = 0;
+  let prevWord;
+  let stringQuote = "";
+  let stringSink;
+  let stringText = "";
+  let regexAllowed = true;
+  let regexInClass = false;
+  const currentSink = () => sinks.at(-1);
+  const addPart = (sink, text) => {
+    if (sink === undefined)
+      return;
+    if (sink.glue)
+      sink.text += text;
+    else if (text.trim() !== "")
+      sink.text = sink.text === "" ? text : `${sink.text} ${text}`;
+    sink.glue = false;
+    sink.afterPart = true;
+  };
+  const breakChain = (sink) => {
+    if (sink === undefined)
+      return;
+    sink.glue = false;
+    sink.afterPart = false;
+  };
+  const openSink = () => {
+    const sink = { text: "", glue: false, afterPart: false };
+    results.push(sink);
+    return sink;
+  };
+  while (i < source.length) {
+    const ch = source[i] ?? "";
+    if (mode === "line") {
+      if (ch === `
+`)
+        mode = "code";
+      i += 1;
+      continue;
+    }
+    if (mode === "block") {
+      if (ch === "*" && source[i + 1] === "/") {
+        mode = "code";
+        i += 2;
+      } else {
+        i += 1;
+      }
+      continue;
+    }
+    if (mode === "string") {
+      if (ch === "\\") {
+        const next = source[i + 1];
+        if (next !== undefined)
+          stringText += next;
+        i += next === undefined ? 1 : 2;
+      } else if (ch === stringQuote) {
+        addPart(stringSink, stringText);
+        stringSink = undefined;
+        stringText = "";
+        mode = "code";
+        i += 1;
+      } else {
+        stringText += ch;
+        i += 1;
+      }
+      continue;
+    }
+    if (mode === "template") {
+      const frame = templates.at(-1);
+      if (frame === undefined) {
+        mode = "code";
+        continue;
+      }
+      if (ch === "\\") {
+        const next = source[i + 1];
+        if (next !== undefined)
+          frame.text += next;
+        i += next === undefined ? 1 : 2;
+      } else if (ch === "`") {
+        addPart(frame.sink, frame.text);
+        templates.pop();
+        sinks.pop();
+        prevWord = undefined;
+        mode = "code";
+        i += 1;
+      } else if (ch === "$" && source[i + 1] === "{") {
+        addPart(frame.sink, frame.text);
+        frame.text = "";
+        frame.depth = 1;
+        prevWord = undefined;
+        regexAllowed = true;
+        mode = "code";
+        i += 2;
+      } else {
+        frame.text += ch;
+        i += 1;
+      }
+      continue;
+    }
+    if (mode === "regex") {
+      if (ch === "\\") {
+        i += source[i + 1] === undefined ? 1 : 2;
+      } else if (ch === `
+`) {
+        mode = "code";
+        regexAllowed = true;
+        i += 1;
+      } else if (ch === "[") {
+        regexInClass = true;
+        i += 1;
+      } else if (ch === "]") {
+        regexInClass = false;
+        i += 1;
+      } else if (ch === "/" && !regexInClass) {
+        mode = "code";
+        regexAllowed = false;
+        i += 1;
+        while (i < source.length && isIdentChar(source[i] ?? ""))
+          i += 1;
+      } else {
+        i += 1;
+      }
+      continue;
+    }
+    if (ch === " " || ch === "\t" || ch === `
+` || ch === "\r") {
+      i += 1;
+      continue;
+    }
+    if (ch === "/" && source[i + 1] === "/") {
+      mode = "line";
+      i += 2;
+      continue;
+    }
+    if (ch === "/" && source[i + 1] === "*") {
+      mode = "block";
+      i += 2;
+      continue;
+    }
+    if (ch === "/" && regexAllowed) {
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexInClass = false;
+      mode = "regex";
+      i += 1;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      stringQuote = ch;
+      stringSink = currentSink();
+      stringText = "";
+      prevWord = undefined;
+      regexAllowed = false;
+      mode = "string";
+      i += 1;
+      continue;
+    }
+    if (ch === "`") {
+      const tag = prevWord;
+      const sink = tag !== undefined && EXEC_PRIMITIVES.has(tag) ? openSink() : currentSink();
+      sinks.push(sink);
+      templates.push({ sink, depth: 0, text: "" });
+      prevWord = undefined;
+      regexAllowed = false;
+      mode = "template";
+      i += 1;
+      continue;
+    }
+    if (ch === "(") {
+      const callee = prevWord;
+      const sink = callee !== undefined && EXEC_PRIMITIVES.has(callee) ? openSink() : currentSink();
+      sinks.push(sink);
+      breakChain(sink);
+      prevWord = undefined;
+      regexAllowed = true;
+      i += 1;
+      continue;
+    }
+    if (ch === ")") {
+      sinks.pop();
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexAllowed = false;
+      i += 1;
+      continue;
+    }
+    if (ch === "]") {
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexAllowed = false;
+      i += 1;
+      continue;
+    }
+    if (ch === "{") {
+      const frame = templates.at(-1);
+      if (frame !== undefined && frame.depth > 0)
+        frame.depth += 1;
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexAllowed = true;
+      i += 1;
+      continue;
+    }
+    if (ch === "}") {
+      const frame = templates.at(-1);
+      if (frame !== undefined && frame.depth > 0) {
+        frame.depth -= 1;
+        if (frame.depth === 0)
+          mode = "template";
+      }
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexAllowed = false;
+      i += 1;
+      continue;
+    }
+    if ((ch === "+" || ch === "-") && source[i + 1] === ch) {
+      breakChain(currentSink());
+      prevWord = undefined;
+      regexAllowed = false;
+      i += 2;
+      continue;
+    }
+    if (ch === "+") {
+      const sink = currentSink();
+      if (sink !== undefined) {
+        sink.glue = sink.afterPart;
+        sink.afterPart = false;
+      }
+      prevWord = undefined;
+      regexAllowed = true;
+      i += 1;
+      continue;
+    }
+    if (isIdentChar(ch)) {
+      const start = i;
+      while (i < source.length && isIdentChar(source[i] ?? ""))
+        i += 1;
+      breakChain(currentSink());
+      prevWord = source.slice(start, i);
+      regexAllowed = REGEX_PREFIX_WORDS.has(prevWord);
+      continue;
+    }
+    breakChain(currentSink());
+    prevWord = undefined;
+    regexAllowed = true;
+    i += 1;
+  }
+  if (mode === "string")
+    addPart(stringSink, stringText);
+  const tail = templates.at(-1);
+  if (tail !== undefined)
+    addPart(tail.sink, tail.text);
+  return results.map((sink) => sink.text.trim());
+}
+var EXEC_PRIMITIVES = new Set([
+  "exec",
+  "execFile",
+  "execSync",
+  "execFileSync",
+  "spawn",
+  "spawnSync",
+  "system",
+  "eval",
+  "Function",
+  "sh",
+  "$"
+]);
+var REGEX_PREFIX_WORDS = new Set([
+  "await",
+  "case",
+  "delete",
+  "do",
+  "else",
+  "in",
+  "instanceof",
+  "new",
+  "of",
+  "return",
+  "throw",
+  "typeof",
+  "void",
+  "yield"
+]);
+function isIdentChar(ch) {
+  return ch === "$" || ch === "_" || /[A-Za-z0-9]/.test(ch);
+}
+
 // packages/core/src/policy/shell-parse.ts
 class ShellParseError extends Error {
 }
@@ -1145,6 +1437,35 @@ var BREW_READ_ONLY_FLAGS = new Set([
   "--version",
   "--help"
 ]);
+var BUN_BUILTINS = new Set([
+  "test",
+  "build",
+  "install",
+  "i",
+  "add",
+  "a",
+  "remove",
+  "rm",
+  "update",
+  "link",
+  "unlink",
+  "pm",
+  "x",
+  "create",
+  "c",
+  "init",
+  "run",
+  "repl",
+  "upgrade",
+  "publish",
+  "outdated",
+  "audit",
+  "why",
+  "whoami",
+  "patch",
+  "patch-commit",
+  "help"
+]);
 var BREW_READ_ONLY_SUBCOMMANDS = new Set([
   "info",
   "list",
@@ -1162,6 +1483,9 @@ var BREW_READ_ONLY_SUBCOMMANDS = new Set([
   "tap-info"
 ]);
 var BREW_GLOBAL_FLAGS = new Set(["-v", "--verbose", "-d", "--debug", "-q", "--quiet"]);
+function isJsLike(path) {
+  return /\.[cm]?[jt]sx?$/.test(path);
+}
 function scanText(text) {
   for (const t of [text, text.replace(/(['"`])\s*\+\s*\1/g, "")]) {
     if (/\bgit\b[\s"',[\]()]+push\b/.test(t))
@@ -1324,16 +1648,125 @@ function checkRecursiveSearch(state, base, args) {
       block(`searches \`${root}\`, which contains secret file \`${found}\`; search specific directories instead`);
   }
 }
+var PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx"]);
+var BUN_GLOBAL_SUBCOMMANDS = new Set([
+  "install",
+  "i",
+  "add",
+  "a",
+  "remove",
+  "rm",
+  "update",
+  "link",
+  "unlink"
+]);
+var BUN_GLOBAL_VALUE_FLAGS = new Set([
+  "-c",
+  "--config",
+  "--cwd",
+  "--env-file",
+  "--filter",
+  "--preload"
+]);
+function bunSubcommand(args) {
+  for (let i = 0;i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (a === "--") {
+      const next = args[i + 1];
+      return next === undefined ? undefined : { index: i + 1, word: next };
+    }
+    if (!a.startsWith("-") || a === "-")
+      return { index: i, word: a };
+    if (!a.includes("=") && BUN_GLOBAL_VALUE_FLAGS.has(a))
+      i++;
+  }
+  return;
+}
+function bunRunScript(args, start) {
+  for (let i = start;i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (a === "--")
+      return args[i + 1];
+    if (!a.startsWith("-") || a === "-")
+      return a;
+    if (!a.includes("=") && BUN_GLOBAL_VALUE_FLAGS.has(a))
+      i++;
+  }
+  return;
+}
+function checkPackageManager(state, tool, args, outer) {
+  if (tool === "bunx") {
+    checkPackageManager(state, "bun", ["x", ...args], outer);
+    return;
+  }
+  const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
+  const sub = cmd?.word;
+  const known = tool !== "bun" || sub !== undefined && BUN_BUILTINS.has(sub);
+  const installSide = tool !== "bun" || sub !== undefined && BUN_GLOBAL_SUBCOMMANDS.has(sub);
+  const globalWord = tool === "bun" ? sub === "global" || sub === "link" : args[0] === "global" || args[0] === "link";
+  if ((installSide || !known) && args.some((a) => a === "-g" || a === "--global" || a === "--location=global") || globalWord)
+    block(`${tool} global installs change the machine, not the worktree`);
+  if (cmd?.word === "x") {
+    let i = cmd.index + 1;
+    while (i < args.length && (args[i] ?? "").startsWith("-")) {
+      i += args[i] === "-p" || args[i] === "--package" ? 2 : 1;
+    }
+    const wrapped = args.slice(i);
+    if (wrapped.length === 0)
+      return;
+    if (++state.depth > 25)
+      block("command nests too deeply to inspect");
+    try {
+      scoped(state, () => checkSimple(state, {
+        kind: "simple",
+        assigns: [],
+        words: wrapped,
+        redirects: [...outer.redirects],
+        substitutions: []
+      }, outer.stdin));
+    } finally {
+      state.depth--;
+    }
+    return;
+  }
+  const publishArgs = tool === "bun" && known && sub !== undefined ? [sub] : args;
+  if (publishArgs.some((a) => a === "publish" || a === "login" || a === "adduser" || a === "unpublish" || a === "deprecate"))
+    block(`${tool} publishing is not allowed`);
+}
+var BUN_INSTALL_SUBCOMMANDS = new Set(["install", "i", "add", "a", "remove", "rm", "update"]);
+function expandScripts(state, dir, scripts, keys) {
+  for (const key of keys) {
+    const body = scripts[key];
+    if (typeof body !== "string")
+      continue;
+    const expansion = `${dir}\x00${key}`;
+    if (state.expanding.has(expansion))
+      block(`script \`${key}\` expands into itself`);
+    state.expanding.add(expansion);
+    try {
+      checkScript(state, body);
+    } finally {
+      state.expanding.delete(expansion);
+    }
+  }
+}
 function checkPackageScript(state, tool, args) {
   const pos = positionals(args);
-  const sub = pos[0];
+  const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
+  const sub = cmd === undefined ? pos[0] : cmd.word;
   if (sub === undefined || state.cwd === undefined)
     return;
-  const text = state.ctx.readFile?.(join7(state.cwd, "package.json"));
+  const dir = state.cwd;
+  const text = state.ctx.readFile?.(join7(dir, "package.json"));
   let scripts = {};
   try {
     scripts = (text === undefined ? {} : JSON.parse(text).scripts) ?? {};
   } catch {
+    return;
+  }
+  if (tool === "bun" && sub !== "run" && BUN_BUILTINS.has(sub)) {
+    if (BUN_INSTALL_SUBCOMMANDS.has(sub))
+      expandScripts(state, dir, scripts, ["preinstall", "postinstall"]);
     return;
   }
   const NPM_RUN = new Set(["run", "run-script", "rum", "urn"]);
@@ -1349,24 +1782,20 @@ function checkPackageScript(state, tool, args) {
   if (tool === "npm")
     name = NPM_RUN.has(sub) ? pos[1] : NPM_LIFECYCLE[sub];
   else if (sub === "run")
-    name = pos[1];
+    name = cmd === undefined ? pos[1] : bunRunScript(args, cmd.index + 1);
   else if (sub in scripts)
     name = sub;
-  else if (tool === "bun" && /\.[cm]?[jt]sx?$/.test(sub)) {
+  else if (tool === "bun" && isJsLike(sub)) {
     checkScriptFile(state, sub, "other");
     return;
   }
   if (name === undefined)
     return;
-  if (tool === "bun" && !(name in scripts) && /\.[cm]?[jt]sx?$/.test(name)) {
+  if (tool === "bun" && !(name in scripts) && isJsLike(name)) {
     checkScriptFile(state, name, "other");
     return;
   }
-  for (const key of [`pre${name}`, name, `post${name}`]) {
-    const body = scripts[key];
-    if (typeof body === "string")
-      checkScript(state, body);
-  }
+  expandScripts(state, dir, scripts, [`pre${name}`, name, `post${name}`]);
 }
 function parseMakefile(text) {
   const vars = new Map;
@@ -1826,6 +2255,12 @@ function checkScriptFile(state, word, interpreter) {
   const isShell = interpreter === "shell" ? shebang === "" || /\b(sh|bash|zsh|dash|ksh)\b/.test(shebang) : false;
   if (isShell) {
     checkScript(state, text);
+  } else if (isJsLike(word)) {
+    for (const literal of execSinkLiterals(text)) {
+      const found = scanText(literal);
+      if (found)
+        block(`${word}: ${found}`);
+    }
   } else {
     const found = scanText(text);
     if (found)
@@ -2168,6 +2603,8 @@ function checkSimple(state, cmd, stdin) {
     state.cwd = undefined;
     return;
   }
+  if (PACKAGE_MANAGERS.has(base))
+    checkPackageManager(state, base, args, { redirects: cmd.redirects, stdin });
   const interpreter = base.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     const operands = [];
@@ -2373,11 +2810,6 @@ function checkSimple(state, cmd, stdin) {
     case "pnpm":
     case "yarn":
     case "bun":
-      if (args.some((a) => a === "-g" || a === "--global" || a === "--location=global") || args[0] === "global" || args[0] === "link")
-        return block(`${base} global installs change the machine, not the worktree`);
-      if (args.some((a) => a === "publish" || a === "login" || a === "adduser" || a === "unpublish" || a === "deprecate")) {
-        return block(`${base} publishing is not allowed`);
-      }
       checkPackageScript(state, base, args);
       return;
     case "make":
@@ -2499,7 +2931,14 @@ function checkScript(state, text) {
   return;
 }
 function checkShell(command, ctx) {
-  const state = { ctx, aliases: new Map, depth: 0, cwd: ctx.cwd, written: new Set };
+  const state = {
+    ctx,
+    aliases: new Map,
+    depth: 0,
+    cwd: ctx.cwd,
+    written: new Set,
+    expanding: new Set
+  };
   try {
     checkScript(state, command);
     return { allowed: true };
