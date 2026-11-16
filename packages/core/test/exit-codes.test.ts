@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { ExitCode } from "../src/exit-codes.ts";
 
 describe("exit codes", () => {
-  test("ExitCode still exposes the documented values", () => {
+  test("exit codes are unchanged: ExitCode still exposes the documented values", () => {
     expect(ExitCode).toEqual({
       Ok: 0,
       Failure: 1,
@@ -15,7 +15,7 @@ describe("exit codes", () => {
     });
   });
 
-  test("each documented meaning keeps its existing code", () => {
+  test("exit codes are unchanged: each documented meaning keeps its existing code", () => {
     expect(ExitCode.Ok).toBe(0);
     expect(ExitCode.Failure).toBe(1);
     expect(ExitCode.Usage).toBe(2);
