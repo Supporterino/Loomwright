@@ -217,9 +217,11 @@ describe("published package", () => {
   });
 
   test("the build bundles a self-contained CLI and the plugin without writing tracked files", async () => {
-    // Built in memory so a stale committed bundle fails here instead of being regenerated on
-    // disk, where a parallel `test/plugin.test.ts` could read the fresh output and pass.
-    expect(await bundlePlugin()).toBe(read(ROOT, "templates/plugin/factory-plugin.txt"));
+    // Freshness of the committed plugin bundle is asserted in test/plugin.test.ts; here only
+    // that bundling is in-memory, so a parallel reader never sees a rewritten tracked file.
+    const tracked = read(ROOT, "templates/plugin/factory-plugin.txt");
+    await bundlePlugin();
+    expect(read(ROOT, "templates/plugin/factory-plugin.txt")).toBe(tracked);
 
     const dir = tempRoot();
     const build = await Bun.build({
