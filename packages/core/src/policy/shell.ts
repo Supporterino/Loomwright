@@ -456,10 +456,16 @@ function bunRunScript(args: readonly string[], start: number): string | undefine
  * `bun` is both a runtime and a package manager, and the interpreter branch returns before the
  * `bun` case, so this runs before that branch.
  */
-function checkPackageManager(state: State, tool: string, args: readonly string[]): void {
+function checkPackageManager(
+  state: State,
+  tool: string,
+  args: readonly string[],
+  /** The outer command's input: `bun x` hands its redirects and stdin to what it wraps. */
+  outer: { readonly redirects: readonly Redirect[]; readonly stdin: string | undefined | null },
+): void {
   // `bunx` is Bun's documented alias for `bun x`: whatever it wraps gets the same checks.
   if (tool === "bunx") {
-    checkPackageManager(state, "bun", ["x", ...args]);
+    checkPackageManager(state, "bun", ["x", ...args], outer);
     return;
   }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
@@ -493,8 +499,14 @@ function checkPackageManager(state: State, tool: string, args: readonly string[]
       scoped(state, () =>
         checkSimple(
           state,
-          { kind: "simple", assigns: [], words: wrapped, redirects: [], substitutions: [] },
-          undefined,
+          {
+            kind: "simple",
+            assigns: [],
+            words: wrapped,
+            redirects: [...outer.redirects],
+            substitutions: [],
+          },
+          outer.stdin,
         ),
       );
     } finally {
@@ -1451,7 +1463,8 @@ function checkSimple(
     state.cwd = undefined;
     return;
   }
-  if (PACKAGE_MANAGERS.has(base)) checkPackageManager(state, base, args);
+  if (PACKAGE_MANAGERS.has(base))
+    checkPackageManager(state, base, args, { redirects: cmd.redirects, stdin });
   const interpreter = base.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     // -i edits the operands in place: they are writes.

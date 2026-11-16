@@ -366,6 +366,15 @@ describe("package scripts", () => {
     expect(checkShell("bunx tsc", scriptsCtx)).toEqual({ allowed: true });
   });
 
+  test("bun x passes piped, redirected and here-doc input to the wrapped interpreter", () => {
+    expect(reason("printf 'git push' | bun x sh", scriptsCtx)).toContain("git push");
+    expect(reason("printf 'git push' | bunx bash", scriptsCtx)).toContain("git push");
+    expect(reason("bun x sh < scripts/release.sh", scriptsCtx)).toContain("git push");
+    expect(reason("bun x sh <<EOF\ngit push\nEOF", scriptsCtx)).toContain("git push");
+    expect(reason("cat x | bun x sh", scriptsCtx)).toContain("pipes generated input");
+    expect(checkShell("printf 'go test' | bun x sh", scriptsCtx)).toEqual({ allowed: true });
+  });
+
   test("bun test -g filters test names instead of installing globally", () => {
     expect(checkShell("bun test -g health", realCtx)).toEqual({ allowed: true });
     expect(checkShell("bun --cwd . test -g health", realCtx)).toEqual({ allowed: true });
