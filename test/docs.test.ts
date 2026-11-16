@@ -61,6 +61,7 @@ describe("documentation", () => {
     const readme = read("README.md");
     expect(readme).toContain("packages/core/src/config/schema.ts");
     expect(readme).toContain("packages/core/test/detect-units.test.ts");
+    expect(readme).toContain("packages/cli/test/opencode-runtime.e2e.test.ts");
     expect(readme).toContain("packages/cli/dist/cli.js");
     expect(readme).toContain("packages/core/src/version.ts");
     expect(readme).toContain("packages/protocol");

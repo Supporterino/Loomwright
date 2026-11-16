@@ -258,7 +258,7 @@ bun install
 bun run check          # biome + tsc + bun test
 bun run build          # packages/cli/dist/cli.js and the bundled plugin
 bun run changeset      # record a release note for this PR
-AI_FACTORY_E2E=1 bun test packages/core/test/opencode-runtime.e2e.test.ts   # real opencode, stub model server
+AI_FACTORY_E2E=1 bun test packages/cli/test/opencode-runtime.e2e.test.ts   # real opencode, stub model server
 bun scripts/e2e-transcript.ts single        # re-record docs/e2e/single.md (also: submodules)
 ```
 
