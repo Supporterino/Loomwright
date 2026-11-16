@@ -42,6 +42,15 @@ describe("script text", () => {
     expect(scan('note("the guard blocks git push")')).toEqual([]);
   });
 
+  test("a literal moved into a variable is not a sink argument (documented narrowing)", () => {
+    // A sink call with no literal argument contributes one empty join, so filter those: the
+    // point is that nothing scannable reaches the call.
+    const scannable = (source: string): string[] =>
+      scan(source).filter((literal) => literal.trim() !== "");
+    expect(scannable('const c = "git push"; execSync(c)')).toEqual([]);
+    expect(scannable('const argv = ["git", "push"]; spawnSync(argv)')).toEqual([]);
+  });
+
   test("a comment does not block in any script type", () => {
     expect(scan("// git push\n")).toEqual([]);
     expect(scan("/* git push */")).toEqual([]);

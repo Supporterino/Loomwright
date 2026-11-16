@@ -24,6 +24,8 @@ const FILES: Record<string, string> = {
   [`${WT}/scripts/split-push.ts`]: 'spawnSync("git", ["pu" + "sh"]);\n',
   [`${WT}/notes.ts`]: 'note("the guard blocks git push");\n',
   [`${WT}/console-notes.ts`]: 'console.log("git push");\n',
+  // The documented narrowing: the whole-text scan caught this, the lexer does not.
+  [`${WT}/scripts/indirect.ts`]: 'const c = "git push";\nexecSync(c);\n',
   [`${WT}/scripts/comment.ts`]: "// git push\nexport const x = 1;\n",
   [`${WT}/scripts/block-comment.ts`]: "/* git push */\nexport const x = 1;\n",
   [`${WT}/scripts/commented.sh`]:
@@ -373,6 +375,12 @@ describe("script files are inspected as code", () => {
 
   test("a script that splits `git push` across `+` literals is blocked", () => {
     expect(reason("bun scripts/split-push.ts")).toContain("git push");
+  });
+
+  test("a literal moved into a variable is the one documented narrowing", () => {
+    // The old whole-text scan caught this; the lexer only joins literals written inside the
+    // call. The spec accepts it, so pin the behaviour instead of leaving it implicit.
+    expect(verdict("bun scripts/indirect.ts")).toEqual({ allowed: true });
   });
 
   test("git push inside a note(...) argument is allowed", () => {
