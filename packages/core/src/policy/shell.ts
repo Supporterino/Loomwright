@@ -145,6 +145,39 @@ const BREW_READ_ONLY_FLAGS = new Set([
   "--version",
   "--help",
 ]);
+/**
+ * Bun's own subcommands. Bun resolves these itself and never runs a same-named `scripts` entry,
+ * so `bun test` is the test runner, not `scripts.test`, and expanding the script would loop.
+ */
+const BUN_BUILTINS = new Set([
+  "test",
+  "build",
+  "install",
+  "i",
+  "add",
+  "a",
+  "remove",
+  "rm",
+  "update",
+  "link",
+  "unlink",
+  "pm",
+  "x",
+  "create",
+  "c",
+  "init",
+  "run",
+  "repl",
+  "upgrade",
+  "publish",
+  "outdated",
+  "audit",
+  "why",
+  "whoami",
+  "patch",
+  "patch-commit",
+  "help",
+]);
 const BREW_READ_ONLY_SUBCOMMANDS = new Set([
   "info",
   "list",
@@ -192,6 +225,8 @@ interface State {
   cwd: string | undefined;
   /** Paths this command line writes (to catch write-then-execute in one go). */
   readonly written: Set<string>;
+  /** Package-script expansions in progress, keyed `<dir>\0<key>`, to detect cycles. */
+  readonly expanding: Set<string>;
 }
 
 function home(state: State): string | undefined {
@@ -357,7 +392,11 @@ function checkPackageScript(state: State, tool: string, args: readonly string[])
   const pos = positionals(args);
   const sub = pos[0];
   if (sub === undefined || state.cwd === undefined) return;
-  const text = state.ctx.readFile?.(join(state.cwd, "package.json"));
+  // Bun runs its own subcommands (`test`, `build`, `install`, …) even when a script has that
+  // name; expanding the script would run the script body instead of the builtin.
+  if (tool === "bun" && sub !== "run" && BUN_BUILTINS.has(sub)) return;
+  const dir = state.cwd;
+  const text = state.ctx.readFile?.(join(dir, "package.json"));
   let scripts: Record<string, unknown> = {};
   try {
     scripts =
@@ -391,7 +430,16 @@ function checkPackageScript(state: State, tool: string, args: readonly string[])
   }
   for (const key of [`pre${name}`, name, `post${name}`]) {
     const body = scripts[key];
-    if (typeof body === "string") checkScript(state, body);
+    if (typeof body !== "string") continue;
+    // A script that reaches itself through its own expansion is a cycle, not deep nesting.
+    const expansion = `${dir}\0${key}`;
+    if (state.expanding.has(expansion)) block(`script \`${key}\` expands into itself`);
+    state.expanding.add(expansion);
+    try {
+      checkScript(state, body);
+    } finally {
+      state.expanding.delete(expansion);
+    }
   }
 }
 
@@ -1586,7 +1634,14 @@ function checkScript(state: State, text: string): undefined {
 }
 
 export function checkShell(command: string, ctx: ShellContext): ShellVerdict {
-  const state: State = { ctx, aliases: new Map(), depth: 0, cwd: ctx.cwd, written: new Set() };
+  const state: State = {
+    ctx,
+    aliases: new Map(),
+    depth: 0,
+    cwd: ctx.cwd,
+    written: new Set(),
+    expanding: new Set(),
+  };
   try {
     checkScript(state, command);
     return { allowed: true };

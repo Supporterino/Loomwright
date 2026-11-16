@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { checkShell, type ShellContext } from "../src/policy/shell.ts";
 
 const WT = "/ws/.factory/worktrees/add-x/backend/1.1";
@@ -188,5 +190,91 @@ describe("evasions", () => {
       allowed: false,
       reason: "cannot parse the command (unterminated single quote); simplify it",
     });
+  });
+});
+
+describe("package scripts", () => {
+  const REAL_PKG = readFileSync(join(import.meta.dir, "../../../package.json"), "utf8");
+  const realCtx: ShellContext = {
+    ...ctx,
+    readFile: (abs) => (abs === `${WT}/package.json` ? REAL_PKG : FILES[abs]),
+  };
+
+  const pkgCtx = (scripts: Record<string, string>): ShellContext => {
+    const pkg = JSON.stringify({ scripts });
+    return { ...ctx, readFile: (abs) => (abs === `${WT}/package.json` ? pkg : FILES[abs]) };
+  };
+  const scriptsCtx = pkgCtx({
+    deploy: "git push",
+    postdeploy: "bun run deploy",
+    test: "bun run test",
+    a: "bun run b",
+    b: "bun run a",
+    install: "git push",
+    build: "git push",
+    sneaky: "git push",
+    lint: "biome check .",
+  });
+  const hopCtx = pkgCtx({ deploy: "bun run postdeploy", postdeploy: "bun run deploy" });
+
+  /** The single reason a blocked command gets; fails the test when the command is allowed. */
+  const reason = (cmd: string, context: ShellContext): string => {
+    const v = checkShell(cmd, context);
+    expect(v.allowed).toBe(false);
+    if (v.allowed) throw new Error(`expected \`${cmd}\` to be blocked`);
+    return v.reason;
+  };
+  const cycleReason = (cmd: string, context: ShellContext, name: string): void => {
+    const r = reason(cmd, context);
+    expect(r).toContain(`\`${name}\``);
+    expect(r).toContain("expands into itself");
+    expect(r).not.toContain("nests too deeply");
+  };
+
+  test.each([
+    "bun test",
+    "bun run test",
+    "bun run check",
+    "bun run build",
+    "bun run test && bun run test",
+  ])("%s is allowed against the real package.json", (cmd) => {
+    const v = checkShell(cmd, realCtx);
+    expect(v).toEqual({ allowed: true });
+    if (!v.allowed) expect(v.reason).not.toContain("nests too deeply");
+  });
+
+  test("bun install, bun add, bun pm and bun x run the builtin, not a same-named script", () => {
+    for (const cmd of ["bun install", "bun add left-pad", "bun pm ls", "bun x tsc", "bun build"]) {
+      expect(checkShell(cmd, scriptsCtx)).toEqual({ allowed: true });
+    }
+  });
+
+  test.each(["bun run deploy", "bun deploy"])("%s stays blocked by the script body", (cmd) => {
+    expect(reason(cmd, scriptsCtx)).toContain("git push");
+  });
+
+  test("a self-referential test script blocks with one cycle reason", () => {
+    cycleReason("bun run test", scriptsCtx, "test");
+  });
+
+  test("a pre/post hop blocks with one cycle reason", () => {
+    cycleReason("bun run deploy", hopCtx, "deploy");
+  });
+
+  test("a ring of scripts blocks with one cycle reason", () => {
+    cycleReason("bun run a", scriptsCtx, "a");
+  });
+
+  test("an acyclic check script ends at the bun test builtin", () => {
+    const checkCtx = pkgCtx({
+      check: "biome check . && bun run test",
+      test: "bun test --parallel",
+    });
+    expect(checkShell("bun run check", checkCtx)).toEqual({ allowed: true });
+  });
+
+  test("pnpm expands a same-named script and npm runs the lint script", () => {
+    expect(reason("pnpm sneaky", scriptsCtx)).toContain("git push");
+    expect(checkShell("npm run lint", scriptsCtx)).toEqual({ allowed: true });
   });
 });
