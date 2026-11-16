@@ -30,7 +30,15 @@
   - repo: loomwright
   - deps: 1.6
   - touches: README.md, ARCHITECTURE.md, docs/cli.md, docs/plan.md, docs/decisions/**
-- [ ] 1.8 Run the acceptance verification
+- [ ] 1.8 Confirm the acceptance rows are covered and leave the tree unchanged
   - repo: loomwright
   - deps: 1.7
   - touches: docs/e2e/**
+    This task edits nothing. It reports the evidence and stops: `bun run lint`,
+    `bun run typecheck` and the suite (849 pass, 5 skip) are green, `test/publish.test.ts`
+    covers the pack file list and `--version`, `test/plugin.test.ts` covers the committed
+    plugin bundle and `test/docs.test.ts` covers the historical scan.
+    `docs/e2e/**` MUST stay byte-identical: do not run `scripts/e2e-transcript.ts` and do
+    not re-record or edit the transcripts — the legacy header/command text against
+    `test/docs.test.ts` is a separate compatibility change. Do not run the gate scripts
+    either; the factory runs them after this task.
