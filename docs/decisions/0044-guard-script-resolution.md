@@ -58,8 +58,9 @@ Alternatives rejected:
   behaviour is unchanged.
 - A cyclic script fails fast with a reason that names it, instead of exhausting the nesting
   limit.
-- A literal that reaches an execution primitive through a variable stays undetected, as
-  before. A regex containing `//` or `/*` may be read as a comment: this is a lexer, not a
-  parser.
+- A literal written inside an execution call is caught; the same literal moved into a variable
+  first (`const c = 'git push'; execSync(c)`) is no longer caught, where the whole-text scan saw
+  it. A value that arrives from outside the file stays undetected, as before. A regex
+  containing `//` or `/*` may be read as a comment: this is a lexer, not a parser.
 - `templates/plugin/factory-plugin.txt` must be regenerated with `bun run build:plugin`
   whenever `packages/core/src/policy/` changes; the committed bundle is what agents run.
