@@ -63,6 +63,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - name: Pack the package
+        working-directory: packages/cli
         run: |
           mkdir -p "$RUNNER_TEMP/npm-pack"
           npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/npm-pack"
@@ -88,8 +89,8 @@ jobs:
         with:
           name: cli-dist
           path: |
-            dist/cli.js
-            dist/package.json
+            packages/cli/dist/cli.js
+            packages/cli/dist/package.json
           if-no-files-found: error
 
   node-smoke:

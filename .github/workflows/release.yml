@@ -45,11 +45,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require('./packages/cli/package.json').version")
 
-          # Changesets bumps package.json; keep src/version.ts in lockstep.
+          # Changesets bumps packages/cli/package.json; keep the version file in lockstep.
           bun scripts/sync-version.ts
-          git diff --exit-code -- src/version.ts
+          git diff --exit-code -- packages/core/src/version.ts
           bun scripts/changelog-section.ts "$VERSION" > /dev/null
 
           NPM_PUBLISHED=true
@@ -105,6 +105,7 @@ jobs:
       - name: Check the committed plugin bundle is current
         run: git diff --exit-code -- templates/plugin/factory-plugin.txt
       - name: Pack the package
+        working-directory: packages/cli
         run: |
           mkdir -p "$RUNNER_TEMP/npm-pack"
           npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/npm-pack"

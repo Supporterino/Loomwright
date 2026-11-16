@@ -9,6 +9,7 @@ const RELEASE_WORKFLOW = readFileSync(
   join(import.meta.dir, "../.github/workflows/release.yml"),
   "utf8",
 );
+const E2E_WORKFLOW = readFileSync(join(import.meta.dir, "../.github/workflows/e2e.yml"), "utf8");
 
 const CHANGELOG = `# Changelog
 
@@ -48,9 +49,38 @@ describe("release scripts", () => {
 });
 
 describe("release workflows", () => {
-  test("the release plan checks the new package", () => {
+  test("sync-version keeps the version file in lockstep and the release plan checks the new package", () => {
     expect(RELEASE_WORKFLOW).toContain('npm view "@loomwright/cli@$VERSION"');
+    expect(RELEASE_WORKFLOW).toContain("require('./packages/cli/package.json')");
+    expect(RELEASE_WORKFLOW).toContain("packages/core/src/version.ts");
     expect(RELEASE_WORKFLOW).not.toContain("@supporterino/ai-factory");
+    expect(RELEASE_WORKFLOW).not.toContain("git diff --exit-code -- src/version.ts");
+  });
+
+  test("CI packs and smoke-tests the new paths: pack from the package root", () => {
+    expect(CI_WORKFLOW).toContain("working-directory: packages/cli");
+    expect(CI_WORKFLOW).toContain('node: ["20.3.0", "22", "24"]');
+  });
+
+  test("CI packs and smoke-tests the new paths: artifact uses the new dist paths", () => {
+    expect(CI_WORKFLOW).toContain("packages/cli/dist/cli.js");
+    expect(CI_WORKFLOW).toContain("packages/cli/dist/package.json");
+    expect(CI_WORKFLOW).not.toMatch(/^\s+dist\/cli\.js$/m);
+    expect(CI_WORKFLOW).not.toMatch(/^\s+dist\/package\.json$/m);
+  });
+
+  test("the tarball file list matches the baseline", () => {
+    for (const workflow of [CI_WORKFLOW, RELEASE_WORKFLOW]) {
+      expect(workflow).toContain('grep -qx "package/dist/cli.js"');
+      expect(workflow).toContain('grep -qx "package/dist/package.json"');
+      expect(workflow).toContain("^package/(src|test|scripts)/");
+    }
+  });
+
+  test("the e2e workflow runs the moved runtime test", () => {
+    expect(E2E_WORKFLOW).toContain("bun test packages/cli/test/opencode-runtime.e2e.test.ts");
+    expect(E2E_WORKFLOW).toContain('AI_FACTORY_E2E: "1"');
+    expect(E2E_WORKFLOW).toContain('opencode: ["2.1.2", "2.2.0"]');
   });
 
   test("the tarball smoke test runs the new binary", () => {
