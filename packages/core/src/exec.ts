@@ -66,14 +66,11 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGKILL");
-    }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = (code: number | null, extraErr = ""): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       resolve({
         command,
@@ -84,6 +81,18 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
         durationMs: Math.round(performance.now() - started),
       });
     };
+    // A killed child can lose its exit notification (a wedged bun test worker does), so the
+    // deadline settles the promise itself rather than waiting for `close`.
+    timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      finish(null);
+    }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+
+    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
     // A missing binary surfaces as an 'error' event (ENOENT) instead of an exit code.
     child.on("error", (err) => finish(127, err.message));
     child.on("close", (code) => finish(code));
