@@ -187,6 +187,30 @@ describe("documentation", () => {
     expect(read("docs/decisions/README.md")).toContain(`| [0044](${file})`);
   });
 
+  test("ADR-0045 records the opencode feature floors", () => {
+    const adr = read("docs/decisions/0045-opencode-feature-floors.md");
+    expect(adr.startsWith("# 0045 — opencode feature version floors")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).toContain(">= 2.1.2 < 3.0.0");
+    expect(adr).toContain("mcp.roles");
+    expect(adr).not.toContain("Loomwright");
+    expect(read("docs/decisions/README.md")).toContain("| [0045](0045-opencode-feature-floors.md)");
+  });
+
+  test("the docs describe the 2.x range and the mcp.roles floor", () => {
+    const readme = read("README.md");
+    expect(readme).toContain("2.x (≥ 2.1.2, < 3.0.0; tested 2.2.0)");
+    expect(readme).toContain("`mcp.roles` needs 2.2.0");
+    const cli = read("docs/cli.md");
+    expect(cli).toContain("`mcp.roles` needs 2.2.0");
+    expect(cli).toContain(
+      "The opencode floor is the higher of the base floor and the enabled features' floors",
+    );
+    expect(cli).toContain("a lock whose opencode floor is behind the config is a warning");
+  });
+
   test("historical material is untouched", () => {
     expect(read("docs/decisions/0042-fewer-git-processes.md")).toContain(
       "`test/pipeline.test.ts` ran 7,215 git processes",

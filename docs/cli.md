@@ -26,7 +26,7 @@ loomwright init [--plan] [--force] [--allow-downgrade] [--no-commit] [--no-graph
 ```
 
 Installs or refreshes the factory. `--plan` prints what would be created, replaced or archived and writes nothing. It runs these steps in order:
-1. Checks git, opencode, openspec and graphify against the pinned ranges. A missing or unsupported tool exits with 4 and prints its install command.
+1. Checks git, opencode, openspec and graphify against the pinned ranges. A missing or unsupported tool exits with 4 and prints its install command. opencode's floor is raised when an existing `factory.config.jsonc` enables a feature that needs a newer version: `mcp.roles` needs 2.2.0, and the error names it.
 2. Detects the workspace, existing `opencode.json` instructions and generated contracts, and writes `factory.config.jsonc` if there is none.
 3. On the first install, archives replaced custom agents, commands and skills under `.factory/legacy/<timestamp>/`; OpenSpec's `opsx-*`/`openspec-*` files stay.
 4. Renders the managed files:
@@ -94,7 +94,7 @@ Upgrades an installed workspace to the factory version you run, as one local com
   - paths in `unmanaged` are skipped;
   - a modified or deleted vendored Ponytail file stops the update; `--restore` puts the vendored copy back.
 - Reinstalls the git hooks and warns when detection differs from the config.
-- `--tools` regenerates OpenSpec's opencode commands and skills, merges them like other managed files, and rebuilds the graph when its format changed or it was built by another Graphify release than the installed one (a plain `update` only warns). The tool version ranges in the lock always follow the factory version: they are its requirements, not a choice.
+- `--tools` regenerates OpenSpec's opencode commands and skills, merges them like other managed files, and rebuilds the graph when its format changed or it was built by another Graphify release than the installed one (a plain `update` only warns). The tool version ranges in the lock always follow the factory version: they are its requirements, not a choice. The opencode floor is the higher of the base floor and the enabled features' floors (`mcp.roles` → 2.2.0). An installed opencode below it prints a warning naming the feature; `update` continues and writes the new floor.
 - `--dry-run --json` lists the planned paths and actions, not the rendered contents.
 
 It needs a clean AI repo. It refuses while a change is active, queued or paused with tasks; `--force` updates anyway, and those changes keep the agent and gate definitions they were approved with. It never commits onto a `change/<id>` branch, even with `--force`: switch the AI repo to your base branch first (`git switch main`); `resume` switches back, and the change keeps its definitions. Every file it may touch is backed up to `.factory/backups/<timestamp>/` first. A merge conflict leaves markers, commits nothing and exits 4: resolve and commit, or run `rollback`. Submodules (apart from hooks), `openspec/specs` and `openspec/changes` are never touched. See [CHANGELOG.md](../CHANGELOG.md) for what each version changes, and [fleet-update.sh](fleet-update.sh) for updating many workspaces.
@@ -114,7 +114,7 @@ loomwright doctor [--json]
 ```
 
 A read-only health check. It looks at:
-- **Tools:** the installed git, opencode, OpenSpec and Graphify against the lock's ranges and against what this factory version supports. The factory version that wrote the lock is checked too.
+- **Tools:** the installed git, opencode, OpenSpec and Graphify against the lock's ranges and against what this factory version supports, including the opencode floors its configured features need. An enabled feature whose floor the installed opencode misses is a failure; a lock whose opencode floor is behind the config is a warning that points at `loomwright update`. The factory version that wrote the lock is checked too.
 - **Install:** the config, the managed files (out of date, edited by you, deleted by you) and the Ponytail content hash.
 - **Repos:**
   - submodule state; for uninitialised ones it offers `git submodule update --init` when run in a terminal;
