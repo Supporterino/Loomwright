@@ -211,29 +211,38 @@ describe("published package", () => {
   });
 
   test("bun run build writes the CLI bundle and a self-contained dist package", () => {
-    const build = spawnSync(process.execPath, ["run", "build"], { cwd: ROOT, encoding: "utf8" });
-    if (build.status !== 0) throw new Error(`build failed: ${build.stderr}`);
+    const committed = read(ROOT, "templates/plugin/factory-plugin.txt");
+    try {
+      const build = spawnSync(process.execPath, ["run", "build"], { cwd: ROOT, encoding: "utf8" });
+      if (build.status !== 0) throw new Error(`build failed: ${build.stderr}`);
 
-    const bundle = join(CLI, "dist", "cli.js");
-    expect(existsSync(bundle)).toBe(true);
-    expect(existsSync(join(CLI, "dist", "package.json"))).toBe(true);
-    expect(JSON.parse(read(ROOT, "packages/cli/dist/package.json"))).toEqual({ type: "module" });
+      // The build regenerates the tracked bundle. Restore it below, and fail when it changed:
+      // a stale committed bundle must stay stale for `test/plugin.test.ts`, not be fixed here.
+      expect(read(ROOT, "templates/plugin/factory-plugin.txt")).toBe(committed);
 
-    // The bundle carries its own sources: it runs outside the checkout.
-    const run = spawnSync(process.execPath, [bundle, "--version"], {
-      cwd: tempRoot(),
-      encoding: "utf8",
-    });
-    expect(run.status).toBe(0);
-    expect(run.stdout.trim()).toBe(FACTORY_VERSION);
+      const bundle = join(CLI, "dist", "cli.js");
+      expect(existsSync(bundle)).toBe(true);
+      expect(existsSync(join(CLI, "dist", "package.json"))).toBe(true);
+      expect(JSON.parse(read(ROOT, "packages/cli/dist/package.json"))).toEqual({ type: "module" });
 
-    // Packing the real package after the build yields exactly the baseline tarball.
-    const pack = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
-      cwd: CLI,
-      encoding: "utf8",
-    });
-    if (pack.status !== 0) throw new Error(`npm pack failed: ${pack.stderr}`);
-    expect(packPaths(pack.stdout).sort()).toEqual(BASELINE_TARBALL);
+      // The bundle carries its own sources: it runs outside the checkout.
+      const run = spawnSync(process.execPath, [bundle, "--version"], {
+        cwd: tempRoot(),
+        encoding: "utf8",
+      });
+      expect(run.status).toBe(0);
+      expect(run.stdout.trim()).toBe(FACTORY_VERSION);
+
+      // Packing the real package after the build yields exactly the baseline tarball.
+      const pack = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
+        cwd: CLI,
+        encoding: "utf8",
+      });
+      if (pack.status !== 0) throw new Error(`npm pack failed: ${pack.stderr}`);
+      expect(packPaths(pack.stdout).sort()).toEqual(BASELINE_TARBALL);
+    } finally {
+      write(ROOT, "templates/plugin/factory-plugin.txt", committed);
+    }
   });
 
   test("the generated package files are ignored", () => {

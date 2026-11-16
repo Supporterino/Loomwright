@@ -9,6 +9,9 @@ packages/cli/LICENSE
 packages/cli/templates/
 packages/cli/dist/
 
+# Written by `scripts/build-plugin.ts` before the rename; never committed.
+templates/plugin/*.tmp
+
 # ai-factory:start (managed)
 .factory/
 graphify-out/

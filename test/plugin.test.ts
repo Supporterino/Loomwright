@@ -18,7 +18,7 @@ import { appendLog, pruneLogs } from "@loomwright/core/logs/log";
 import { redact, secretEnvValues } from "@loomwright/core/logs/redact";
 import { auditChanges, type SessionContext } from "@loomwright/core/policy/scope";
 import { sessionContextFile } from "@loomwright/core/policy/session-files";
-import { bundlePlugin, PLUGIN_OUT } from "../scripts/build-plugin.ts";
+import { bundlePlugin, PLUGIN_OUT, writePluginBundle } from "../scripts/build-plugin.ts";
 import { writeFiles } from "./fixtures/workspaces.ts";
 
 type Hook = (event: {
@@ -128,6 +128,22 @@ describe("plugin bundle", () => {
     const bundle = readFileSync(PLUGIN_OUT, "utf8");
     expect(bundle.startsWith("// Loomwright opencode plugin")).toBe(true);
     expect(bundle).toContain("Loomwright blocked this call:");
+  });
+
+  test("the bundle is written through a temp file, leaving none behind on failure", () => {
+    const root = mkdtempSync(join(tmpdir(), "loomwright-bundle-"));
+    try {
+      const out = join(root, "factory-plugin.txt");
+      writePluginBundle("// bundle\n", out);
+      expect(readFileSync(out, "utf8")).toBe("// bundle\n");
+      expect(readdirSync(root)).toEqual(["factory-plugin.txt"]);
+
+      mkdirSync(join(root, "occupied"));
+      expect(() => writePluginBundle("// bundle\n", join(root, "occupied"))).toThrow();
+      expect(readdirSync(root).sort()).toEqual(["factory-plugin.txt", "occupied"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
