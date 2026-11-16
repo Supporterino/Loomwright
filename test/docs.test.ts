@@ -139,6 +139,22 @@ describe("documentation", () => {
     expect(isHistoricalTranscript(header)).toBe(false);
   });
 
+  test("the current ADR stays name-free", () => {
+    const files = readdirSync(join(ROOT, "docs/decisions")).filter((name) =>
+      name.startsWith("0044-"),
+    );
+    expect(files).toHaveLength(1);
+    const [file] = files;
+    if (file === undefined) throw new Error("no 0044 ADR");
+    const adr = read("docs/decisions", file);
+    expect(adr.startsWith("# 0044 — ")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).not.toContain("Loomwright");
+    expect(read("docs/decisions/README.md")).toContain(`| [0044](${file})`);
+  });
+
   test("historical material is untouched", () => {
     expect(read("docs/decisions/0042-fewer-git-processes.md")).toContain(
       "`test/pipeline.test.ts` ran 7,215 git processes",
