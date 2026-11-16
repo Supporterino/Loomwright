@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseJsonc } from "@loomwright/core/config/jsonc";
@@ -18,8 +26,12 @@ import { loadRun } from "@loomwright/core/state/run";
 import { FACTORY_VERSION } from "@loomwright/core/version";
 import { factoryScript, type ScriptedTask } from "../../../test/fixtures/factory-script.ts";
 import { ScriptedRuntime } from "../../../test/fixtures/scripted-runtime.ts";
-import { fixtureGit } from "../../../test/fixtures/workspaces.ts";
-import { cli, cliWith, gitOut } from "../../../test/helpers.ts";
+import {
+  createSingleRepoFixture,
+  type Fixture,
+  fixtureGit,
+} from "../../../test/fixtures/workspaces.ts";
+import { cli, cliWith, gitOut, type Run } from "../../../test/helpers.ts";
 
 const SNAPSHOT = JSON.parse(
   readFileSync(join(import.meta.dir, "../../../test/fixtures/install-0.1.0.json"), "utf8"),
@@ -380,5 +392,88 @@ describe("activation snapshot", () => {
     } finally {
       fx.cleanup();
     }
+  });
+});
+
+describe("update and the opencode feature floor", () => {
+  const fixtures: Fixture[] = [];
+
+  afterEach(() => {
+    for (const fixture of fixtures.splice(0)) fixture.cleanup();
+  });
+
+  /** A fresh install; `withRoles` turns on `mcp.roles`, which needs opencode 2.2.0. */
+  async function freshInstall(withRoles: boolean): Promise<Fixture> {
+    const fixture = await createSingleRepoFixture();
+    fixtures.push(fixture);
+    expect((await cli(fixture.root, "init", "--no-graph")).code).toBe(ExitCode.Ok);
+    expect(readLock(fixture.root)?.tools.opencode.min).toBe("2.1.2");
+    if (!withRoles) return fixture;
+
+    const file = join(fixture.root, "factory.config.jsonc");
+    const text = readFileSync(file, "utf8");
+    const enabled = text.replace(
+      '"mcp": { "roles": {} }',
+      '"mcp": { "roles": { "implementer": ["mantine_*"] } }',
+    );
+    expect(enabled).not.toBe(text);
+    writeFileSync(file, enabled);
+    await fixtureGit(fixture.root, "add", "-A");
+    await fixtureGit(fixture.root, "commit", "-q", "-m", "chore: enable mcp roles");
+    return fixture;
+  }
+
+  /** Runs `update` against a stub reporting `opencode v<version>`, restoring the env after. */
+  async function updateWithOpencode(fixture: Fixture, version: string): Promise<Run> {
+    const script = join(fixture.base, `opencode-${version}.sh`);
+    writeFileSync(script, `#!/bin/sh\necho "opencode v${version}"\n`);
+    chmodSync(script, 0o755);
+    const saved = process.env.AI_FACTORY_OPENCODE_BIN;
+    process.env.AI_FACTORY_OPENCODE_BIN = script;
+    try {
+      return await cli(fixture.root, "update");
+    } finally {
+      if (saved === undefined) delete process.env.AI_FACTORY_OPENCODE_BIN;
+      else process.env.AI_FACTORY_OPENCODE_BIN = saved;
+    }
+  }
+
+  test("update warns and continues when mcp.roles needs a newer opencode", async () => {
+    const fixture = await freshInstall(true);
+    const run = await updateWithOpencode(fixture, "2.1.2");
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(run.out).toContain("warning: opencode");
+    expect(run.out).toContain("mcp.roles");
+    expect(run.out).toContain("npm install --global @opencode/cli@2.2.0");
+    expect(await gitOut(fixture.root, "log", "-1", "--format=%s")).toBe(
+      `chore(factory): update to v${FACTORY_VERSION}`,
+    );
+    expect(await gitOut(fixture.root, "status", "--porcelain")).toBe("");
+  });
+
+  test("the lock records the effective floor on the update path", async () => {
+    const fixture = await freshInstall(true);
+    expect((await updateWithOpencode(fixture, "2.1.2")).code).toBe(ExitCode.Ok);
+    const lock = readLock(fixture.root);
+    expect(lock?.tools.opencode.min).toBe("2.2.0");
+    expect(lock?.tools.opencode.maxExclusive).toBe("3.0.0");
+  });
+
+  test("3.0.0 fails with or without the feature: update still only warns", async () => {
+    for (const withRoles of [true, false]) {
+      const fixture = await freshInstall(withRoles);
+      const run = await updateWithOpencode(fixture, "3.0.0");
+      expect(run.code).toBe(ExitCode.Ok);
+      expect(run.out).toContain("warning: opencode");
+      expect(run.out).toContain("newer than supported");
+    }
+  });
+
+  test("an opencode at the floor records it without a warning", async () => {
+    const fixture = await freshInstall(true);
+    const run = await updateWithOpencode(fixture, "2.2.0");
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(run.out).not.toContain("warning: opencode");
+    expect(readLock(fixture.root)?.tools.opencode.min).toBe("2.2.0");
   });
 });
