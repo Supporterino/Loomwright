@@ -289,7 +289,7 @@ test("the three package identities are correct", () => {
   expect(protocol.private).toBe(true);
   expect(core.private).toBe(true);
   expect(cli.private).toBeUndefined();
-  expect(cli.version).toBe("1.0.0");
+  expect(cli.version).toBe(FACTORY_VERSION);
 });
 
 test("protocol is a versioned skeleton with no engine imports", () => {

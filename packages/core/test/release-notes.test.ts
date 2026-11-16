@@ -58,11 +58,15 @@ function readChangelog(): Section[] {
   return changelogSections(readFileSync(join(ROOT, "CHANGELOG.md"), "utf8"));
 }
 
-// `changeset version` prepends the released section above a stale `Unreleased` one, so the
-// newest entry is always the first section before `## 0.12.0`.
-function newestSection(sections: Section[]): Section | undefined {
-  const released = sections.findIndex((section) => section.heading === "0.12.0");
-  return released > 0 ? sections[0] : undefined;
+// The rename is recorded once, in the release that carried it. Later releases prepend their own
+// sections, so look the note up by content rather than assuming it is the newest entry.
+function renameSection(sections: Section[]): Section | undefined {
+  return sections.find(
+    (section) =>
+      section.body.includes("@loomwright/cli") &&
+      section.body.includes("loomwright") &&
+      section.body.includes("ai-factory"),
+  );
 }
 
 describe("release notes", () => {
@@ -71,19 +75,19 @@ describe("release notes", () => {
       (entry) => entry.frontmatter["@loomwright/cli"] === "major",
     );
     // Releasing deletes the changeset; the released section then carries the same note.
-    const recorded = changeset?.body ?? newestSection(readChangelog())?.body;
+    const recorded = changeset?.body ?? renameSection(readChangelog())?.body;
     expect(recorded).toContain("loomwright");
     expect(recorded).toContain("ai-factory");
   });
 
-  test("the new changelog section announces the rename", () => {
+  test("the changelog announces the rename", () => {
     const sections = readChangelog();
     expect(sections.some((section) => section.heading === "0.12.0")).toBe(true);
-    const first = newestSection(sections);
-    expect(first).toBeDefined();
-    expect(first?.body).toContain("@loomwright/cli");
-    expect(first?.body).toContain("loomwright");
-    expect(first?.body).toContain("ai-factory");
+    const rename = renameSection(sections);
+    expect(rename).toBeDefined();
+    expect(rename?.body).toContain("@loomwright/cli");
+    expect(rename?.body).toContain("loomwright");
+    expect(rename?.body).toContain("ai-factory");
   });
 
   test("past changelog entries are preserved", () => {

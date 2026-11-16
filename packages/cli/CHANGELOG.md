@@ -2,6 +2,21 @@
 
 All notable changes per release. `loomwright update` applies them to an installed workspace (see [docs/cli.md](docs/cli.md#update)).
 
+## 1.0.1
+
+### Patch Changes
+
+- 31c32b1: The shell guard resolves `bun` builtin subcommands before package scripts, so `bun test`,
+  `bun run test`, `bun run check` and `bun run build` no longer expand a same-named script into
+  itself. Cyclic script expansion stops with one reason naming the script, and JS/TS script
+  files are inspected as code, so prose inside a string no longer blocks a recording while a
+  literal reaching an execution primitive still does. `bunx` is treated as the `bun x` alias, so
+  the command it wraps gets the same publish, global-install and shell checks.
+- e56d031: Move the engine and the command layer into Bun workspace packages. The published tarball,
+  the CLI entry, both binaries and the workspace file formats are unchanged. A command that
+  hits its deadline now settles `exec` itself, instead of waiting for a child exit notification
+  that a wedged `bun test` worker can lose.
+
 ## 1.0.0
 
 ### Major Changes
