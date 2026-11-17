@@ -432,7 +432,12 @@ export async function landChange(
       deletedBranches: [],
       keptBranches: [],
       cleaned,
-      kept: [`.factory/reports/${id}.md`, `.factory/usage/${id}.json`, `.factory/logs/${id}`],
+      kept: [
+        `.factory/reports/${id}.md`,
+        `.factory/usage/${id}.json`,
+        `.factory/logs/${id}`,
+        `.factory/events/${id}.jsonl`,
+      ],
       ...(recorded === undefined || recorded.written.length === 0
         ? {}
         : { recorded: recorded.written }),
@@ -480,6 +485,7 @@ export async function landChange(
       `.factory/reports/${id}.md`,
       `.factory/usage/${id}.json`,
       `.factory/logs/${id}`,
+      `.factory/events/${id}.jsonl`,
       ...worktrees.kept,
       ...(incomplete ? [`.factory/runs/${id}.json`, `.factory/approvals/${id}.json`] : []),
     ],

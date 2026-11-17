@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig } from "@loomwright/core/config/load";
 import { ExitCode } from "@loomwright/core/exit-codes";
@@ -48,6 +48,8 @@ async function singleRepoChange(fx: Fixture): Promise<string> {
     ".factory/reports/add-land.md": "done report",
     ".factory/reports/add-land-paused.md": "old pause",
     ".factory/logs/add-land/2026.jsonl": '{"kind":"tool"}\n',
+    ".factory/events/add-land.jsonl":
+      '{"v":1,"runId":"add-land","seq":1,"ts":"2026-11-17T10:00:00.000Z","type":"run.started","data":{"phase":"done"}}\n',
     ".factory/usage/add-land.json": JSON.stringify({
       version: 1,
       changeId: ID,
@@ -113,6 +115,37 @@ describe("land", () => {
       ".factory/usage/add-land.json",
     ])
       expect(existsSync(join(fx.root, path))).toBe(true);
+  });
+
+  test("keeps the event log and lists it under kept", async () => {
+    await singleRepoChange(fx);
+    const run = await cli(fx.root, "land", ID, "--json");
+    expect(run.code).toBe(ExitCode.Ok);
+    const outcome = JSON.parse(run.out) as { kept: string[]; cleaned: string[] };
+    expect(outcome.kept).toContain(`.factory/events/${ID}.jsonl`);
+    expect(outcome.cleaned).not.toContain(`.factory/events/${ID}.jsonl`);
+    expect(existsSync(join(fx.root, `.factory/events/${ID}.jsonl`))).toBe(true);
+    expect(existsSync(join(fx.root, `.factory/runs/${ID}.json`))).toBe(false);
+    expect(existsSync(join(fx.root, `.factory/approvals/${ID}.json`))).toBe(false);
+  });
+
+  test("dry-run lists the event log under kept, not cleaned", async () => {
+    await singleRepoChange(fx);
+    const run = await cli(fx.root, "land", ID, "--dry-run", "--json");
+    expect(run.code).toBe(ExitCode.Ok);
+    const plan = JSON.parse(run.out) as { kept: string[]; cleaned: string[] };
+    expect(plan.kept).toContain(`.factory/events/${ID}.jsonl`);
+    expect(plan.cleaned).not.toContain(`.factory/events/${ID}.jsonl`);
+    expect(existsSync(join(fx.root, `.factory/events/${ID}.jsonl`))).toBe(true);
+  });
+
+  test("a missing event log is not an error", async () => {
+    await singleRepoChange(fx);
+    rmSync(join(fx.root, ".factory/events"), { recursive: true, force: true });
+    const run = await cli(fx.root, "land", ID, "--json");
+    expect(run.code).toBe(ExitCode.Ok);
+    const outcome = JSON.parse(run.out) as { kept: string[] };
+    expect(outcome.kept).toContain(`.factory/events/${ID}.jsonl`);
   });
 
   test("records the change instead of the local-records hint when artifacts are tracked", async () => {
