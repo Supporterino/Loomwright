@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { parseConfigText } from "@loomwright/core/config/load";
 import { ExitCode } from "@loomwright/core/exit-codes";
@@ -21,6 +29,36 @@ const read = (root: string, rel: string): string => readFileSync(join(root, rel)
 async function commitAll(root: string, message: string): Promise<void> {
   await fixtureGit(root, "add", "-A");
   await fixtureGit(root, "commit", "-q", "-m", message);
+}
+
+/** A fake `opencode --version` that reports `version`. */
+function opencodeStub(fx: Fixture, version: string): string {
+  const script = join(fx.base, `opencode-v${version}`);
+  writeFileSync(script, `#!/bin/sh\necho "opencode v${version}"\n`);
+  chmodSync(script, 0o755);
+  return script;
+}
+
+async function runWithOpencode<T>(bin: string, run: () => Promise<T>): Promise<T> {
+  const saved = process.env.AI_FACTORY_OPENCODE_BIN;
+  process.env.AI_FACTORY_OPENCODE_BIN = bin;
+  try {
+    return await run();
+  } finally {
+    if (saved === undefined) delete process.env.AI_FACTORY_OPENCODE_BIN;
+    else process.env.AI_FACTORY_OPENCODE_BIN = saved;
+  }
+}
+
+async function enableMcpRoles(fx: Fixture): Promise<void> {
+  writeFileSync(
+    join(fx.root, "factory.config.jsonc"),
+    read(fx.root, "factory.config.jsonc").replace(
+      '"mcp": { "roles": {} }',
+      '"mcp": { "roles": { "implementer": ["mantine_*"] } }',
+    ),
+  );
+  await commitAll(fx.root, "chore: mcp roles");
 }
 
 describe("init: AI repo with submodules", () => {
@@ -377,5 +415,62 @@ describe("init: single repo", () => {
     } finally {
       process.env.AI_FACTORY_GRAPHIFY_BIN = saved;
     }
+  });
+
+  test("init refuses an opencode below a feature floor", async () => {
+    expect((await cli(fx.root, "init", "--no-graph")).code).toBe(ExitCode.Ok);
+    expect(readLock(fx.root)?.tools.opencode.min).toBe("2.1.2");
+    await enableMcpRoles(fx);
+    const head = await gitOut(fx.root, "rev-parse", "HEAD");
+
+    const run = await runWithOpencode(opencodeStub(fx, "2.1.2"), () =>
+      cli(fx.root, "init", "--no-graph"),
+    );
+    expect(run.code).toBe(ExitCode.Precondition);
+    expect(run.err).toContain("mcp.roles");
+    expect(run.err).toContain("@opencode/cli@2.2.0");
+    // Nothing is written: not the lock floor, not a commit.
+    expect(readLock(fx.root)?.tools.opencode.min).toBe("2.1.2");
+    expect(await gitOut(fx.root, "rev-parse", "HEAD")).toBe(head);
+  });
+
+  test("init accepts the tested version", async () => {
+    expect((await cli(fx.root, "init", "--no-graph")).code).toBe(ExitCode.Ok);
+    await enableMcpRoles(fx);
+
+    const run = await runWithOpencode(opencodeStub(fx, "2.2.0"), () =>
+      cli(fx.root, "init", "--no-graph"),
+    );
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(run.err).toBe("");
+  });
+
+  test("the lock records the effective floor", async () => {
+    expect((await cli(fx.root, "init", "--no-graph")).code).toBe(ExitCode.Ok);
+    await enableMcpRoles(fx);
+
+    const run = await runWithOpencode(opencodeStub(fx, "2.2.0"), () =>
+      cli(fx.root, "init", "--no-graph"),
+    );
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(readLock(fx.root)?.tools.opencode.min).toBe("2.2.0");
+    expect(readLock(fx.root)?.tools.opencode.maxExclusive).toBe("3.0.0");
+  });
+
+  test("3.0.0 fails with or without the feature", async () => {
+    const fresh = await runWithOpencode(opencodeStub(fx, "3.0.0"), () =>
+      cli(fx.root, "init", "--no-graph"),
+    );
+    expect(fresh.code).toBe(ExitCode.Precondition);
+    expect(fresh.err).toContain("newer than supported");
+    expect(existsSync(join(fx.root, "factory.config.jsonc"))).toBe(false);
+
+    expect((await cli(fx.root, "init", "--no-graph")).code).toBe(ExitCode.Ok);
+    await enableMcpRoles(fx);
+    const withFeature = await runWithOpencode(opencodeStub(fx, "3.0.0"), () =>
+      cli(fx.root, "init", "--no-graph"),
+    );
+    expect(withFeature.code).toBe(ExitCode.Precondition);
+    expect(withFeature.err).toContain("newer than supported");
   });
 });

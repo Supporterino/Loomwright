@@ -11,6 +11,7 @@ import { graphFile, updateGraph } from "@loomwright/core/graph/graph";
 import { ensureNotNewer, readLock } from "@loomwright/core/lock/lock";
 import type { SyncAction } from "@loomwright/core/managed/sync";
 import { planSync } from "@loomwright/core/managed/sync";
+import { opencodeRequirement } from "@loomwright/core/opencode-features";
 import { unadoptedChanges } from "@loomwright/core/openspec/changes";
 import { renderOpenspecTools } from "@loomwright/core/openspec/cli";
 import { renderWorkspace } from "@loomwright/core/render/workspace";
@@ -115,7 +116,18 @@ export const initCommand: Command = {
       throw new PreconditionError(`${root} is not the top level of its git repository (${top})`);
     }
 
-    const tools = await checkTools(REQUIRED_TOOLS, root);
+    const configPath = join(root, CONFIG_FILE);
+    const newConfig = !existsSync(configPath);
+    // An existing config may enable a feature that needs a newer opencode; a fresh install has none.
+    const existingConfig = newConfig ? undefined : loadConfig(root).config;
+    const requirement =
+      existingConfig === undefined ? undefined : opencodeRequirement(existingConfig);
+
+    const tools = await checkTools(
+      REQUIRED_TOOLS,
+      root,
+      requirement === undefined ? {} : { opencode: requirement },
+    );
     const missing = tools.filter((t) => !t.ok);
     if (missing.length > 0) {
       throw new PreconditionError(
@@ -134,8 +146,6 @@ export const initCommand: Command = {
       }
     }
 
-    const configPath = join(root, CONFIG_FILE);
-    const newConfig = !existsSync(configPath);
     const unadopted = unadoptedChanges(root);
     const detection = newConfig ? await detectWorkspace(root) : undefined;
     // Replacing an existing set is reversible: archive agents/commands/skills the factory
@@ -160,7 +170,9 @@ export const initCommand: Command = {
         ? setJsonc(rendered, ["unmanaged"], [OPENSPEC_CONFIG])
         : rendered;
     const config =
-      configText !== undefined ? parseConfigText(configText, CONFIG_FILE) : loadConfig(root).config;
+      configText !== undefined
+        ? parseConfigText(configText, CONFIG_FILE)
+        : (existingConfig ?? loadConfig(root).config);
 
     // OpenSpec's opencode files are rendered aside and managed like the factory's own.
     const openspecFiles = await renderOpenspecTools(root);

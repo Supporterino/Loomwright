@@ -15,9 +15,10 @@ import {
   serializeLock,
 } from "../lock/lock.ts";
 import { executeSync, type PlannedChange, planSync, type SyncAction } from "../managed/sync.ts";
+import { opencodeRequirement } from "../opencode-features.ts";
 import { OPENSPEC_TOOLS_TEMPLATE } from "../openspec/cli.ts";
 import { type ManagedFile, renderWorkspace } from "../render/workspace.ts";
-import { PONYTAIL } from "../versions.ts";
+import { OPENCODE, PONYTAIL } from "../versions.ts";
 
 /**
  * Paths a factory install commits in the AI repo. OpenSpec's own init output is included;
@@ -136,6 +137,8 @@ export async function syncWorkspace(
           },
         }
       : {},
+    // The lock records what the config requires, not what is installed (design D3).
+    opencodeRequirement(config)?.min ?? OPENCODE.min,
   );
   writeFileSync(join(root, LOCK_FILE), serializeLock(lock));
 

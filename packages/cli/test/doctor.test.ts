@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DoctorReport } from "@loomwright/core/doctor/doctor";
 import { gateExecutables } from "@loomwright/core/doctor/doctor";
@@ -63,6 +63,41 @@ describe("doctor", () => {
     return JSON.parse(res.out) as DoctorReport;
   }
   const find = (r: DoctorReport, name: string) => r.checks.find((c) => c.name === name);
+
+  async function enableMcpRoles(root: string): Promise<void> {
+    const file = join(root, "factory.config.jsonc");
+    writeFileSync(
+      file,
+      readFileSync(file, "utf8").replace(
+        '"mcp": { "roles": {} }',
+        '"mcp": { "roles": { "implementer": ["mantine_*"] } }',
+      ),
+    );
+    await fixtureGit(root, "commit", "-q", "-am", "chore: mcp roles");
+  }
+
+  /** Point the opencode tool at a stub for `version`, answering `--version` and `models`. */
+  async function asOpencode(version: string, run: () => Promise<void>): Promise<void> {
+    const script = join(fx.base, `opencode-${version}`);
+    writeFileSync(
+      script,
+      `#!/bin/sh
+case "$1" in
+  models) printf '%s\\n' anthropic/claude-haiku-5-5 anthropic/claude-opus-5-5 anthropic/claude-sonnet-5-5 ;;
+  *) echo "opencode v${version}" ;;
+esac
+`,
+    );
+    chmodSync(script, 0o755);
+    const saved = process.env.AI_FACTORY_OPENCODE_BIN;
+    process.env.AI_FACTORY_OPENCODE_BIN = script;
+    try {
+      await run();
+    } finally {
+      if (saved === undefined) delete process.env.AI_FACTORY_OPENCODE_BIN;
+      else process.env.AI_FACTORY_OPENCODE_BIN = saved;
+    }
+  }
 
   test("reports corrupt run files and a corrupt active lock (audit P15)", async () => {
     const root = await installed(createSingleRepoFixture, { app: passAll });
@@ -217,6 +252,56 @@ describe("doctor", () => {
     expect(find(edited, "your edits")?.detail).toContain(".opencode/agents/tester.md");
     writeFileSync(join(root, ".opencode/plugins/factory.js"), "export default {};\n");
     expect(find(await report(root), "guard plugin")).toMatchObject({ status: "fail" });
+  });
+
+  test("doctor fails an unmet feature floor", async () => {
+    const root = await installed(createSingleRepoFixture, { app: passAll });
+    await enableMcpRoles(root);
+    await asOpencode("2.1.2", async () => {
+      const json = await report(root);
+      expect(find(json, "opencode")).toMatchObject({ status: "fail" });
+      expect(find(json, "opencode")?.detail).toContain("mcp.roles");
+      expect(find(json, "opencode")?.fix).toContain("@opencode/cli@2.2.0");
+      expect((await cli(root, "doctor")).code).toBe(ExitCode.Precondition);
+    });
+  });
+
+  test("doctor warns about a stale lock", async () => {
+    const root = await installed(createSingleRepoFixture, { app: passAll });
+    await enableMcpRoles(root);
+    await asOpencode("2.2.0", async () => {
+      const check = find(await report(root), "opencode");
+      expect(check).toMatchObject({ status: "warn", fix: "loomwright update" });
+      expect(check?.detail).toContain("2.1.2");
+      expect(check?.detail).toContain("2.2.0");
+      expect(check?.detail).toContain("mcp.roles");
+    });
+  });
+
+  test("doctor keeps the base floor for a config without the feature", async () => {
+    const root = await installed(createSingleRepoFixture, { app: passAll });
+    await asOpencode("2.1.2", async () => {
+      const check = find(await report(root), "opencode");
+      expect(check).toMatchObject({ status: "ok" });
+      expect(check?.detail).toContain("2.1.2");
+    });
+  });
+
+  test("3.0.0 fails with or without the feature", async () => {
+    const root = await installed(createSingleRepoFixture, { app: passAll });
+    await asOpencode("3.0.0", async () => {
+      const check = find(await report(root), "opencode");
+      expect(check).toMatchObject({ status: "fail" });
+      expect(check?.detail).toContain("newer than supported");
+      expect(check?.detail).toContain("< 3.0.0");
+    });
+    await enableMcpRoles(root);
+    await asOpencode("3.0.0", async () => {
+      const check = find(await report(root), "opencode");
+      expect(check).toMatchObject({ status: "fail" });
+      expect(check?.detail).toContain("newer than supported");
+      expect(check?.detail).toContain("< 3.0.0");
+    });
   });
 
   test("offers to initialise missing submodules", async () => {

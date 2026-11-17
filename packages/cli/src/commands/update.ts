@@ -8,6 +8,7 @@ import { commitPaths } from "@loomwright/core/git/commit";
 import { currentBranch, ensureClean } from "@loomwright/core/git/repo";
 import { updateGraph } from "@loomwright/core/graph/graph";
 import { ensureNotNewer } from "@loomwright/core/lock/lock";
+import { opencodeRequirement } from "@loomwright/core/opencode-features";
 import { renderOpenspecTools } from "@loomwright/core/openspec/cli";
 import { checkTools } from "@loomwright/core/tools";
 import {
@@ -129,7 +130,13 @@ Upgrades this workspace to the installed factory version, as one local commit
       return ExitCode.Ok;
     }
 
-    const tools = await checkTools(["git", "opencode", "openspec", "graphify"], root);
+    // Warning-only: an unmet floor is how the workspace records the new requirement (design D4).
+    const requirement = opencodeRequirement(plan.config);
+    const tools = await checkTools(
+      ["git", "opencode", "openspec", "graphify"],
+      root,
+      requirement === undefined ? {} : { opencode: requirement },
+    );
     for (const t of tools) if (!t.ok) io.out(`warning: ${t.tool}: ${t.problem} → ${t.fix}`);
 
     const backupDir = backup(root, plan);

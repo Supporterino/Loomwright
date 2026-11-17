@@ -21,6 +21,7 @@ import { prePushState } from "../git/hooks.ts";
 import { dirtyPaths } from "../git/repo.ts";
 import { graphRebuildReason, graphStatus } from "../graph/graph.ts";
 import { buildLock, type Lock, readLock } from "../lock/lock.ts";
+import { opencodeRequirement } from "../opencode-features.ts";
 import { unadoptedChanges } from "../openspec/changes.ts";
 import { sandboxEnabled } from "../policy/sandbox.ts";
 import { parseScript, type Script } from "../policy/shell-parse.ts";
@@ -37,7 +38,7 @@ import { readOrCorrupt } from "../state/files.ts";
 import { scanRuns } from "../state/run.ts";
 import { checkTools, compareVersions, type ToolName, toolBin, toolEnv } from "../tools.ts";
 import { FACTORY_VERSION, runVersion } from "../version.ts";
-import { GRAPHIFY } from "../versions.ts";
+import { GRAPHIFY, OPENCODE } from "../versions.ts";
 import { INSTALL_PATHS, planWorkspace } from "../workspace/sync.ts";
 
 /**
@@ -194,10 +195,20 @@ const CURRENT_PINS = buildLock({}).tools;
 const range = (pin: Lock["tools"]["git"]): string =>
   `>= ${pin.min}${pin.maxExclusive ? ` < ${pin.maxExclusive}` : ""}`;
 
-async function checkToolsAndLock(c: Checks, root: string, lock: Lock | undefined): Promise<void> {
+async function checkToolsAndLock(
+  c: Checks,
+  root: string,
+  lock: Lock | undefined,
+  config: FactoryConfig | undefined,
+): Promise<void> {
   c.in("tools");
+  const requirement = config === undefined ? undefined : opencodeRequirement(config);
+  const floor =
+    requirement !== undefined && compareVersions(requirement.min, OPENCODE.min) > 0
+      ? requirement.min
+      : OPENCODE.min;
   const names: ToolName[] = ["git", "opencode", "openspec", "graphify"];
-  for (const t of await checkTools(names, root)) {
+  for (const t of await checkTools(names, root, requirement ? { opencode: requirement } : {})) {
     if (!t.ok) {
       c.add("fail", t.tool, t.problem, t.fix);
       continue;
@@ -207,12 +218,26 @@ async function checkToolsAndLock(c: Checks, root: string, lock: Lock | undefined
       pin !== undefined &&
       (compareVersions(t.version, pin.min) < 0 ||
         (pin.maxExclusive !== undefined && compareVersions(t.version, pin.maxExclusive) >= 0));
+    const staleFloor =
+      t.tool === "opencode" &&
+      pin !== undefined &&
+      !outsideLock &&
+      compareVersions(pin.min, floor) < 0;
     if (pin !== undefined && outsideLock) {
       c.add(
         "warn",
         t.tool,
         `${t.version} is outside the lock's range (${range(pin)})`,
         "loomwright update --tools",
+      );
+    } else if (staleFloor) {
+      c.add(
+        "warn",
+        t.tool,
+        `${t.version}; the lock's floor is ${pin.min}, this config needs ${floor}${
+          requirement === undefined ? "" : ` (${requirement.reason})`
+        }`,
+        "loomwright update",
       );
     } else if (pin !== undefined && pin.tested !== CURRENT_PINS[t.tool].tested) {
       c.add(
@@ -862,19 +887,30 @@ function checkSandbox(c: Checks, config: FactoryConfig): void {
 export async function runDoctor(root: string): Promise<DoctorReport> {
   const c = new Checks("tools");
   const lock = readLock(root);
-  await checkToolsAndLock(c, root, lock);
+  let config: FactoryConfig | undefined;
+  let configFailure: FactoryError | undefined;
+  if (lock !== undefined) {
+    try {
+      config = loadConfig(root).config;
+    } catch (err) {
+      if (!(err instanceof FactoryError)) throw err;
+      configFailure = err;
+    }
+  }
+  await checkToolsAndLock(c, root, lock, config);
   const uninitialised: string[] = [];
   c.in("install");
   if (lock === undefined) {
     c.add("fail", "install", "loomwright is not installed here", "loomwright init");
     return { checks: c.list, gates: [], uninitialised };
   }
-  let config: FactoryConfig;
-  try {
-    config = loadConfig(root).config;
-  } catch (err) {
-    if (!(err instanceof FactoryError)) throw err;
-    c.add("fail", "config", err.message, err.details.join("; ") || undefined);
+  if (config === undefined) {
+    c.add(
+      "fail",
+      "config",
+      configFailure?.message ?? "config could not be read",
+      configFailure?.details.join("; ") || undefined,
+    );
     return { checks: c.list, gates: [], uninitialised };
   }
   c.add("ok", "config", `schemaVersion ${config.schemaVersion}, layout ${config.layout}`);

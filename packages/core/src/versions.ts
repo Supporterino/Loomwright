@@ -2,7 +2,11 @@
 // see docs/research/tooling.md for the source of each one.
 
 export interface VersionRange {
-  /** Lowest version the factory supports (inclusive). */
+  /**
+   * Lowest version the factory supports (inclusive). Support is bounded by majors, not by the
+   * last verified minor; a feature that needs a newer minor declares its own floor in
+   * `opencode-features.ts`.
+   */
   readonly min: string;
   /** First version the factory does NOT support (exclusive). */
   readonly maxExclusive: string;
@@ -11,12 +15,14 @@ export interface VersionRange {
 }
 
 /**
- * opencode v2 runtime. 2.1.0 broke plugin/SDK contracts on purpose; 2.1.2 and 2.2.0 were
- * verified end to end, so support that range and re-check every new minor before widening it.
+ * opencode v2 runtime. 2.1.0 broke plugin/SDK contracts on purpose; 2.1.2 is the supported floor
+ * and 2.2.0 the version verified end to end. Support is bounded by majors, not by the last
+ * verified minor, so every 2.x minor is accepted up to 3.0.0; a feature that needs a newer minor
+ * declares its own floor in `opencode-features.ts`.
  */
 export const OPENCODE: VersionRange & { readonly npmCli: string } = {
   min: "2.1.2",
-  maxExclusive: "2.3.0",
+  maxExclusive: "3.0.0",
   tested: "2.2.0",
   npmCli: "@opencode/cli",
 };
