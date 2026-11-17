@@ -32,4 +32,28 @@ describe("CLI usage", () => {
     expect(run.code).toBe(ExitCode.Usage);
     expect(run.err).toContain("see `loomwright run --help`");
   });
+
+  test("one-shot commands are untouched and still registered", () => {
+    const names = new Set(COMMANDS.map((command) => command.name));
+    for (const name of [
+      "init",
+      "update",
+      "doctor",
+      "detect",
+      "refine",
+      "quick",
+      "reword",
+      "reapprove",
+      "usage",
+      "gate",
+      "graph",
+      "repoint",
+      "land",
+      "artifacts",
+      "bench",
+      "completion",
+    ]) {
+      expect(names.has(name), name).toBe(true);
+    }
+  });
 });

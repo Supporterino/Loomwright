@@ -260,6 +260,31 @@ describe("plugin bundle", () => {
     expect(bundle).toContain("Loomwright blocked this call:");
   });
 
+  test("the plugin does not write events", async () => {
+    // The bundle is a plain opencode plugin: it guards tools and logs calls, it never
+    // imports the orchestrator's emitter, JSONL sink or Factory command API.
+    const bundle = readFileSync(PLUGIN_OUT, "utf8");
+    for (const marker of [
+      "EventEmitter",
+      "EventSink",
+      "JsonlSink",
+      "PROTOCOL_VERSION",
+      "eventLogPath",
+      ".factory/events",
+    ]) {
+      expect(bundle, marker).not.toContain(marker);
+    }
+
+    const events = join(ws, ".factory", "events");
+    rmSync(events, { recursive: true, force: true });
+    const allowed = await call("impl", "implementer-app", "read", {
+      path: join(wt, "src/sum.test.ts"),
+    });
+    expect(allowed).toBeUndefined();
+    // A plugin run may append its tool log, but it never creates an event file.
+    expect(existsSync(events)).toBe(false);
+  });
+
   test("the bundle is written through a temp file, leaving none behind on failure", () => {
     const root = mkdtempSync(join(tmpdir(), "loomwright-bundle-"));
     try {

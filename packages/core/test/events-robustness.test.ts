@@ -488,6 +488,7 @@ describe("gate output is never inlined", () => {
 
     const finished = sink.ofType("gate.finished")[0];
     if (finished === undefined) throw new Error("missing gate.finished");
+    expect(finished.data).toMatchObject({ name: "tests", status: "pass", durationMs: 42 });
     expect(finished.data).not.toHaveProperty("output");
     const ref = finished.data.outputRef;
     if (ref === undefined) throw new Error("missing outputRef");

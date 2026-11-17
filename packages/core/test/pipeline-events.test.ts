@@ -272,6 +272,24 @@ describe("heartbeats in the event stream", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  test("agent.finished carries the role, outcome, duration, usage and session id", async () => {
+    const { root, sink } = await runSession(() => {});
+    try {
+      const finished = sink.ofType("agent.finished")[0];
+      if (finished === undefined) throw new Error("the agent session was not finished");
+      expect(finished.data).toMatchObject({
+        step: "1.1",
+        role: "implementer",
+        outcome: "succeeded",
+        durationMs: 0,
+        usage,
+        sessionId: "ses_test",
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("approval events", () => {

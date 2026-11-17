@@ -214,12 +214,14 @@ describe("documentation", () => {
     for (const topic of [
       "v",
       "seq",
+      "event families",
       "truncated",
       "redact",
       "single writer",
       "fromSeq",
       "tailEvents",
       "pause",
+      "additive evolution checklist",
     ])
       expect(events).toContain(topic);
     expect(events).toContain("loomwright events");

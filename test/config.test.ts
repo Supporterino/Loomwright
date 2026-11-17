@@ -392,6 +392,23 @@ test("gate scripts keep their exact definitions", () => {
   expect(pkg.scripts?.["test:serial"]).toBe("bun test --timeout 60000");
 });
 
+test("no new retention knob is added", () => {
+  const config = parseConfigText(
+    readFileSync(new URL("../factory.config.jsonc", import.meta.url), "utf8"),
+    "factory.config.jsonc",
+  );
+  expect(Object.keys(config.logs).sort()).toEqual(["redact", "retentionDays"]);
+  expect(Object.keys(config)).not.toContain("events");
+
+  const schema = readFileSync(
+    new URL("../packages/core/src/config/schema.ts", import.meta.url),
+    "utf8",
+  );
+  // The only retention setting is the log tree's; the event log follows it, never a new knob.
+  expect(schema.match(/retentionDays/g)?.length).toBe(1);
+  expect(schema).not.toMatch(/events\s*:/);
+});
+
 test("protected configuration is checked for moved paths", () => {
   const text = readFileSync(new URL("../factory.config.jsonc", import.meta.url), "utf8");
   const config = parseConfigText(text, "factory.config.jsonc");

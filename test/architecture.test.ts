@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, posix, relative, sep } from "node:path";
+import {
+  Command,
+  emptySnapshot,
+  PROTOCOL_VERSION,
+  RunEvent,
+  type RunSnapshot,
+  reduce,
+} from "@loomwright/protocol";
 
 export interface ImportEdge {
   /** Repo-relative POSIX path. */
@@ -388,5 +396,24 @@ describe("monorepo layout", () => {
     expect(existsSync(join(repoRoot, "packages/core/src/index.ts"))).toBe(false);
     const permissions: unknown = await import("@loomwright/core/policy/permissions");
     expect(isRecord(permissions) && typeof permissions.ruleEffect === "function").toBe(true);
+  });
+
+  test("protocol is a versioned skeleton with no engine imports", () => {
+    expect(PROTOCOL_VERSION).toBe(1);
+    expect(typeof RunEvent.parse).toBe("function");
+    expect(typeof reduce).toBe("function");
+    expect(typeof emptySnapshot).toBe("function");
+    expect(Command).toBeDefined();
+
+    // The root export also carries the snapshot type, and the initial value it describes.
+    const snapshot: RunSnapshot = emptySnapshot("add-health");
+    expect(snapshot).toMatchObject({ runId: "add-health", lastSeq: 0, phase: null });
+
+    const edges = edgesOf(typescriptFiles(join(repoRoot, "packages/protocol/src")));
+    expect(checkImports(edges)).toEqual([]);
+    // The protocol leaf may import zod and nothing else from outside its own tree.
+    for (const edge of edges.filter((edge) => !edge.specifier.startsWith("."))) {
+      expect(edge.specifier).toBe("zod");
+    }
   });
 });
