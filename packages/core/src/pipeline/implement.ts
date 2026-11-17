@@ -75,7 +75,7 @@ export function taskEventPayload(event: TaskEvent): {
     case "failed":
       return {
         type: "task.failed",
-        data: { task: taskRef(event.task), reason: event.reason },
+        data: { task: taskRef(event.task), reason: event.reason, attempt: event.task.failures + 1 },
       };
     case "merging":
       return { type: "task.merging", data: { task: taskRef(event.task) } };

@@ -474,6 +474,7 @@ describe("Scheduler", () => {
     expect(failed?.data).toEqual({
       task: { id: "1.1", repo: "backend", title: "Task 1.1" },
       reason: "gate-failed; retry budget (3) exhausted",
+      attempt: 5,
     });
     expect(skipped).toEqual([{ id: "2.1", reason: "dependency 1.1 failed" }]);
   });
