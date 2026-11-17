@@ -2,6 +2,14 @@
 
 All notable changes per release. `loomwright update` applies them to an installed workspace (see [docs/cli.md](docs/cli.md#update)).
 
+## 1.0.2
+
+### Patch Changes
+
+- a9d57b0: opencode: accept every 2.x minor below 3.0.0 and let features declare their own floor
+  (`mcp.roles` needs 2.2.0); the lock records the effective floor and init, update and doctor
+  report it.
+
 ## 1.0.1
 
 ### Patch Changes
