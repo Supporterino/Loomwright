@@ -374,6 +374,23 @@ describe("Factory commands", () => {
     expect(readActive(fx.root)).toBeUndefined();
   });
 
+  test("a malformed runId is rejected before a control command acts", async () => {
+    const factory = await open(fx.root);
+    const commands: (() => Promise<unknown>)[] = [
+      () => factory.resume("../../x"),
+      () => factory.approve("../../x"),
+      () => factory.retry("../../x", "1.1"),
+      () => factory.abort("../../x"),
+      () => factory.answer("../../x", "yes"),
+      () => factory.pause("../../x"),
+    ];
+    for (const command of commands) {
+      await expect(command()).rejects.toThrow(/expected a change id/);
+    }
+    expect(existsSync(join(fx.root, "x"))).toBe(false);
+    expect(existsSync(join(fx.root, ".factory", "commands"))).toBe(false);
+  });
+
   test("no listener is started", async () => {
     const eventsDir = join(import.meta.dir, "..", "src", "events");
     const sources = [

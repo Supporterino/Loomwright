@@ -5,7 +5,7 @@ import { findWorkspaceRoot, loadConfig } from "./config/load.ts";
 import type { FactoryConfig } from "./config/schema.ts";
 import { PreconditionError, UsageError } from "./errors.ts";
 import { setCommandErrorReporter, writeCommand } from "./events/inbox.ts";
-import type { RunEvent } from "./events/protocol.ts";
+import { Command, type RunEvent } from "./events/protocol.ts";
 import { readEventLines } from "./events/reader.ts";
 import { tailEvents } from "./events/tailer.ts";
 import { LOCK_FILE } from "./lock/lock.ts";
@@ -307,62 +307,66 @@ function createFactory(root: string, config: FactoryConfig, options: FactoryOpti
     },
 
     async resume(changeId: string): Promise<RunOutcome> {
-      requireRun(root, changeId);
-      return withPipeline(root, config, options, changeId, async (p) => {
-        const outcome = await drive(p, changeId);
+      const { runId } = Command.parse({ command: "resume", runId: changeId });
+      requireRun(root, runId);
+      return withPipeline(root, config, options, runId, async (p) => {
+        const outcome = await drive(p, runId);
         report(out, outcome);
         return outcome;
       });
     },
 
     async approve(changeId: string, commandOptions?: { continue?: boolean }): Promise<Approval> {
-      return withPipeline(root, config, options, changeId, async (p) => {
-        const approval = await approvePipeline(p, changeId);
+      const { runId } = Command.parse({ command: "approve", runId: changeId });
+      return withPipeline(root, config, options, runId, async (p) => {
+        const approval = await approvePipeline(p, runId);
         if (commandOptions?.continue === false) return approval;
-        report(out, await drive(p, changeId));
+        report(out, await drive(p, runId));
         return approval;
       });
     },
 
     async retry(changeId: string, taskId: string): Promise<void> {
-      const task = requireRun(root, changeId).tasks.find((t) => t.id === taskId);
-      if (task === undefined) throw new UsageError(`retry: ${changeId} has no task ${taskId}`);
+      const { runId } = Command.parse({ command: "retry", runId: changeId, task: taskId });
+      const task = requireRun(root, runId).tasks.find((t) => t.id === taskId);
+      if (task === undefined) throw new UsageError(`retry: ${runId} has no task ${taskId}`);
       if (task.status !== "failed")
         throw new PreconditionError(`task ${task.id} is ${task.status}, not failed`);
-      const next = await updateRun(root, changeId, (draft) => retryTask(draft, task.id));
+      const next = await updateRun(root, runId, (draft) => retryTask(draft, task.id));
       const revived = next.tasks.filter((t) => t.status === "pending").map((t) => t.id);
       out(`requeued ${task.id} with a fresh retry budget (pending: ${revived.join(", ")})`);
-      out(`continue with \`loomwright resume ${changeId}\``);
+      out(`continue with \`loomwright resume ${runId}\``);
     },
 
     async abort(changeId: string): Promise<void> {
-      const run = requireRun(root, changeId);
-      if (run.phase === "done") throw new PreconditionError(`${changeId} is already closed`);
+      const { runId } = Command.parse({ command: "abort", runId: changeId });
+      const run = requireRun(root, runId);
+      if (run.phase === "done") throw new PreconditionError(`${runId} is already closed`);
       // Read first: a corrupt lock refuses the abort before anything changed.
       const active = readActive(root);
-      await updateRun(root, changeId, (draft) => {
+      await updateRun(root, runId, (draft) => {
         draft.abortRequested = true;
         draft.phase = "aborted";
       });
-      await removeFromQueue(root, changeId);
+      await removeFromQueue(root, runId);
       // A live driver in another process stops at its next safe point and frees the
       // workspace itself; otherwise nothing is running and the lock goes now.
       const driver =
-        active?.changeId === changeId &&
+        active?.changeId === runId &&
         active.pid !== null &&
         active.pid !== process.pid &&
         driverAlive(active)
           ? active.pid
           : undefined;
-      if (driver === undefined) await releaseActive(root, changeId);
+      if (driver === undefined) await releaseActive(root, runId);
       out(
         driver === undefined
-          ? `aborted ${changeId}`
-          : `aborted ${changeId}; pid ${driver} stops at its next safe point and frees the workspace`,
+          ? `aborted ${runId}`
+          : `aborted ${runId}; pid ${driver} stops at its next safe point and frees the workspace`,
       );
       const branches = Object.entries(run.branches).map(([repo, b]) => `${repo}: ${b.branch}`);
       if (branches.length > 0) out(`kept branches: ${branches.join(", ")}`);
-      const worktrees = worktreesOf(root, changeId);
+      const worktrees = worktreesOf(root, runId);
       if (worktrees.length > 0) out(`kept worktrees: ${worktrees.join(", ")}`);
     },
 

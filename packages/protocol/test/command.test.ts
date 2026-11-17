@@ -56,3 +56,9 @@ test("an empty or missing runId is rejected", () => {
     expect(Command.safeParse(bad).success).toBe(false);
   }
 });
+
+test("a malformed runId that could escape the inbox is rejected", () => {
+  for (const runId of ["../../x", "add/health", "Add-health", "add health", "-add-health"]) {
+    expect(Command.safeParse({ command: "pause", runId }).success).toBe(false);
+  }
+});

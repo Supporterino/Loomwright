@@ -1,6 +1,5 @@
 import { z } from "zod";
-
-const RunId = z.string().min(1);
+import { RunId } from "./events.ts";
 
 /**
  * The closed union of commands a reader may send for a run. Unknown command names and a

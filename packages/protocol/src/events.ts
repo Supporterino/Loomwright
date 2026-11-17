@@ -11,7 +11,7 @@ export const PROTOCOL_VERSION = 1;
 
 /** A change id, e.g. `add-health`; an empty or malformed id cannot name a run. */
 const CHANGE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const RunId = z.string().regex(CHANGE_ID, "expected a change id such as add-health");
+export const RunId = z.string().regex(CHANGE_ID, "expected a change id such as add-health");
 
 const Seq = z.int().min(1);
 /** ISO-8601 in UTC, which is the only form `Date.prototype.toISOString` produces. */
