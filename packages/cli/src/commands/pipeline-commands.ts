@@ -1,16 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { findWorkspaceRoot, loadConfig } from "@loomwright/core/config/load";
 import { PreconditionError, UsageError } from "@loomwright/core/errors";
 import { ExitCode } from "@loomwright/core/exit-codes";
+import { type Factory, type FactoryOptions, open, type RunOutcome } from "@loomwright/core/factory";
 import { CHANGE_ID } from "@loomwright/core/git/repo";
 import { LOCK_FILE } from "@loomwright/core/lock/lock";
 import { pruneLogs } from "@loomwright/core/logs/log";
-import { approve } from "@loomwright/core/pipeline/approve";
 import { Pipeline } from "@loomwright/core/pipeline/context";
-import { design, intake } from "@loomwright/core/pipeline/design";
-import type { DriveOutcome } from "@loomwright/core/pipeline/drive";
-import { drive } from "@loomwright/core/pipeline/drive";
 import type { Verbosity } from "@loomwright/core/pipeline/progress";
 import { OpencodeRuntime } from "@loomwright/core/runtime/opencode";
 import { readActive, releaseDriver } from "@loomwright/core/state/active";
@@ -105,12 +102,21 @@ export const PROGRESS_OPTIONS = {
   },
 } as const satisfies CommandOptions;
 
-function report(io: Io, outcome: DriveOutcome): ExitCode {
-  io.out(`${outcome.id}: ${outcome.phase}${outcome.detail ? ` — ${outcome.detail}` : ""}`);
-  if (outcome.phase === "done")
-    io.out(
-      `next: \`loomwright land ${outcome.id}\` merges the finished change into its base branches`,
-    );
+/** The `Factory` seam the run-state commands share; the one-shot paths keep `withPipeline`. */
+export async function openFactory(io: Io, verbosity?: Verbosity): Promise<Factory> {
+  const options: FactoryOptions = {
+    out: (line) => io.out(line),
+    err: (line) => io.err(line),
+    ...(io.signal === undefined ? {} : { signal: io.signal }),
+    ...(io.runtime === undefined ? {} : { runtime: io.runtime }),
+    ...(io.ask === undefined ? {} : { ask: io.ask }),
+    ...(verbosity === undefined ? {} : { verbosity }),
+  };
+  return open(io.cwd, options);
+}
+
+/** A paused or aborted drive exits 6; every other outcome exits 0, as before the rewiring. */
+function exitCodeFor(outcome: RunOutcome): ExitCode {
   return outcome.phase === "paused" || outcome.phase === "aborted" ? ExitCode.Paused : ExitCode.Ok;
 }
 
@@ -172,38 +178,9 @@ in openspec/changes/<id>/questions.md and .factory/clarifications/<id>.md.
     if (request === "")
       throw new UsageError('run: expected a request, e.g. loomwright run "add a health endpoint"');
     const verbosity = verbosityOf(values);
-    return withPipeline(
-      io,
-      "intake",
-      { verbosity, clarify: values["no-interactive"] !== true },
-      async (p) => {
-        const id = await intake(p, request);
-        const result = await design(p, id);
-        const run = p.run(id);
-        if (run.clarifications.length > 0) {
-          const questions = join(
-            run.draft === undefined ? p.root : join(p.root, run.draft),
-            "openspec",
-            "changes",
-            id,
-            "questions.md",
-          );
-          if (existsSync(questions)) io.out(`questions: ${relative(p.root, questions)}`);
-        }
-        if (!result.ok) {
-          io.out(`${id}: the spec does not validate yet:`);
-          for (const issue of result.issues) io.out(`  - ${issue}`);
-          io.out(
-            `fix openspec/changes/${id}/ and run \`loomwright approve ${id}\`, or \`loomwright resume ${id}\` to let the architect repair it`,
-          );
-          return ExitCode.Paused;
-        }
-        io.out(
-          `${id}: awaiting approval — review openspec/changes/${id}/ then run \`loomwright approve ${id}\``,
-        );
-        return ExitCode.Ok;
-      },
-    );
+    const factory = await openFactory(io, verbosity);
+    const outcome = await factory.run(request, { clarify: values["no-interactive"] !== true });
+    return exitCodeFor(outcome);
   },
 };
 
@@ -234,11 +211,15 @@ change is queued while another one is active. --no-continue only records the app
     const { values, positionals } = parseCommandArgs("approve", args, APPROVE_OPTIONS, true);
     const id = changeIdArg("approve", positionals);
     const verbosity = verbosityOf(values);
-    return withPipeline(io, id, { verbosity }, async (p) => {
-      await approve(p, id);
-      if (values["no-continue"]) return ExitCode.Ok;
-      return report(io, await drive(p, id));
-    });
+    const factory = await openFactory(io, verbosity);
+    if (values["no-continue"] === true) {
+      await factory.approve(id, { continue: false });
+      return ExitCode.Ok;
+    }
+    // Approve here, drive through `resume`: the exit code stays the old `drive` outcome
+    // (a queued change that pauses while this one closes must still exit 6).
+    await factory.approve(id, { continue: false });
+    return exitCodeFor(await factory.resume(id));
   },
 };
 
@@ -258,15 +239,16 @@ kept worktrees, finished ones stay; a queued change starts when the workspace is
     const { positionals, values } = parseCommandArgs("resume", args, PROGRESS_OPTIONS, true);
     const id = changeIdArg("resume", positionals);
     const verbosity = verbosityOf(values);
-    return withPipeline(io, id, { verbosity }, async (p) => {
-      const run = loadRun(p.root, id);
-      if (run === undefined) throw new PreconditionError(`no change ${id}`);
-      if (run.phase === "done") {
-        io.out(`${id} is already done`);
-        io.out(`next: \`loomwright land ${id}\` merges the finished change into its base branches`);
-        return ExitCode.Ok;
-      }
-      return report(io, await drive(p, id));
-    });
+    // Setup first, so an uninstalled workspace fails the same way it did through `withPipeline`.
+    const { root } = await setup(io);
+    const run = loadRun(root, id);
+    if (run === undefined) throw new PreconditionError(`no change ${id}`);
+    if (run.phase === "done") {
+      io.out(`${id} is already done`);
+      io.out(`next: \`loomwright land ${id}\` merges the finished change into its base branches`);
+      return ExitCode.Ok;
+    }
+    const factory = await openFactory(io, verbosity);
+    return exitCodeFor(await factory.resume(id));
   },
 };

@@ -4,23 +4,9 @@ import { findWorkspaceRoot } from "@loomwright/core/config/load";
 import { PreconditionError, UsageError } from "@loomwright/core/errors";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { CHANGE_ID } from "@loomwright/core/git/repo";
-import { retryTask } from "@loomwright/core/scheduler/scheduler";
-import {
-  type ActiveLock,
-  driverAlive,
-  readActive,
-  readQueue,
-  releaseActive,
-  removeFromQueue,
-} from "@loomwright/core/state/active";
+import { type ActiveLock, driverAlive, readActive, readQueue } from "@loomwright/core/state/active";
 import { factoryDir, readOrCorrupt } from "@loomwright/core/state/files";
-import {
-  loadRun,
-  type RunState,
-  scanRuns,
-  type TaskState,
-  updateRun,
-} from "@loomwright/core/state/run";
+import { loadRun, type RunState, scanRuns, type TaskState } from "@loomwright/core/state/run";
 import {
   formatTokens,
   summarizeUsage,
@@ -29,6 +15,7 @@ import {
   usageLine,
 } from "@loomwright/core/usage/usage";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
+import { openFactory } from "./pipeline-commands.ts";
 
 async function workspace(io: Io): Promise<string> {
   const root = await findWorkspaceRoot(io.cwd);
@@ -234,7 +221,7 @@ With an id: that change's phase, branches, task DAG with states, retries and wor
     if (values.watch && values.json)
       throw new UsageError("status: --watch and --json exclude each other");
     const root = await workspace(io);
-    if (positionals.length > 0) changeId("status", positionals);
+    const id = positionals.length > 0 ? changeId("status", positionals) : undefined;
     if (values.watch) {
       const seconds = values.interval === undefined ? 2 : Number(values.interval);
       if (!Number.isFinite(seconds) || seconds <= 0)
@@ -246,34 +233,10 @@ With an id: that change's phase, branches, task DAG with states, retries and wor
       renderStatus(io, root, positionals);
       return ExitCode.Ok;
     }
-    // Corrupt state files are shown, not fatal: status is how they are found (audit P15).
-    const lock = readOrCorrupt(() => readActive(root));
-    const active = lock.value;
-    const queued = readOrCorrupt(() => readQueue(root));
-    const queue = queued.value?.entries.map((e) => e.changeId) ?? [];
-    const { runs, corrupt } =
-      positionals.length > 0
-        ? { runs: [requireRun(root, changeId("status", positionals))], corrupt: [] }
-        : scanRuns(root);
-    io.out(
-      JSON.stringify(
-        {
-          active: active ?? null,
-          driverAlive: active ? driverAlive(active) : false,
-          queue,
-          ...(positionals.length === 0 ? { workspaceUsage: summarizeWorkspaceUsage(root) } : {}),
-          runs: runs.map((r) => ({ ...r, usage: summarizeUsage(root, r.id) })),
-          corrupt: [
-            ...[lock.corrupt, queued.corrupt]
-              .filter((e) => e !== undefined)
-              .map((e) => ({ file: e.file, error: e.message })),
-            ...corrupt.map((c) => ({ id: c.id, file: c.error.file, error: c.error.message })),
-          ],
-        },
-        null,
-        2,
-      ),
-    );
+    // One document, one implementation: `Factory.status` serialises exactly what `--json` prints.
+    const factory = await openFactory(io);
+    const doc = id === undefined ? await factory.status() : await factory.status(id);
+    io.out(JSON.stringify(doc, null, 2));
     return ExitCode.Ok;
   },
 };
@@ -330,35 +293,8 @@ the aborted change (or another one) when you are ready.`,
   async run(args, io) {
     const { positionals } = parseCommandArgs("abort", args, {}, true);
     const id = changeId("abort", positionals);
-    const root = await workspace(io);
-    const run = requireRun(root, id);
-    if (run.phase === "done") throw new PreconditionError(`${id} is already closed`);
-    // Read first: a corrupt lock refuses the abort before anything changed.
-    const active = readActive(root);
-    await updateRun(root, id, (draft) => {
-      draft.abortRequested = true;
-      draft.phase = "aborted";
-    });
-    await removeFromQueue(root, id);
-    // A live driver in another process stops at its next safe point and frees the
-    // workspace itself; otherwise nothing is running and the lock goes now.
-    const driver =
-      active?.changeId === id &&
-      active.pid !== null &&
-      active.pid !== process.pid &&
-      driverAlive(active)
-        ? active.pid
-        : undefined;
-    if (driver === undefined) await releaseActive(root, id);
-    io.out(
-      driver === undefined
-        ? `aborted ${id}`
-        : `aborted ${id}; pid ${driver} stops at its next safe point and frees the workspace`,
-    );
-    const branches = Object.entries(run.branches).map(([repo, b]) => `${repo}: ${b.branch}`);
-    if (branches.length > 0) io.out(`kept branches: ${branches.join(", ")}`);
-    const worktrees = worktreesOf(root, id);
-    if (worktrees.length > 0) io.out(`kept worktrees: ${worktrees.join(", ")}`);
+    const factory = await openFactory(io);
+    await factory.abort(id);
     return ExitCode.Ok;
   },
 };
@@ -380,15 +316,8 @@ that were cancelled because of it. Continue the change with \`loomwright resume 
     const { values, positionals } = parseCommandArgs("retry", args, RETRY_OPTIONS, true);
     const id = changeId("retry", positionals);
     if (values.task === undefined) throw new UsageError("retry: --task <id> is required");
-    const root = await workspace(io);
-    const task = requireRun(root, id).tasks.find((t) => t.id === values.task);
-    if (task === undefined) throw new UsageError(`retry: ${id} has no task ${values.task}`);
-    if (task.status !== "failed")
-      throw new PreconditionError(`task ${task.id} is ${task.status}, not failed`);
-    const next = await updateRun(root, id, (draft) => retryTask(draft, task.id));
-    const revived = next.tasks.filter((t) => t.status === "pending").map((t) => t.id);
-    io.out(`requeued ${task.id} with a fresh retry budget (pending: ${revived.join(", ")})`);
-    io.out(`continue with \`loomwright resume ${id}\``);
+    const factory = await openFactory(io);
+    await factory.retry(id, values.task);
     return ExitCode.Ok;
   },
 };

@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import { ExitCode } from "@loomwright/core/exit-codes";
+import { open } from "@loomwright/core/factory";
 import { claimActive, enqueue, readActive, readQueue } from "@loomwright/core/state/active";
 import { loadRun, newRun, saveRun, TaskState } from "@loomwright/core/state/run";
 import { FACTORY_VERSION } from "@loomwright/core/version";
@@ -13,6 +15,7 @@ describe("status, retry and abort", () => {
   let fx: Fixture;
   beforeEach(async () => {
     fx = await createSingleRepoFixture();
+    expect((await cli(fx.root, "init", "--no-graph")).code).toBe(ExitCode.Ok);
     const run = newRun("add-x", "Add a health endpoint", "paused");
     run.pausedReason = "failed: 1.1; cancelled: 1.2";
     run.branches = { ".": { branch: "change/add-x", base: "0123456789abcdef" } };
@@ -66,6 +69,18 @@ describe("status, retry and abort", () => {
     expect(json.runs.map((r) => r.id).sort()).toEqual(["add-x", "next-thing"]);
   });
 
+  test("status --json deep-equals the document Factory.status() returns", async () => {
+    const factory = await open(fx.root);
+    const all = JSON.parse((await cli(fx.root, "status", "--json")).out) as unknown;
+    expect(all).toEqual(await factory.status());
+    const one = JSON.parse((await cli(fx.root, "status", "add-x", "--json")).out) as {
+      workspaceUsage?: unknown;
+    };
+    expect(one).toEqual(await factory.status("add-x"));
+    expect("workspaceUsage" in one).toBe(false);
+    expect((await cli(fx.root, "status", "nope", "--json")).code).toBe(ExitCode.Precondition);
+  });
+
   test("status --watch reprints frames until interrupted", async () => {
     const out: string[] = [];
     const code = await runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
@@ -114,6 +129,21 @@ describe("status, retry and abort", () => {
     ]);
   });
 
+  test("retry keeps its usage and precondition errors", async () => {
+    const missing = await cli(fx.root, "retry", "add-x");
+    expect(missing.code).toBe(ExitCode.Usage);
+    expect(missing.err).toContain("retry: --task <id> is required");
+    const unknownChange = await cli(fx.root, "retry", "nope", "--task", "1.1");
+    expect(unknownChange.code).toBe(ExitCode.Precondition);
+    expect(unknownChange.err).toContain("no change nope in this workspace");
+    const unknownTask = await cli(fx.root, "retry", "add-x", "--task", "nope");
+    expect(unknownTask.code).toBe(ExitCode.Usage);
+    expect(unknownTask.err).toContain("retry: add-x has no task nope");
+    const notFailed = await cli(fx.root, "retry", "add-x", "--task", "1.3");
+    expect(notFailed.code).toBe(ExitCode.Precondition);
+    expect(notFailed.err).toContain("task 1.3 is merged, not failed");
+  });
+
   test("a corrupt run file or lock is reported, not a crash (audit P15)", async () => {
     writeFileSync(join(fx.root, ".factory/runs/broken.json"), "{not json");
     const all = await cli(fx.root, "status");
@@ -146,10 +176,29 @@ describe("status, retry and abort", () => {
   test("abort marks the change, releases the lock and leaves the queue to the user", async () => {
     const run = await cli(fx.root, "abort", "add-x");
     expect(run.code).toBe(ExitCode.Ok);
+    expect(run.out.split("\n")[0]).toBe("aborted add-x");
     expect(run.out).toContain("kept branches: .: change/add-x");
     expect(loadRun(fx.root, "add-x")).toMatchObject({ phase: "aborted", abortRequested: true });
     expect(readActive(fx.root)).toBeUndefined();
     expect(readQueue(fx.root).entries.map((e) => e.changeId)).toEqual(["next-thing"]);
     expect((await cli(fx.root, "abort", "nope")).code).toBe(ExitCode.Precondition);
+  });
+
+  test("abort reports the live driver that stops at its next safe point", async () => {
+    const driver = Bun.spawn(["sleep", "60"]);
+    try {
+      writeFileSync(
+        join(fx.root, ".factory/active.lock"),
+        JSON.stringify({ changeId: "add-x", pid: driver.pid, host: hostname(), since: "now" }),
+      );
+      const run = await cli(fx.root, "abort", "add-x");
+      expect(run.code).toBe(ExitCode.Ok);
+      expect(run.out.split("\n")[0]).toBe(
+        `aborted add-x; pid ${driver.pid} stops at its next safe point and frees the workspace`,
+      );
+      expect(readActive(fx.root)?.changeId).toBe("add-x");
+    } finally {
+      driver.kill();
+    }
   });
 });

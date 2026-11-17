@@ -171,6 +171,7 @@ describe("pipeline: AI repo with submodules", () => {
 
     expect(run.code).toBe(ExitCode.Ok);
     expect(run.out).toContain("clarify");
+    expect(run.out).toContain(`questions: openspec/changes/${ID}/questions.md`);
     expect(intakeTurns).toBe(2);
     expect(designTurns).toBe(2);
     const orchestrator = runtime.calls.filter((c) => c.agent === "orchestrator");
