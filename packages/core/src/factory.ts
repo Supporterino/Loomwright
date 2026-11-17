@@ -1,38 +1,57 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 import type { Approval } from "./approval/approval.ts";
 import { findWorkspaceRoot, loadConfig } from "./config/load.ts";
 import type { FactoryConfig } from "./config/schema.ts";
-import { PreconditionError } from "./errors.ts";
+import { PreconditionError, UsageError } from "./errors.ts";
+import { setCommandErrorReporter, writeCommand } from "./events/inbox.ts";
 import type { RunEvent } from "./events/protocol.ts";
 import { readEventLines } from "./events/reader.ts";
 import { tailEvents } from "./events/tailer.ts";
 import { LOCK_FILE } from "./lock/lock.ts";
+import { pruneLogs } from "./logs/log.ts";
+import { approve as approvePipeline } from "./pipeline/approve.ts";
 import type { Ask } from "./pipeline/clarify.ts";
+import { Pipeline } from "./pipeline/context.ts";
+import { design, intake } from "./pipeline/design.ts";
+import { drive } from "./pipeline/drive.ts";
 import type { Verbosity } from "./pipeline/progress.ts";
+import { OpencodeRuntime } from "./runtime/opencode.ts";
 import type { AgentRuntime } from "./runtime/types.ts";
+import { retryTask } from "./scheduler/scheduler.ts";
 import type { ActiveLock } from "./state/active.ts";
-import { driverAlive, readActive, readQueue } from "./state/active.ts";
-import { readOrCorrupt } from "./state/files.ts";
+import {
+  driverAlive,
+  readActive,
+  readQueue,
+  releaseActive,
+  releaseDriver,
+  removeFromQueue,
+} from "./state/active.ts";
+import { factoryDir, readOrCorrupt } from "./state/files.ts";
 import {
   listRuns as listRunStates,
   loadRun,
+  type Phase,
   type RunScan,
   type RunState,
   scanRuns,
+  updateRun,
 } from "./state/run.ts";
 import { summarizeUsage, summarizeWorkspaceUsage } from "./usage/usage.ts";
 
 /**
  * `Factory.open` is the library command API: the CLI's `status`, `listRuns` and `events` read
- * paths without the CLI, and (from 5.2) the write commands. Reads never take a lock, write run
- * state or append an event; `open` only resolves the workspace config and lock.
+ * paths without the CLI, and the write commands over the same modules the CLI uses. Reads
+ * never take a lock, write run state or append an event; write commands compose `intake`,
+ * `design`, `approve` and `drive` and never start a daemon or listener.
  */
 
 export interface FactoryOptions {
   readonly cwd?: string;
   readonly out?: (line: string) => void;
   readonly err?: (line: string) => void;
+  /** When omitted, `Factory` owns SIGINT/SIGTERM for the duration of one write command. */
   readonly signal?: AbortSignal;
   readonly runtime?: (root: string, config: FactoryConfig, changeId: string) => AgentRuntime;
   readonly ask?: Ask;
@@ -65,20 +84,24 @@ export interface EventLogLine {
   readonly event?: RunEvent;
 }
 
-/** Options for `Factory.run`; the write half lands in 5.2. */
+/** Options for `Factory.run`; `clarify: false` records questions instead of asking them. */
 export interface RunCommandOptions {
-  readonly quick?: boolean;
+  readonly clarify?: boolean;
 }
 
-/** What `Factory.run` and `Factory.resume` report; the write half lands in 5.2. */
-export type RunOutcome = RunState;
+/** What a write command reports; the exit code stays a CLI concern. */
+export interface RunOutcome {
+  readonly id: string;
+  readonly phase: Phase;
+  readonly detail?: string;
+}
 
 export interface Factory {
   // reads
   status(changeId?: string): Promise<StatusDocument>;
   listRuns(): Promise<RunState[]>;
   events(runId: string, query?: EventQuery): AsyncIterable<EventLogLine>;
-  // writes (5.2)
+  // writes
   run(request: string, options?: RunCommandOptions): Promise<RunOutcome>;
   resume(changeId: string): Promise<RunOutcome>;
   approve(changeId: string, options?: { continue?: boolean }): Promise<Approval>;
@@ -88,13 +111,106 @@ export interface Factory {
   pause(changeId: string): Promise<void>;
 }
 
+const noop = (): void => {};
+
+const stderr = (line: string): void => {
+  process.stderr.write(`${line}\n`);
+};
+
 function requireRun(root: string, id: string): RunState {
   const run = loadRun(root, id);
   if (run === undefined) throw new PreconditionError(`no change ${id} in this workspace`);
   return run;
 }
 
-function createFactory(root: string, _config: FactoryConfig, _options: FactoryOptions): Factory {
+function report(out: (line: string) => void, outcome: RunOutcome): void {
+  out(`${outcome.id}: ${outcome.phase}${outcome.detail ? ` — ${outcome.detail}` : ""}`);
+  if (outcome.phase === "done")
+    out(
+      `next: \`loomwright land ${outcome.id}\` merges the finished change into its base branches`,
+    );
+}
+
+/** Worktrees a change kept (`status`/`abort` show them; the CLI owns the same list). */
+function worktreesOf(root: string, id: string): string[] {
+  const dir = factoryDir(root, "worktrees", id);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((repo) => repo !== ".opencode")
+    .flatMap((repo) =>
+      readdirSync(join(dir, repo)).map((task) => `.factory/worktrees/${id}/${repo}/${task}`),
+    );
+}
+
+interface PipelineCommandOptions {
+  readonly clarify?: boolean;
+}
+
+/**
+ * One write command: prune logs, build the runtime, wire the signal and always close both.
+ * A caller-supplied `signal` is honoured as-is; only then does `Factory` install nothing,
+ * because a library must not hijack its host's process handlers.
+ */
+async function withPipeline<T>(
+  root: string,
+  config: FactoryConfig,
+  options: FactoryOptions,
+  changeId: string,
+  work: (p: Pipeline) => Promise<T>,
+  commandOptions: PipelineCommandOptions = {},
+): Promise<T> {
+  const out = options.out ?? noop;
+  const err = options.err ?? stderr;
+  pruneLogs(root, config.logs.retentionDays);
+  const makeRuntime =
+    options.runtime ??
+    ((r: string, c: FactoryConfig, id: string): AgentRuntime =>
+      new OpencodeRuntime({
+        root: r,
+        config: c,
+        changeId: id,
+        turnTimeoutMs: c.runtime.turnTimeoutMinutes * 60_000,
+      }));
+  const runtime = makeRuntime(root, config, changeId);
+  const ownSignal = options.signal === undefined;
+  const controller = new AbortController();
+  const signal = options.signal ?? controller.signal;
+  const onSignal = (): void => {
+    err("interrupt: stopping safely (state is kept; continue with `loomwright resume`)");
+    controller.abort();
+  };
+  if (ownSignal) {
+    process.once("SIGINT", onSignal);
+    process.once("SIGTERM", onSignal);
+  }
+  const p = new Pipeline(root, config, {
+    runtime,
+    out,
+    signal,
+    ...(options.verbosity === undefined ? {} : { verbosity: options.verbosity }),
+    ...(options.ask === undefined ? {} : { ask: options.ask }),
+    ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
+    ...(options.now === undefined ? {} : { now: options.now }),
+    ...(commandOptions.clarify === undefined ? {} : { clarify: commandOptions.clarify }),
+  });
+  setCommandErrorReporter(p, err);
+  try {
+    return await work(p);
+  } finally {
+    p.progress.stop();
+    if (ownSignal) {
+      process.off("SIGINT", onSignal);
+      process.off("SIGTERM", onSignal);
+    }
+    await runtime.close();
+    const active = readOrCorrupt(() => readActive(root)).value;
+    if (active?.pid === process.pid) await releaseDriver(root, active.changeId);
+  }
+}
+
+function createFactory(root: string, config: FactoryConfig, options: FactoryOptions): Factory {
+  const out = options.out ?? noop;
+
   return {
     async status(changeId?: string): Promise<StatusDocument> {
       // Corrupt state files are shown, not fatal: status is how they are found (audit P15).
@@ -153,26 +269,114 @@ function createFactory(root: string, _config: FactoryConfig, _options: FactoryOp
       }
     },
 
-    async run(_request: string, _options?: RunCommandOptions): Promise<RunOutcome> {
-      throw new PreconditionError("Factory.run is not implemented yet");
+    async run(request: string, commandOptions?: RunCommandOptions): Promise<RunOutcome> {
+      return withPipeline(
+        root,
+        config,
+        options,
+        "intake",
+        async (p) => {
+          const id = await intake(p, request);
+          const result = await design(p, id);
+          const run = p.run(id);
+          if (run.clarifications.length > 0) {
+            const questions = join(
+              run.draft === undefined ? p.root : join(p.root, run.draft),
+              "openspec",
+              "changes",
+              id,
+              "questions.md",
+            );
+            if (existsSync(questions)) out(`questions: ${relative(p.root, questions)}`);
+          }
+          if (!result.ok) {
+            out(`${id}: the spec does not validate yet:`);
+            for (const issue of result.issues) out(`  - ${issue}`);
+            out(
+              `fix openspec/changes/${id}/ and run \`loomwright approve ${id}\`, or \`loomwright resume ${id}\` to let the architect repair it`,
+            );
+            return { id, phase: "paused", detail: result.issues.join("\n") };
+          }
+          out(
+            `${id}: awaiting approval — review openspec/changes/${id}/ then run \`loomwright approve ${id}\``,
+          );
+          return { id, phase: "awaiting-approval" };
+        },
+        { clarify: commandOptions?.clarify ?? true },
+      );
     },
-    async resume(_changeId: string): Promise<RunOutcome> {
-      throw new PreconditionError("Factory.resume is not implemented yet");
+
+    async resume(changeId: string): Promise<RunOutcome> {
+      requireRun(root, changeId);
+      return withPipeline(root, config, options, changeId, async (p) => {
+        const outcome = await drive(p, changeId);
+        report(out, outcome);
+        return outcome;
+      });
     },
-    async approve(_changeId: string, _options?: { continue?: boolean }): Promise<Approval> {
-      throw new PreconditionError("Factory.approve is not implemented yet");
+
+    async approve(changeId: string, commandOptions?: { continue?: boolean }): Promise<Approval> {
+      return withPipeline(root, config, options, changeId, async (p) => {
+        const approval = await approvePipeline(p, changeId);
+        if (commandOptions?.continue === false) return approval;
+        report(out, await drive(p, changeId));
+        return approval;
+      });
     },
-    async retry(_changeId: string, _taskId: string): Promise<void> {
-      throw new PreconditionError("Factory.retry is not implemented yet");
+
+    async retry(changeId: string, taskId: string): Promise<void> {
+      const task = requireRun(root, changeId).tasks.find((t) => t.id === taskId);
+      if (task === undefined) throw new UsageError(`retry: ${changeId} has no task ${taskId}`);
+      if (task.status !== "failed")
+        throw new PreconditionError(`task ${task.id} is ${task.status}, not failed`);
+      const next = await updateRun(root, changeId, (draft) => retryTask(draft, task.id));
+      const revived = next.tasks.filter((t) => t.status === "pending").map((t) => t.id);
+      out(`requeued ${task.id} with a fresh retry budget (pending: ${revived.join(", ")})`);
+      out(`continue with \`loomwright resume ${changeId}\``);
     },
-    async abort(_changeId: string): Promise<void> {
-      throw new PreconditionError("Factory.abort is not implemented yet");
+
+    async abort(changeId: string): Promise<void> {
+      const run = requireRun(root, changeId);
+      if (run.phase === "done") throw new PreconditionError(`${changeId} is already closed`);
+      // Read first: a corrupt lock refuses the abort before anything changed.
+      const active = readActive(root);
+      await updateRun(root, changeId, (draft) => {
+        draft.abortRequested = true;
+        draft.phase = "aborted";
+      });
+      await removeFromQueue(root, changeId);
+      // A live driver in another process stops at its next safe point and frees the
+      // workspace itself; otherwise nothing is running and the lock goes now.
+      const driver =
+        active?.changeId === changeId &&
+        active.pid !== null &&
+        active.pid !== process.pid &&
+        driverAlive(active)
+          ? active.pid
+          : undefined;
+      if (driver === undefined) await releaseActive(root, changeId);
+      out(
+        driver === undefined
+          ? `aborted ${changeId}`
+          : `aborted ${changeId}; pid ${driver} stops at its next safe point and frees the workspace`,
+      );
+      const branches = Object.entries(run.branches).map(([repo, b]) => `${repo}: ${b.branch}`);
+      if (branches.length > 0) out(`kept branches: ${branches.join(", ")}`);
+      const worktrees = worktreesOf(root, changeId);
+      if (worktrees.length > 0) out(`kept worktrees: ${worktrees.join(", ")}`);
     },
-    async answer(_changeId: string, _answer: string, _question?: string): Promise<void> {
-      throw new PreconditionError("Factory.answer is not implemented yet");
+
+    async answer(changeId: string, answer: string, question?: string): Promise<void> {
+      writeCommand(root, {
+        command: "answer",
+        runId: changeId,
+        answer,
+        ...(question === undefined ? {} : { question }),
+      });
     },
-    async pause(_changeId: string): Promise<void> {
-      throw new PreconditionError("Factory.pause is not implemented yet");
+
+    async pause(changeId: string): Promise<void> {
+      writeCommand(root, { command: "pause", runId: changeId });
     },
   };
 }

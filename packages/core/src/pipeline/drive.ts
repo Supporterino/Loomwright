@@ -1,8 +1,14 @@
 import { PreconditionError, TransientError } from "../errors.ts";
+import {
+  type InboxCommand,
+  readCommands,
+  removeCommand,
+  reportCommandProblem,
+} from "../events/inbox.ts";
 import { checkDesign } from "../openspec/cli.ts";
-import { claimActive, dequeue, readActive, releaseActive } from "../state/active.ts";
+import { claimActive, dequeue, readActive, releaseActive, releaseDriver } from "../state/active.ts";
 import { readOrCorrupt } from "../state/files.ts";
-import { loadRun, type Phase } from "../state/run.ts";
+import { loadRun, now, type Phase } from "../state/run.ts";
 import { verifyApproval } from "./approve.ts";
 import { ChangeAborted, type Pipeline } from "./context.ts";
 import { contractPhase } from "./contracts.ts";
@@ -75,6 +81,92 @@ async function nextQueued(p: Pipeline): Promise<string | undefined> {
 
 const WAITING: ReadonlySet<Phase> = new Set(["queued", "awaiting-approval", "paused"]);
 
+const PAUSE_REASON = "pause requested";
+
+type AnswerCommand = InboxCommand & { readonly command: "answer" };
+
+/** Records an inbox answer on the run's clarification list; the caller turns a failure into a diagnostic. */
+async function applyAnswer(p: Pipeline, id: string, command: AnswerCommand): Promise<void> {
+  let step = "answer";
+  let question = command.question ?? "answer";
+  await p.update(id, (draft) => {
+    const record =
+      command.question === undefined
+        ? draft.clarifications.find((c) => c.status === "unanswered")
+        : draft.clarifications.find((c) => c.question === command.question);
+    if (record === undefined) {
+      // A TUI can answer before an ask loop recorded the question: keep the answer anyway.
+      draft.clarifications.push({
+        step: "answer",
+        question,
+        status: "answered",
+        answer: command.answer,
+        at: now(),
+      });
+      return;
+    }
+    record.status = "answered";
+    record.answer = command.answer;
+    record.at = now();
+    step = record.step;
+    question = record.question;
+  });
+  p.emit("question.answered", { step, question, status: "answered", answer: command.answer });
+}
+
+/** Applies pending `.factory/commands/<id>/` files. Returns true when the run paused. */
+async function consumeCommands(p: Pipeline, id: string): Promise<boolean> {
+  for (const entry of readCommands(p.root, id)) {
+    if (entry.error !== undefined) {
+      reportCommandProblem(p, `${entry.file}: ${entry.error}`);
+      continue;
+    }
+    const command = entry.command;
+    if (command === undefined) continue;
+    if (command.runId !== id) {
+      reportCommandProblem(p, `${entry.file}: command is for ${command.runId}, not ${id}`);
+      continue;
+    }
+    switch (command.command) {
+      case "pause": {
+        // `abort` wins: its safe point stops the run and frees the workspace itself.
+        if (p.abortRequested(id)) continue;
+        if (p.run(id).phase === "done") {
+          reportCommandProblem(p, `${entry.file}: ${id} is already done`);
+          continue;
+        }
+        p.emit("run.pause-requested", { reason: PAUSE_REASON });
+        await setPhase(p, id, "paused", PAUSE_REASON);
+        // `abort` won the race: leave the request for a later reader instead of faking a pause.
+        if (p.run(id).phase !== "paused") continue;
+        // Pause keeps the change active: only the driver pid goes.
+        if (readActive(p.root)?.changeId === id) await releaseDriver(p.root, id);
+        // Last, so a crash before the pause persisted re-delivers the request.
+        removeCommand(entry.file);
+        return true;
+      }
+      case "answer": {
+        try {
+          await applyAnswer(p, id, command);
+          removeCommand(entry.file);
+        } catch (err: unknown) {
+          reportCommandProblem(
+            p,
+            `${entry.file}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        continue;
+      }
+      default:
+        reportCommandProblem(
+          p,
+          `${entry.file}: "${command.command}" has its own file path; use \`loomwright ${command.command} ${id}\``,
+        );
+    }
+  }
+  return false;
+}
+
 /** Drives one change as far as it can go; continues with the next queued change on close. */
 export async function drive(p: Pipeline, firstId: string): Promise<DriveOutcome> {
   let id = firstId;
@@ -92,10 +184,12 @@ export async function drive(p: Pipeline, firstId: string): Promise<DriveOutcome>
       return { id, phase: p.run(id).phase, detail: "interrupted" };
     }
     if (p.abortRequested(id)) return stopAborted(p, id);
+    if (await consumeCommands(p, id)) return { id, phase: "paused", detail: PAUSE_REASON };
     try {
       const next = await step(p, id);
       if (next.kind === "stop") return next.outcome;
       id = next.id;
+      if (await consumeCommands(p, id)) return { id, phase: "paused", detail: PAUSE_REASON };
     } catch (err) {
       if (err instanceof ChangeAborted) return stopAborted(p, err.changeId);
       if (err instanceof TransientError) {
