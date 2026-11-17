@@ -40,12 +40,16 @@ async function ensureDriver(p: Pipeline, id: string): Promise<void> {
 }
 
 async function setPhase(p: Pipeline, id: string, phase: Phase, reason?: string): Promise<void> {
-  await p.update(id, (d) => {
+  const from = p.run(id).phase;
+  const updated = await p.update(id, (d) => {
     if (d.abortRequested) return; // `abort` won: the change stays aborted
     d.phase = phase;
     if (reason === undefined) delete d.pausedReason;
     else d.pausedReason = reason;
   });
+  if (updated.phase !== phase) return; // the update was a no-op (aborted)
+  p.emit("phase.changed", { from, to: phase, ...(reason === undefined ? {} : { reason }) });
+  if (phase === "paused") p.emit("run.paused", { reason: reason ?? "paused" });
 }
 
 /** Stops an aborted change: it stays aborted and frees the workspace for the next one. */
@@ -53,6 +57,8 @@ async function stopAborted(p: Pipeline, id: string): Promise<DriveOutcome> {
   await p.update(id, (d) => {
     d.phase = "aborted";
   });
+  p.emit("run.aborted", {});
+  p.emit("run.finished", { outcome: "aborted" });
   if (readActive(p.root)?.changeId === id) await releaseActive(p.root, id);
   return { id, phase: "aborted", detail: "aborted; branches and worktrees are kept" };
 }
@@ -72,14 +78,19 @@ const WAITING: ReadonlySet<Phase> = new Set(["queued", "awaiting-approval", "pau
 /** Drives one change as far as it can go; continues with the next queued change on close. */
 export async function drive(p: Pipeline, firstId: string): Promise<DriveOutcome> {
   let id = firstId;
+  p.bindRun(id);
   // `resume` of an aborted change is the decision to continue it.
   if (p.run(id).phase === "aborted") {
     await p.update(id, (d) => {
       d.abortRequested = false;
     });
+    p.emit("run.resumed", {});
   }
   for (;;) {
-    if (p.deps.signal.aborted) return { id, phase: p.run(id).phase, detail: "interrupted" };
+    if (p.deps.signal.aborted) {
+      p.emit("run.finished", { outcome: "paused" });
+      return { id, phase: p.run(id).phase, detail: "interrupted" };
+    }
     if (p.abortRequested(id)) return stopAborted(p, id);
     try {
       const next = await step(p, id);
@@ -253,11 +264,14 @@ async function step(p: Pipeline, id: string): Promise<Step> {
     case "closing": {
       await close(p, id);
       const next = await nextQueued(p);
+      p.emit("run.finished", { outcome: "done" });
       if (next === undefined) return stop({ id, phase: "done" });
+      p.bindRun(next);
       p.out(`▶ starting queued change ${next}`);
       return go(next);
     }
     case "done":
+      p.emit("run.finished", { outcome: "done" });
       return stop({ id, phase: "done" });
   }
 }

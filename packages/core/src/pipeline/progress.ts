@@ -26,6 +26,8 @@ export interface ProgressOptions {
   /** 0 disables the heartbeat (tests call `tick` themselves). */
   readonly heartbeatMs?: number;
   readonly now?: () => number;
+  /** Replaces the heartbeat line: the orchestrator turns it into a `heartbeat` event. */
+  readonly onHeartbeat?: (text: string) => void;
 }
 
 export interface AgentStart {
@@ -119,6 +121,14 @@ export function describeTool(tool: string, input: unknown): string {
   return tool;
 }
 
+/**
+ * The line a failed `tool-done` prints. The event stream carries it pre-rendered because the
+ * `agent.activity` payload has no error field for the terminal sink to replay.
+ */
+export function failedToolLine(step: string, tool: string, error?: string): string {
+  return `  ${ICON.fail} [${step}] ${tool} failed${error === undefined ? "" : `: ${cap(error, DETAIL_MAX)}`}`;
+}
+
 /** `pass` → `✓`, a missing/timeout/not-check-only gate → `✗`, skipped → `–`. */
 const GATE_ICON: Record<string, string> = {
   pass: ICON.ok,
@@ -135,6 +145,7 @@ export class Progress {
   readonly #maxAttempts: number;
   readonly #heartbeatMs: number;
   readonly #now: () => number;
+  readonly #onHeartbeat: ((text: string) => void) | undefined;
   readonly #active = new Map<string, ActiveSession>();
   readonly #gates = new Map<string, ActiveStage>();
   readonly #installs = new Map<string, ActiveStage>();
@@ -148,6 +159,7 @@ export class Progress {
     this.#maxAttempts = Math.max(1, options.maxAttempts ?? 4);
     this.#heartbeatMs = options.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
     this.#now = options.now ?? Date.now;
+    this.#onHeartbeat = options.onHeartbeat;
   }
 
   get verbosity(): Verbosity {
@@ -242,10 +254,7 @@ export class Progress {
     }
     // A failed tool call is worth a line even in normal mode: the agent may still recover,
     // but the user should see why a turn stalls or gets long.
-    if (activity.status === "failed")
-      this.line(
-        `  ${ICON.fail} [${step}] ${detail} failed${activity.error === undefined ? "" : `: ${cap(activity.error, DETAIL_MAX)}`}`,
-      );
+    if (activity.status === "failed") this.line(failedToolLine(step, detail, activity.error));
   }
 
   gate(step: string, event: GateEvent, stage = "gates"): void {
@@ -398,7 +407,8 @@ export class Progress {
       entries.pop();
       text = `  ${ICON.wait} running ${total}: ${entries.join(" · ")} · +${total - entries.length} more`;
     }
-    this.line(text);
+    if (this.#onHeartbeat === undefined) this.line(text);
+    else this.#onHeartbeat(text);
   }
 
   #startHeartbeat(): void {

@@ -20,6 +20,7 @@ import { ensureDesignBranch, specDir } from "./design.ts";
 export async function approve(p: Pipeline, id: string): Promise<Approval> {
   let run = p.run(id);
   assertApprovable(id, run);
+  p.bindRun(id);
   // An adopted change has no branch yet: create it (or its draft worktree) before validating
   // and committing the spec, so the normal branch check below applies to it too (ADR-0038).
   if (run.branches["."] === undefined) {
@@ -61,6 +62,7 @@ export async function approve(p: Pipeline, id: string): Promise<Approval> {
     hash: specHash(dir, id),
     approvedAt: now(),
   };
+  p.events.emit("approval.requested", { specHash: approval.hash, specCommit });
   const checked = run.preserveProgress ? checkedTaskIds(dir, id) : new Set<string>();
   await p.update(id, (d) => {
     // Checked again under the run lock: another approve or resume may have moved on (P14).
@@ -79,6 +81,11 @@ export async function approve(p: Pipeline, id: string): Promise<Approval> {
       recordTask(task, merged ? "adopted: already checked in OpenSpec" : "approved");
       return task;
     });
+  });
+  p.events.emit("approval.granted", {
+    approver,
+    specHash: approval.hash,
+    specCommit,
   });
   snapshotDefinitions(p.root, id, p.config, p.run(id).factoryVersion, true);
   p.out(

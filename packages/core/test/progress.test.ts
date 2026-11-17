@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { RunEvent } from "../src/events/protocol.ts";
+import { TerminalSink } from "../src/events/terminal.ts";
 import type { GateEvent, GateReport } from "../src/gates/run.ts";
-import { describeTool, Progress } from "../src/pipeline/progress.ts";
+import { describeTool, Progress, type Verbosity } from "../src/pipeline/progress.ts";
 import type { Usage } from "../src/runtime/types.ts";
 import { TaskState } from "../src/state/run.ts";
 import { formatDuration } from "../src/util/duration.ts";
@@ -81,6 +83,55 @@ describe("describeTool", () => {
     expect(
       describeTool("bash", { command: `curl -H "Authorization: Bearer ${"a".repeat(20)}"` }),
     ).toContain("[REDACTED");
+  });
+});
+
+const renderLevel = (level: "always" | "normal" | "verbose", verbosity: Verbosity): string[] => {
+  const { lines, out } = collect();
+  const progress = new Progress({ out, verbosity, heartbeatMs: 0 });
+  const sink = new TerminalSink(progress);
+  sink.write(
+    RunEvent.parse({
+      v: 1,
+      runId: "add-health",
+      seq: 1,
+      ts: "2026-11-17T10:00:00.000Z",
+      type: "progress.line",
+      data: { level, text: "banner" },
+    }),
+  );
+  return lines;
+};
+
+describe("progress.line levels", () => {
+  test("free-form progress uses the note channel: level maps to verbosity", () => {
+    for (const verbosity of ["quiet", "normal", "verbose"] as const)
+      expect(renderLevel("always", verbosity)).toEqual(["banner"]);
+    expect(renderLevel("normal", "quiet")).toEqual([]);
+    expect(renderLevel("normal", "normal")).toEqual(["banner"]);
+    expect(renderLevel("normal", "verbose")).toEqual(["banner"]);
+    expect(renderLevel("verbose", "quiet")).toEqual([]);
+    expect(renderLevel("verbose", "normal")).toEqual([]);
+    expect(renderLevel("verbose", "verbose")).toEqual(["banner"]);
+  });
+
+  test("quiet and verbose remain unchanged", () => {
+    const { lines, out } = collect();
+    const progress = new Progress({ out, verbosity: "quiet", heartbeatMs: 0 });
+    const sink = new TerminalSink(progress);
+    sink.write(
+      RunEvent.parse({
+        v: 1,
+        runId: "add-health",
+        seq: 1,
+        ts: "2026-11-17T10:00:00.000Z",
+        type: "progress.line",
+        data: { level: "normal", text: "note" },
+      }),
+    );
+    expect(lines).toEqual([]);
+    progress.line("kept");
+    expect(lines).toEqual(["kept"]);
   });
 });
 
@@ -194,6 +245,24 @@ describe("Progress", () => {
     expect(line).toContain("1.2 2m14s");
     // A long gate is visible too: no agent session is running during it.
     expect(line).toContain("[1.2] test 2m14s");
+    progress.stop();
+  });
+
+  test("the heartbeat hook replaces the line and prints exactly once", () => {
+    const { lines, out } = collect();
+    const beats: string[] = [];
+    const progress = new Progress({
+      out,
+      heartbeatMs: 0,
+      now: () => 1000,
+      onHeartbeat: (text) => beats.push(text),
+    });
+    progress.agentStarted({ step: "1.1", agent: "implementer-app", model: "stub/model" });
+    const before = lines.length;
+    progress.tick();
+    expect(beats).toHaveLength(1);
+    expect(beats[0]).toContain("running 1");
+    expect(lines).toHaveLength(before);
     progress.stop();
   });
 
