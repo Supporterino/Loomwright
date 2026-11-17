@@ -209,7 +209,11 @@ async function withPipeline<T>(
   }
 }
 
-function createFactory(root: string, config: FactoryConfig, options: FactoryOptions): Factory {
+function createFactory(
+  root: string,
+  config: () => FactoryConfig,
+  options: FactoryOptions,
+): Factory {
   const out = options.out ?? noop;
 
   return {
@@ -274,7 +278,7 @@ function createFactory(root: string, config: FactoryConfig, options: FactoryOpti
     async run(request: string, commandOptions?: RunCommandOptions): Promise<RunOutcome> {
       return withPipeline(
         root,
-        config,
+        config(),
         options,
         "intake",
         async (p) => {
@@ -311,7 +315,7 @@ function createFactory(root: string, config: FactoryConfig, options: FactoryOpti
     async resume(changeId: string): Promise<RunOutcome> {
       const { runId } = Command.parse({ command: "resume", runId: changeId });
       requireRun(root, runId);
-      return withPipeline(root, config, options, runId, async (p) => {
+      return withPipeline(root, config(), options, runId, async (p) => {
         const outcome = await drive(p, runId);
         report(out, outcome);
         return outcome;
@@ -320,7 +324,7 @@ function createFactory(root: string, config: FactoryConfig, options: FactoryOpti
 
     async approve(changeId: string, commandOptions?: { continue?: boolean }): Promise<Approval> {
       const { runId } = Command.parse({ command: "approve", runId: changeId });
-      return withPipeline(root, config, options, runId, async (p) => {
+      return withPipeline(root, config(), options, runId, async (p) => {
         const approval = await approvePipeline(p, runId);
         if (commandOptions?.continue === false) return approval;
         report(out, await drive(p, runId));
@@ -387,12 +391,39 @@ function createFactory(root: string, config: FactoryConfig, options: FactoryOpti
   };
 }
 
-export async function open(workspace?: string, options: FactoryOptions = {}): Promise<Factory> {
-  const root =
-    workspace === undefined ? await findWorkspaceRoot(options.cwd ?? process.cwd()) : workspace;
+async function workspaceRoot(
+  workspace: string | undefined,
+  cwd: string | undefined,
+): Promise<string> {
+  const root = workspace === undefined ? await findWorkspaceRoot(cwd ?? process.cwd()) : workspace;
   if (root === undefined) throw new PreconditionError("not inside a git repository");
+  return root;
+}
+
+/** The install marker and config only `run`, `resume` and `approve` need. */
+function installConfig(root: string): FactoryConfig {
   if (!existsSync(join(root, LOCK_FILE)))
     throw new PreconditionError("loomwright is not installed here", ["run `loomwright init`"]);
-  const { config } = loadConfig(root);
+  return loadConfig(root).config;
+}
+
+export async function open(workspace?: string, options: FactoryOptions = {}): Promise<Factory> {
+  const root = await workspaceRoot(workspace, options.cwd);
+  const config = (): FactoryConfig => installConfig(root);
+  // `open` rejects before init and on a broken config, as it always has.
+  config();
   return createFactory(root, config, options);
+}
+
+/**
+ * The read and recovery variant: no install marker and no config, so `status`, `listRuns`,
+ * `events`, `abort` and `retry` still work in a git repository that is not initialised or
+ * whose config does not parse. The commands that need the config load it on first use.
+ */
+export async function openReadOnly(
+  workspace?: string,
+  options: FactoryOptions = {},
+): Promise<Factory> {
+  const root = await workspaceRoot(workspace, options.cwd);
+  return createFactory(root, () => installConfig(root), options);
 }

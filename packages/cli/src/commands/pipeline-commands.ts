@@ -3,7 +3,13 @@ import { join, resolve } from "node:path";
 import { findWorkspaceRoot, loadConfig } from "@loomwright/core/config/load";
 import { PreconditionError, UsageError } from "@loomwright/core/errors";
 import { ExitCode } from "@loomwright/core/exit-codes";
-import { type Factory, type FactoryOptions, open, type RunOutcome } from "@loomwright/core/factory";
+import {
+  type Factory,
+  type FactoryOptions,
+  open,
+  openReadOnly,
+  type RunOutcome,
+} from "@loomwright/core/factory";
 import { CHANGE_ID } from "@loomwright/core/git/repo";
 import { LOCK_FILE } from "@loomwright/core/lock/lock";
 import { pruneLogs } from "@loomwright/core/logs/log";
@@ -103,8 +109,8 @@ export const PROGRESS_OPTIONS = {
 } as const satisfies CommandOptions;
 
 /** The `Factory` seam the run-state commands share; the one-shot paths keep `withPipeline`. */
-export async function openFactory(io: Io, verbosity?: Verbosity): Promise<Factory> {
-  const options: FactoryOptions = {
+function factoryOptions(io: Io, verbosity?: Verbosity): FactoryOptions {
+  return {
     out: (line) => io.out(line),
     err: (line) => io.err(line),
     ...(io.signal === undefined ? {} : { signal: io.signal }),
@@ -114,7 +120,18 @@ export async function openFactory(io: Io, verbosity?: Verbosity): Promise<Factor
     // `Factory.open` treats a passed workspace as already resolved; the CLI runs from anywhere.
     cwd: io.cwd,
   };
-  return open(undefined, options);
+}
+
+export async function openFactory(io: Io, verbosity?: Verbosity): Promise<Factory> {
+  return open(undefined, factoryOptions(io, verbosity));
+}
+
+/**
+ * Reads and recovery: `status`, `events`, `abort` and `retry` work without an install marker
+ * or a parseable config, exactly when they are needed to inspect or unstick a broken workspace.
+ */
+export async function openReadOnlyFactory(io: Io): Promise<Factory> {
+  return openReadOnly(undefined, factoryOptions(io));
 }
 
 /** A paused or aborted drive exits 6; every other outcome exits 0, as before the rewiring. */

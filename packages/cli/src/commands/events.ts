@@ -6,7 +6,7 @@ import { readEventLines } from "@loomwright/core/events/reader";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { loadRun } from "@loomwright/core/state/run";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
-import { changeIdArg, openFactory } from "./pipeline-commands.ts";
+import { changeIdArg, openReadOnlyFactory } from "./pipeline-commands.ts";
 
 const EVENTS_OPTIONS = {
   follow: {
@@ -66,7 +66,7 @@ Exit codes: 0 ok, 2 invalid --from, 4 unknown change.`,
         `warning: .factory/events/${id}.jsonl line ${skipped.line} skipped (${skipped.reason})`,
       );
 
-    const factory = await openFactory(io);
+    const factory = await openReadOnlyFactory(io);
     const controller = new AbortController();
     const onAbort = (): void => controller.abort();
     if (io.signal === undefined) process.once("SIGINT", onAbort);

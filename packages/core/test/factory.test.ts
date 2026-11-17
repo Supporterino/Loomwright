@@ -17,7 +17,13 @@ import { ConfigError, PreconditionError } from "../src/errors.ts";
 import { eventLogPath } from "../src/events/jsonl.ts";
 import { type EventType, RunEvent } from "../src/events/protocol.ts";
 import { ExitCode } from "../src/exit-codes.ts";
-import { type EventLogLine, type Factory, open, type StatusDocument } from "../src/factory.ts";
+import {
+  type EventLogLine,
+  type Factory,
+  open,
+  openReadOnly,
+  type StatusDocument,
+} from "../src/factory.ts";
 import { claimActive, enqueue } from "../src/state/active.ts";
 import { newRun, saveRun, TaskState } from "../src/state/run.ts";
 
@@ -346,6 +352,21 @@ describe("Factory read API", () => {
       if (!(err instanceof ConfigError)) throw err;
       expect(err.exitCode).toBe(ExitCode.ConfigInvalid);
     }
+  });
+
+  test("openReadOnly reads without an install marker or a parseable config", async () => {
+    seedRuns(fx.root);
+    const factory = await openReadOnly(fx.root);
+    const status = await factory.status();
+    expect(status.runs.map((run) => run.id).sort()).toEqual(["add-x", "next-thing", "paused-y"]);
+    expect((await factory.listRuns()).map((run) => run.id)).toContain("add-x");
+
+    writeFileSync(join(fx.root, "factory.lock.json"), "{}\n");
+    writeFileSync(join(fx.root, "factory.config.jsonc"), "{ not jsonc");
+    const configured = await openReadOnly(fx.root);
+    expect((await configured.status()).queue).toEqual([]);
+
+    await expect(configured.run("a change")).rejects.toBeInstanceOf(ConfigError);
   });
 
   test("the API surface is complete", async () => {

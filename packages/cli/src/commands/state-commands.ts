@@ -16,7 +16,7 @@ import {
   usageLine,
 } from "@loomwright/core/usage/usage";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
-import { openFactory } from "./pipeline-commands.ts";
+import { openReadOnlyFactory } from "./pipeline-commands.ts";
 
 async function workspace(io: Io): Promise<string> {
   const root = await findWorkspaceRoot(io.cwd);
@@ -236,7 +236,7 @@ With an id: that change's phase, branches, task DAG with states, retries and wor
       return ExitCode.Ok;
     }
     // One document, one implementation: `Factory.status` serialises exactly what `--json` prints.
-    const factory = await openFactory(io);
+    const factory = await openReadOnlyFactory(io);
     const doc = id === undefined ? await factory.status() : await factory.status(id);
     io.out(JSON.stringify(doc, null, 2));
     return ExitCode.Ok;
@@ -341,7 +341,7 @@ async function watchStatus(
   frame();
   const timer = setInterval(frame, intervalMs);
   try {
-    const factory = await openFactory(io);
+    const factory = await openReadOnlyFactory(io);
     for await (const item of factory.events(id, {
       fromSeq: lastCompleteSeq(log) + 1,
       follow: true,
@@ -373,7 +373,7 @@ the aborted change (or another one) when you are ready.`,
   async run(args, io) {
     const { positionals } = parseCommandArgs("abort", args, {}, true);
     const id = changeId("abort", positionals);
-    const factory = await openFactory(io);
+    const factory = await openReadOnlyFactory(io);
     await factory.abort(id);
     return ExitCode.Ok;
   },
@@ -396,7 +396,7 @@ that were cancelled because of it. Continue the change with \`loomwright resume 
     const { values, positionals } = parseCommandArgs("retry", args, RETRY_OPTIONS, true);
     const id = changeId("retry", positionals);
     if (values.task === undefined) throw new UsageError("retry: --task <id> is required");
-    const factory = await openFactory(io);
+    const factory = await openReadOnlyFactory(io);
     await factory.retry(id, values.task);
     return ExitCode.Ok;
   },

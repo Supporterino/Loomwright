@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { eventLogPath } from "@loomwright/core/events/jsonl";
@@ -263,6 +263,52 @@ describe("status, retry and abort", () => {
     const notFailed = await cli(fx.root, "retry", "add-x", "--task", "1.3");
     expect(notFailed.code).toBe(ExitCode.Precondition);
     expect(notFailed.err).toContain("task 1.3 is merged, not failed");
+  });
+
+  test("status --json, events, retry and abort work in a git repository that is not initialised", async () => {
+    rmSync(join(fx.root, "factory.lock.json"));
+    rmSync(join(fx.root, "factory.config.jsonc"));
+
+    const json = await cli(fx.root, "status", "--json");
+    expect(json.code).toBe(ExitCode.Ok);
+    expect((JSON.parse(json.out) as { runs: { id: string }[] }).runs.map((r) => r.id)).toContain(
+      "add-x",
+    );
+    expect((await cli(fx.root, "events", "add-x")).code).toBe(ExitCode.Ok);
+    const retried = await cli(fx.root, "retry", "add-x", "--task", "1.1");
+    expect(retried.code).toBe(ExitCode.Ok);
+    const aborted = await cli(fx.root, "abort", "add-x");
+    expect(aborted.code).toBe(ExitCode.Ok);
+    expect(loadRun(fx.root, "add-x")?.phase).toBe("aborted");
+  });
+
+  test("status --json, events, retry and abort work when the config does not parse", async () => {
+    writeFileSync(join(fx.root, "factory.config.jsonc"), "{ not jsonc");
+
+    expect((await cli(fx.root, "status", "--json")).code).toBe(ExitCode.Ok);
+    expect((await cli(fx.root, "events", "add-x")).code).toBe(ExitCode.Ok);
+    expect((await cli(fx.root, "retry", "add-x", "--task", "1.1")).code).toBe(ExitCode.Ok);
+    expect((await cli(fx.root, "abort", "add-x")).code).toBe(ExitCode.Ok);
+    expect(loadRun(fx.root, "add-x")?.phase).toBe("aborted");
+  });
+
+  test("status in a git repository that is not initialised shows the empty view", async () => {
+    const plain = await createSingleRepoFixture();
+    try {
+      const text = await cli(plain.root, "status");
+      expect(text.code).toBe(ExitCode.Ok);
+      expect(text.out).toContain('no changes yet (start one with `loomwright run "<request>"`)');
+      const json = await cli(plain.root, "status", "--json");
+      expect(json.code).toBe(ExitCode.Ok);
+      expect(JSON.parse(json.out)).toMatchObject({
+        active: null,
+        queue: [],
+        runs: [],
+        corrupt: [],
+      });
+    } finally {
+      plain.cleanup();
+    }
   });
 
   test("a corrupt run file or lock is reported, not a crash (audit P15)", async () => {
