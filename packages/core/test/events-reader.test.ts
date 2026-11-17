@@ -335,6 +335,37 @@ describe("events tailer", () => {
     }
   });
 
+  test("a tailed event carries the stored line byte-exact, unknown fields included", async () => {
+    const root = makeRoot();
+    const path = writeLog(root, [line(1, "heartbeat", { text: "one" })]);
+    const controller = new AbortController();
+    const { cursor, close } = startTail(root, { signal: controller.signal });
+
+    try {
+      expect(seqOf(await cursor.next())).toBe(1);
+
+      // A newer writer's extra field and key order must survive: the tail carries the bytes.
+      const appended = JSON.stringify({
+        writer: "a-newer-loomwright",
+        data: { text: "two" },
+        type: "heartbeat",
+        ts: ISO,
+        seq: 2,
+        runId: RUN,
+        v: 1,
+      });
+      appendLine(path, appended);
+
+      const item = await cursor.next();
+      if (item.kind !== "event") throw new Error("expected an event");
+      expect(item.text).toBe(appended);
+      expect(item.event).toEqual(event(2, "heartbeat", { text: "two" }));
+    } finally {
+      controller.abort();
+      await close();
+    }
+  });
+
   test("the reader and tailer never write to the log", async () => {
     const root = makeRoot();
     const path = writeLog(root, [

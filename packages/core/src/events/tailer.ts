@@ -4,8 +4,18 @@ import { eventLogPath } from "./jsonl.ts";
 import { EventEnvelope, RunEvent } from "./protocol.ts";
 
 export type TailItem =
-  | { readonly kind: "event"; readonly event: RunEvent }
+  | {
+      readonly kind: "event";
+      readonly event: RunEvent;
+      /** The stored line, byte-exact and without its trailing newline. */
+      readonly text: string;
+    }
   | { readonly kind: "gap"; readonly missing: number[] };
+
+interface ParsedLine {
+  readonly event: RunEvent;
+  readonly text: string;
+}
 
 export interface TailOptions {
   readonly fromSeq?: number;
@@ -36,7 +46,7 @@ const reset = (cursor: Cursor): void => {
   cursor.remainder = Buffer.alloc(0);
 };
 
-function parseLine(line: string): RunEvent | undefined {
+function parseLine(line: string): ParsedLine | undefined {
   if (line.trim() === "") return undefined;
   let value: unknown;
   try {
@@ -46,14 +56,14 @@ function parseLine(line: string): RunEvent | undefined {
   }
   if (!EventEnvelope.safeParse(value).success) return undefined;
   const event = RunEvent.safeParse(value);
-  return event.success ? event.data : undefined;
+  return event.success ? { event: event.data, text: line } : undefined;
 }
 
 /**
  * Reads only the bytes appended since the cursor, carrying the unfinished tail over. A smaller
  * file or a different inode means the log was rewritten, so the cursor restarts at byte 0.
  */
-function readAppended(path: string, cursor: Cursor): RunEvent[] {
+function readAppended(path: string, cursor: Cursor): ParsedLine[] {
   let fd: number;
   try {
     fd = openSync(path, "r");
@@ -89,10 +99,10 @@ function readAppended(path: string, cursor: Cursor): RunEvent[] {
     return [];
   }
   cursor.remainder = buffer.subarray(end + 1);
-  const events: RunEvent[] = [];
+  const events: ParsedLine[] = [];
   for (const line of buffer.subarray(0, end).toString("utf8").split("\n")) {
-    const event = parseLine(line);
-    if (event !== undefined) events.push(event);
+    const parsed = parseLine(line);
+    if (parsed !== undefined) events.push(parsed);
   }
   return events;
 }
@@ -155,7 +165,7 @@ export async function* tailEvents(
 
     for (;;) {
       if (aborted()) return;
-      for (const event of readAppended(path, cursor)) {
+      for (const { event, text } of readAppended(path, cursor)) {
         if (aborted()) return;
         if (event.seq <= lastSeq) continue;
         if (event.seq > lastSeq + 1) {
@@ -165,7 +175,7 @@ export async function* tailEvents(
           if (aborted()) return;
         }
         lastSeq = event.seq;
-        yield { kind: "event", event };
+        yield { kind: "event", event, text };
       }
       if (aborted()) return;
       if (dirty) {

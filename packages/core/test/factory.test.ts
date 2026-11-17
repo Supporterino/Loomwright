@@ -272,6 +272,47 @@ describe("Factory read API", () => {
     }
   });
 
+  test("events follow yields the stored bytes of an appended line, unknown fields included", async () => {
+    installWorkspace(fx.root);
+    const path = writeLog(fx.root, RUN, [lineFor(1)]);
+    const factory = await open(fx.root);
+    const controller = new AbortController();
+    const iterator = factory
+      .events(RUN, { follow: true, signal: controller.signal })
+      [Symbol.asyncIterator]();
+
+    try {
+      const first = await withTimeout(iterator.next());
+      if (first.done === true) throw new Error("follow ended before the stored prefix");
+      expect(first.value.event?.seq).toBe(1);
+
+      // A newer writer's field the schema does not know, and keys in its own order: the stored
+      // line must come back untouched, as a restart would print it.
+      const appended = JSON.stringify({
+        writer: "a-newer-loomwright",
+        data: { text: "beat 4" },
+        type: "heartbeat",
+        ts: ISO,
+        seq: 4,
+        runId: RUN,
+        v: 1,
+      });
+      appendFileSync(path, `${appended}\n`);
+
+      const next = await withTimeout(iterator.next());
+      if (next.done === true) throw new Error("follow ended before the appended event");
+      expect(next.value.event?.seq).toBe(4);
+      expect(next.value.line).toBe(appended);
+
+      controller.abort();
+      const done = await withTimeout(iterator.next());
+      expect(done.done).toBe(true);
+    } finally {
+      controller.abort();
+      await iterator.return?.(undefined);
+    }
+  });
+
   test("open rejects an empty directory that is not installed", async () => {
     const dir = mkdtempSync(join(tmpdir(), "loom-factory-empty-"));
     try {

@@ -265,7 +265,7 @@ function createFactory(root: string, config: FactoryConfig, options: FactoryOpti
       for await (const item of tail) {
         // Gaps are not stored events; the CLI renders them from the stream it chooses.
         if (item.kind !== "event") continue;
-        yield { line: JSON.stringify(item.event), event: item.event };
+        yield { line: item.text, event: item.event };
       }
     },
 
