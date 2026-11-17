@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TransientError } from "../src/errors.ts";
+import { taskEventPayload } from "../src/pipeline/implement.ts";
 import {
   type AttemptContext,
   type AttemptResult,
@@ -113,6 +114,7 @@ const schedule = (
     maxRetries?: number;
     serialRepos?: string[];
     observe?: (event: TaskEvent) => void;
+    onSkipped?: (task: TaskState, reason: string) => void;
   } = {},
 ) =>
   new Scheduler({
@@ -123,6 +125,7 @@ const schedule = (
     runner,
     ...(extra.serialRepos ? { serialRepos: extra.serialRepos } : {}),
     ...(extra.observe ? { observe: extra.observe } : {}),
+    ...(extra.onSkipped ? { onSkipped: extra.onSkipped } : {}),
   }).run();
 
 const task = (id: string) => loadRun(root, "add-x")?.tasks.find((t) => t.id === id);
@@ -416,6 +419,91 @@ describe("Scheduler", () => {
     expect(summary.status).toBe("aborted");
     expect(runner.resets).toEqual([]);
     expect(task("1.1")).toMatchObject({ status: "pending", failures: 0, serial: false });
+  });
+
+  test("task transitions map to the task.* family with id, repo and transition detail", async () => {
+    seed([{ id: "1.1", repo: "backend" }]);
+    const runner = new FakeRunner();
+    runner.attempts.set("1.1", [{ status: "gate-failed", output: "lint" }]);
+    runner.merges.set("1.1", [{ status: "conflict", conflicts: ["main.go"] }]);
+    const events: TaskEvent[] = [];
+    expect((await schedule(runner, { observe: (event) => events.push(event) })).status).toBe(
+      "complete",
+    );
+    const mapped = events.map(taskEventPayload);
+    expect(mapped.map((event) => event.type)).toEqual([
+      "task.started",
+      "task.retried",
+      "task.started",
+      "task.merging",
+      "task.conflict",
+      "task.retried",
+      "task.merging",
+      "task.merged",
+    ]);
+    const task = { id: "1.1", repo: "backend", title: "Task 1.1" };
+    expect(mapped[0]?.data).toEqual({ task, attempt: 1 });
+    expect(mapped[1]?.data).toEqual({ task, attempt: 2, reason: "gate-failed" });
+    expect(mapped[2]?.data).toEqual({ task, attempt: 2 });
+    expect(mapped[4]?.data).toEqual({ task, files: ["main.go"] });
+    expect(mapped[5]?.data).toEqual({ task, attempt: 3, reason: "merge conflict" });
+    expect(mapped[7]?.data).toEqual({ task, commit: "m-1.1" });
+  });
+
+  test("task.failed carries the reason and task.skipped names the cancelled dependent", async () => {
+    seed([
+      { id: "1.1", repo: "backend" },
+      { id: "2.1", repo: "frontend", deps: ["1.1"] },
+    ]);
+    const runner = new FakeRunner();
+    runner.attempts.set(
+      "1.1",
+      Array.from(
+        { length: 4 },
+        (_, i) => ({ status: "gate-failed", output: `fail ${i}` }) as const,
+      ),
+    );
+    const events: TaskEvent[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+    const summary = await schedule(runner, {
+      observe: (event) => events.push(event),
+      onSkipped: (task, reason) => skipped.push({ id: task.id, reason }),
+    });
+    expect(summary.failed).toEqual(["1.1"]);
+    const failed = events.map(taskEventPayload).find((event) => event.type === "task.failed");
+    expect(failed?.data).toEqual({
+      task: { id: "1.1", repo: "backend", title: "Task 1.1" },
+      reason: "gate-failed; retry budget (3) exhausted",
+    });
+    expect(skipped).toEqual([{ id: "2.1", reason: "dependency 1.1 failed" }]);
+  });
+
+  test("task.waiting maps the blocked tasks and their reasons", async () => {
+    seed([
+      { id: "1.1", touches: ["a/**"] },
+      { id: "1.2", touches: ["b/**"] },
+      { id: "1.3", touches: ["b/**"] },
+    ]);
+    const runner = new FakeRunner();
+    runner.onAttempt = async (task) => {
+      if (task.id === "1.2") await Bun.sleep(200);
+    };
+    const events: TaskEvent[] = [];
+    await schedule(runner, { observe: (event) => events.push(event) });
+    const waiting = events
+      .map(taskEventPayload)
+      .find(
+        (event) =>
+          event.type === "task.waiting" &&
+          Array.isArray(event.data.tasks) &&
+          event.data.tasks.some(
+            (task) =>
+              typeof task === "object" && task !== null && "id" in task && task.id === "1.3",
+          ),
+      );
+    expect(waiting?.data).toEqual({
+      tasks: [{ id: "1.3", reason: "touches overlap with 1.2" }],
+    });
   });
 
   test("an abort requested by another process stops dispatch and keeps work resumable", async () => {

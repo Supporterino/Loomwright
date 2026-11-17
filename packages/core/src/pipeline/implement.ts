@@ -1,4 +1,5 @@
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -12,12 +13,13 @@ import { checkApprovalHash } from "../approval/approval.ts";
 import { instructionPaths } from "../config/instructions.ts";
 import { type FactoryConfig, repoLanguages } from "../config/schema.ts";
 import { PreconditionError } from "../errors.ts";
+import type { EventType, TruncationRef } from "../events/protocol.ts";
 import { git, gitOk } from "../exec.ts";
 import { changedFiles } from "../gates/affected.ts";
 import { changedGateDefinitions } from "../gates/definitions.ts";
 import { installDeps } from "../gates/install.ts";
 import { resolveGates } from "../gates/resolve.ts";
-import { type GateReport, runGates } from "../gates/run.ts";
+import { type GateEvent, type GateInfo, type GateReport, runGates } from "../gates/run.ts";
 import { worktreeFiles } from "../gates/targets.ts";
 import { branchSubmodule } from "../git/branching.ts";
 import { commitTask } from "../git/commit.ts";
@@ -36,6 +38,7 @@ import {
   type MergeResult,
   type RunSummary,
   Scheduler,
+  type TaskEvent,
   type TaskRunner,
 } from "../scheduler/scheduler.ts";
 import { claimActive, enqueue, removeFromQueue } from "../state/active.ts";
@@ -47,6 +50,195 @@ import { fence } from "../util/fence.ts";
 import { verifyApproval } from "./approve.ts";
 import type { Pipeline } from "./context.ts";
 import { conflictPrompt, packsPrompt, taskPrompt, testerPrompt } from "./prompts.ts";
+
+const taskRef = (task: TaskState): { id: string; repo: string; title: string } => ({
+  id: task.id,
+  repo: task.repo,
+  title: task.title,
+});
+
+/** The `task.*` event family for one scheduler transition. */
+export function taskEventPayload(event: TaskEvent): {
+  readonly type: EventType;
+  readonly data: Record<string, unknown>;
+} {
+  switch (event.type) {
+    case "started":
+      return { type: "task.started", data: { task: taskRef(event.task), attempt: event.attempt } };
+    case "retry":
+      return {
+        type: "task.retried",
+        data: { task: taskRef(event.task), attempt: event.attempt, reason: event.reason },
+      };
+    case "failed":
+      return {
+        type: "task.failed",
+        data: { task: taskRef(event.task), reason: event.reason },
+      };
+    case "merging":
+      return { type: "task.merging", data: { task: taskRef(event.task) } };
+    case "merged":
+      return {
+        type: "task.merged",
+        data: { task: taskRef(event.task), commit: event.commit },
+      };
+    case "conflict":
+      return {
+        type: "task.conflict",
+        data: { task: taskRef(event.task), files: event.files },
+      };
+    case "requeued":
+      return {
+        type: "task.requeued",
+        data: { task: taskRef(event.task), reason: event.reason },
+      };
+    case "transient":
+      return {
+        type: "task.transient",
+        data: { task: taskRef(event.task), reason: event.reason },
+      };
+    case "interrupted":
+      return { type: "task.interrupted", data: { task: taskRef(event.task) } };
+    case "waiting":
+      return { type: "task.waiting", data: { tasks: event.tasks } };
+    default: {
+      const unhandled: never = event;
+      throw new Error(`unhandled task event: ${String(unhandled)}`);
+    }
+  }
+}
+
+/** Maps scheduler transitions to `task.*` events once bound; before that it prints directly. */
+export function emitTaskEvent(p: Pipeline, event: TaskEvent): void {
+  if (!p.bound) {
+    p.progress.task(event);
+    return;
+  }
+  const mapped = taskEventPayload(event);
+  p.events.emit(mapped.type, mapped.data);
+}
+
+/** Free-form progress: `progress.line` once bound, the direct renderer before the run exists. */
+export function progressLine(
+  p: Pipeline,
+  level: "always" | "normal" | "verbose",
+  text: string,
+): void {
+  if (p.bound) {
+    p.events.emit("progress.line", { level, text });
+    return;
+  }
+  if (level === "verbose") {
+    if (p.progress.verbosity === "verbose") p.progress.line(text);
+    return;
+  }
+  if (level === "normal") p.progress.note(text);
+  else p.progress.line(text);
+}
+
+/**
+ * Gate events carry no step field: the terminal sink takes it from the last event. Marking the
+ * step with a silent `step-started` keeps concurrent tasks and repos labelled correctly.
+ */
+function markStep(p: Pipeline, step: string): void {
+  p.events.emit("agent.activity", { step, detail: "", kind: "step-started" });
+}
+
+const gateRef = (gate: GateInfo): { name: string; type: GateInfo["type"]; command: string } => ({
+  name: gate.name ?? gate.type,
+  type: gate.type,
+  command: gate.command,
+});
+
+/** The `gate.*` event family for one live gate transition. */
+export function gateEventPayload(event: GateEvent): {
+  readonly type: EventType;
+  readonly data: Record<string, unknown>;
+} {
+  switch (event.phase) {
+    case "plan":
+      return { type: "gate.planned", data: { gates: event.gates.map(gateRef) } };
+    case "start":
+      return { type: "gate.started", data: gateRef(event.gate) };
+    case "end":
+      return {
+        type: "gate.finished",
+        data: {
+          name: event.gate.name ?? event.gate.type,
+          type: event.gate.type,
+          status: event.status,
+          durationMs: event.durationMs,
+        },
+      };
+    default: {
+      const unhandled: never = event;
+      throw new Error(`unhandled gate event: ${String(unhandled)}`);
+    }
+  }
+}
+
+/** Writes one gate's compacted output to the log and returns the exact byte reference. */
+function gateOutputRef(
+  p: Pipeline,
+  id: string,
+  event: Extract<GateEvent, { phase: "end" }>,
+  entry: { readonly task?: string; readonly repo?: string },
+): TruncationRef {
+  const at = new Date();
+  const date = at.toISOString().slice(0, 10);
+  const dir = join(p.root, ".factory", "logs", id);
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${date}.jsonl`);
+  const offset = existsSync(file) ? statSync(file).size : 0;
+  const line = JSON.stringify({
+    at: at.toISOString(),
+    kind: "gate",
+    ...entry,
+    type: event.gate.type,
+    ...(event.gate.name === undefined ? {} : { name: event.gate.name }),
+    status: event.status,
+    durationMs: event.durationMs,
+    output: event.output ?? "",
+  });
+  appendFileSync(file, `${line}\n`);
+  return {
+    path: join(".factory", "logs", id, `${date}.jsonl`),
+    offset,
+    bytes: Buffer.byteLength(line),
+  };
+}
+
+/** Emits one live gate event; `gate.finished` carries a log reference, never the output. */
+export function emitGateEvent(
+  p: Pipeline,
+  id: string,
+  step: string,
+  event: GateEvent,
+  entry: { readonly task?: string; readonly repo?: string },
+): void {
+  markStep(p, step);
+  const mapped = gateEventPayload(event);
+  if (event.phase === "end") {
+    const outputRef = gateOutputRef(p, id, event, entry);
+    p.events.emit(mapped.type, { ...mapped.data, outputRef });
+    return;
+  }
+  p.events.emit(mapped.type, mapped.data);
+}
+
+/** Emits the per-run gate summary the terminal renders through `Progress.gatesDone`. */
+export function emitGateReport(p: Pipeline, step: string, report: GateReport): void {
+  markStep(p, step);
+  p.events.emit("gate.report", {
+    passed: report.passed,
+    results: report.results.map((result) => ({
+      name: result.name ?? result.type,
+      type: result.type,
+      status: result.status,
+      durationMs: result.durationMs,
+    })),
+  });
+}
 
 /** `addons.ponytail.shortcutComments: "forbid"` turns new `shortcut:` comments into a lint failure. */
 export const forbidShortcuts = (p: Pipeline): boolean =>
@@ -285,6 +477,8 @@ export class PipelineTaskRunner implements TaskRunner {
   async #gates(task: TaskState, dir: string, stage = "gates"): Promise<GateReport> {
     const repo = this.p.repo(task.repo);
     const base = await this.#base(dir);
+    // The event schema has no stage: only the plain gate run can replay through the sink.
+    const streamed = stage === "gates" && this.p.bound;
     const report = await this.p.gates.run(async () => {
       const started = this.p.progress.now();
       const report = await runGates({
@@ -296,9 +490,16 @@ export class PipelineTaskRunner implements TaskRunner {
         base,
         graph: { root: this.p.root, repoPath: repo.path },
         forbidShortcuts: forbidShortcuts(this.p),
-        onGate: (event) => this.p.progress.gate(task.id, event, stage),
+        onGate: (event) => {
+          if (!streamed) {
+            this.p.progress.gate(task.id, event, stage);
+            return;
+          }
+          emitGateEvent(this.p, this.id, task.id, event, { task: task.id });
+        },
       });
-      this.p.progress.gatesDone(task.id, report, this.p.progress.now() - started, stage);
+      if (streamed) emitGateReport(this.p, task.id, report);
+      else this.p.progress.gatesDone(task.id, report, this.p.progress.now() - started, stage);
       return report;
     });
     appendLog(this.p.root, this.id, {
@@ -381,24 +582,40 @@ export class PipelineTaskRunner implements TaskRunner {
     else if (!task.installed) {
       // Until it succeeds, also in a kept worktree. A failure (registry down) is not the
       // task's: no budget is spent, and repeats pause the change (audit P12).
-      this.p.progress.install(task.id, task.repo, "start");
+      if (this.p.bound) this.p.events.emit("install.started", { step: task.id, repo: task.repo });
+      else this.p.progress.install(task.id, task.repo, "start");
       const started = this.p.progress.now();
       const steps = await installDeps(this.p.root, dir, this.p.repo(task.repo));
       const failed = steps.find((s) => s.status === "failed");
       if (failed) {
-        this.p.progress.install(
-          task.id,
-          task.repo,
-          "failed",
-          this.p.progress.now() - started,
-          failed.detail ?? failed.dir,
-        );
+        const detail = failed.detail ?? failed.dir;
+        if (this.p.bound)
+          this.p.events.emit("install.failed", {
+            step: task.id,
+            repo: task.repo,
+            durationMs: this.p.progress.now() - started,
+            detail,
+          });
+        else
+          this.p.progress.install(
+            task.id,
+            task.repo,
+            "failed",
+            this.p.progress.now() - started,
+            detail,
+          );
         return {
           status: "transient",
           reason: `dependency install failed in ${failed.dir}: ${failed.detail ?? ""}`.trim(),
         };
       }
-      this.p.progress.install(task.id, task.repo, "done", this.p.progress.now() - started);
+      if (this.p.bound)
+        this.p.events.emit("install.finished", {
+          step: task.id,
+          repo: task.repo,
+          durationMs: this.p.progress.now() - started,
+        });
+      else this.p.progress.install(task.id, task.repo, "done", this.p.progress.now() - started);
       await this.p.update(this.id, (d) => {
         const t = d.tasks.find((x) => x.id === task.id);
         if (t) t.installed = true;
@@ -453,6 +670,7 @@ export class PipelineTaskRunner implements TaskRunner {
     if (res.handoff.status === "blocked") {
       const why =
         [...res.handoff.openQuestions, ...res.handoff.risks].join("; ") || "agent reported blocked";
+      this.p.emit("task.blocked", { task: taskRef(task), reason: why, attempt: ctx.attempt });
       return { status: "blocked", reason: why };
     }
 
@@ -495,6 +713,11 @@ export class PipelineTaskRunner implements TaskRunner {
     const commit = await commitTask(dir, this.id, task.id, task.title, type, {
       style: this.p.config.commits.style,
       ...(this.p.config.commits.scopes ? { scope: task.repo } : {}),
+    });
+    this.p.emit("task.passed", {
+      task: taskRef(task),
+      attempt: ctx.attempt,
+      ...(commit ? { commit } : {}),
     });
     return { status: "passed", ...(commit ? { commit } : {}) };
   }
@@ -674,7 +897,8 @@ export async function implement(p: Pipeline, id: string): Promise<RunSummary> {
       : {}),
     runner,
     signal: p.deps.signal,
-    observe: (event) => p.progress.task(event),
+    observe: (event) => emitTaskEvent(p, event),
+    onSkipped: (task, reason) => p.emit("task.skipped", { task: taskRef(task), reason }),
   });
   const summary = await scheduler.run();
   // Reviews and later tasks read the graph; let the last update finish.
@@ -692,6 +916,8 @@ export async function implement(p: Pipeline, id: string): Promise<RunSummary> {
           merged,
           failed: summary.failed.filter((taskId) => !routed.has(taskId)),
         };
+  // Documented rule for the usage ledger: `usage.delta` is emitted exactly once per recorded
+  // entry, at the single session choke point (`Pipeline.#call`); implementation emits none.
   p.progress.implementSummary(
     {
       merged: adjusted.merged.length,

@@ -1,14 +1,19 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { factoryScript, type ScriptedTask } from "../../../test/fixtures/factory-script.ts";
 import { ScriptedRuntime } from "../../../test/fixtures/scripted-runtime.ts";
-import { createSingleRepoFixture, type Fixture } from "../../../test/fixtures/workspaces.ts";
+import {
+  createSingleRepoFixture,
+  type Fixture,
+  fixtureGit,
+} from "../../../test/fixtures/workspaces.ts";
 import { cli, cliWith } from "../../../test/helpers.ts";
 import { readApproval } from "../src/approval/approval.ts";
 import { loadConfig } from "../src/config/load.ts";
+import { eventLogPath } from "../src/events/jsonl.ts";
 import { MemorySink } from "../src/events/memory.ts";
-import type { RunEvent } from "../src/events/protocol.ts";
+import { RunEvent } from "../src/events/protocol.ts";
 import { TerminalSink } from "../src/events/terminal.ts";
 import { ExitCode } from "../src/exit-codes.ts";
 import { approve } from "../src/pipeline/approve.ts";
@@ -17,6 +22,14 @@ import { design, intake } from "../src/pipeline/design.ts";
 import { Progress } from "../src/pipeline/progress.ts";
 
 const ID = "add-health";
+
+const PASS_ALL = {
+  format: "true",
+  lint: "true",
+  types: "true",
+  test: "true",
+  testAffected: "true",
+} as const;
 
 const TASKS: ScriptedTask[] = [
   {
@@ -136,6 +149,49 @@ describe("approval events", () => {
       fx.cleanup();
     }
   });
+});
+
+describe("gate events", () => {
+  test("gate.finished carries an output reference, never the output text", async () => {
+    const fx = await createSingleRepoFixture();
+    try {
+      expect((await cli(fx.root, "init")).code).toBe(ExitCode.Ok);
+      const configFile = join(fx.root, "factory.config.jsonc");
+      writeFileSync(
+        configFile,
+        readFileSync(configFile, "utf8").replace(
+          '"overrides": {}',
+          `"overrides": ${JSON.stringify({ app: PASS_ALL })}`,
+        ),
+      );
+      await fixtureGit(fx.root, "commit", "-q", "-am", "chore: configure the factory");
+      const runtime = new ScriptedRuntime(script());
+      expect((await cliWith(runtime, fx.root, "run", "Add math helpers")).code).toBe(ExitCode.Ok);
+      const approved = await cliWith(runtime, fx.root, "approve", ID);
+      expect({ code: approved.code, err: approved.err }).toEqual({ code: ExitCode.Ok, err: "" });
+
+      const events = readFileSync(eventLogPath(fx.root, ID), "utf8")
+        .split("\n")
+        .filter((line) => line.trim() !== "")
+        .map((line): RunEvent => RunEvent.parse(JSON.parse(line)));
+      const finished = events.filter((event) => event.type === "gate.finished");
+      expect(finished.length).toBeGreaterThan(0);
+      for (const event of finished) {
+        expect(event.data).not.toHaveProperty("output");
+        const ref = event.data.outputRef;
+        expect(ref?.path.startsWith(".factory/logs/")).toBe(true);
+        if (ref === undefined) continue;
+        const log = readFileSync(join(fx.root, ref.path));
+        const line = log.subarray(ref.offset, ref.offset + ref.bytes).toString();
+        const entry: unknown = JSON.parse(line);
+        expect(entry).toMatchObject({ kind: "gate", status: event.data.status });
+        expect(entry).toHaveProperty("output");
+      }
+      expect(events.some((event) => event.type === "gate.report")).toBe(true);
+    } finally {
+      fx.cleanup();
+    }
+  }, 120_000);
 });
 
 describe("only the orchestrator writes events", () => {
