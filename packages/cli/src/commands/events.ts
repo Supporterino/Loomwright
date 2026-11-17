@@ -1,5 +1,7 @@
+import { existsSync } from "node:fs";
 import { findWorkspaceRoot } from "@loomwright/core/config/load";
 import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { eventLogPath } from "@loomwright/core/events/jsonl";
 import { readEventLines } from "@loomwright/core/events/reader";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { loadRun } from "@loomwright/core/state/run";
@@ -57,7 +59,7 @@ Exit codes: 0 ok, 2 invalid --from, 4 unknown change.`,
     const id = changeIdArg("events", positionals);
     const start = fromSeq(values.from);
     const workspace = await root(io);
-    if (loadRun(workspace, id) === undefined)
+    if (loadRun(workspace, id) === undefined && !existsSync(eventLogPath(workspace, id)))
       throw new PreconditionError(`no change ${id} in this workspace`);
     for (const skipped of readEventLines(workspace, id).skipped)
       io.err(

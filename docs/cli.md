@@ -241,7 +241,7 @@ loomwright events <change-id> [--follow] [--from <n>] [--json]
 Prints a change's stored event stream from `.factory/events/<id>.jsonl` as JSONL, one stored line per line and unchanged. The default output is already the canonical JSONL, so `--json` is only the explicit spelling of the same bytes: it adds no wrapper, field, sort or reformatting. Corrupt lines are reported on stderr and the rest of the stream still prints. The format is documented in [docs/events.md](events.md).
 - `--follow` keeps printing new events until Ctrl-C.
 - `--from <n>` starts at sequence number `n` (inclusive, default 1).
-- Exit codes: 0 ok, 2 for a non-integer or non-positive `--from`, 4 for an unknown change. An empty stream prints nothing and exits 0.
+- Exit codes: 0 ok, 2 for a non-integer or non-positive `--from`, 4 for an unknown change (no run state and no event log). An empty stream prints nothing and exits 0. A landed change keeps its event log, so its stream stays replayable after `land`.
 
 ## usage
 

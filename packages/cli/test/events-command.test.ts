@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { readApproval } from "@loomwright/core/approval/approval";
 import { eventLogPath } from "@loomwright/core/events/jsonl";
 import { compareSnapshots } from "@loomwright/core/events/parity";
@@ -168,6 +168,16 @@ describe("events", () => {
     expect(result.err).toContain("line 2");
     expect(result.out.split("\n")).toContain(one);
     expect(result.out.split("\n")).toContain(three);
+  });
+
+  test("a kept event log replays without run state", async () => {
+    const events = seedFinished();
+    rmSync(join(fx.root, `.factory/runs/${ID}.json`));
+
+    const result = await cli(fx.root, "events", ID);
+
+    expect(result.code).toBe(ExitCode.Ok);
+    expect(result.out).toBe(events.map((item) => JSON.stringify(item)).join("\n"));
   });
 
   test("an unknown run id exits 4", async () => {

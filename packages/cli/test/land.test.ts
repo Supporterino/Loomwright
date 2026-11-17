@@ -127,6 +127,12 @@ describe("land", () => {
     expect(existsSync(join(fx.root, `.factory/events/${ID}.jsonl`))).toBe(true);
     expect(existsSync(join(fx.root, `.factory/runs/${ID}.json`))).toBe(false);
     expect(existsSync(join(fx.root, `.factory/approvals/${ID}.json`))).toBe(false);
+
+    const replay = await cli(fx.root, "events", ID);
+    expect(replay.code).toBe(ExitCode.Ok);
+    expect(replay.out).toBe(
+      readFileSync(join(fx.root, `.factory/events/${ID}.jsonl`), "utf8").trimEnd(),
+    );
   });
 
   test("dry-run lists the event log under kept, not cleaned", async () => {
