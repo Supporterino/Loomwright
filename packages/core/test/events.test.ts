@@ -487,6 +487,12 @@ describe("events", () => {
     expect(existsSync(eventLogPath(root, "fresh-run"))).toBe(true);
   });
 
+  test("bind rejects an id that is not a change id", () => {
+    const emitter = new EventEmitter({ root, sinks: [new JsonlSink(root)] });
+    expect(() => emitter.bind("../../x")).toThrow(/expected a change id/);
+    expect(existsSync(join(root, "x.jsonl"))).toBe(false);
+  });
+
   test("the emitter close is idempotent", () => {
     const emitter = new EventEmitter({ root, sinks: [new MemorySink()] });
     emitter.bind("close-run");

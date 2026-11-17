@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { redact, secretEnvValues } from "../logs/redact.ts";
 import { appendTruncatedValue, eventLogPath, lastCompleteSeq } from "./jsonl.ts";
-import { type EventType, PROTOCOL_VERSION, RunEvent } from "./protocol.ts";
+import { assertRunId, type EventType, PROTOCOL_VERSION, RunEvent } from "./protocol.ts";
 import type { EventSink, SinkTarget, Verbosity } from "./sink.ts";
 
 export interface EmitterOptions {
@@ -77,6 +77,7 @@ export class EventEmitter implements Emitter {
 
   bind(runId: string, options: { readonly resumed?: boolean } = {}): void {
     if (this.#closed) throw new Error("event emitter is closed");
+    assertRunId(runId);
     if (this.#runId === runId) return;
     if (this.#runId !== undefined)
       throw new Error(`event emitter is already bound to ${this.#runId}`);

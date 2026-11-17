@@ -5,7 +5,7 @@ import { findWorkspaceRoot, loadConfig } from "./config/load.ts";
 import type { FactoryConfig } from "./config/schema.ts";
 import { PreconditionError, UsageError } from "./errors.ts";
 import { setCommandErrorReporter, writeCommand } from "./events/inbox.ts";
-import { Command, type RunEvent } from "./events/protocol.ts";
+import { assertRunId, Command, type RunEvent } from "./events/protocol.ts";
 import { readEventLines } from "./events/reader.ts";
 import { tailEvents } from "./events/tailer.ts";
 import { LOCK_FILE } from "./lock/lock.ts";
@@ -118,6 +118,7 @@ const stderr = (line: string): void => {
 };
 
 function requireRun(root: string, id: string): RunState {
+  assertRunId(id);
   const run = loadRun(root, id);
   if (run === undefined) throw new PreconditionError(`no change ${id} in this workspace`);
   return run;
@@ -244,6 +245,7 @@ function createFactory(root: string, config: FactoryConfig, options: FactoryOpti
     },
 
     async *events(runId: string, query: EventQuery = {}): AsyncIterable<EventLogLine> {
+      assertRunId(runId);
       const fromSeq = query.fromSeq ?? 1;
       const stored = readEventLines(root, runId);
       for (const line of stored.lines) {

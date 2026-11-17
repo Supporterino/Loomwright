@@ -211,6 +211,14 @@ describe("Factory read API", () => {
     expect(await collect(factory.events("never-ran"))).toEqual([]);
   });
 
+  test("status and events reject an id that is not a change id", async () => {
+    installWorkspace(fx.root);
+    const factory = await open(fx.root);
+
+    await expect(factory.status("../../x")).rejects.toThrow(/expected a change id/);
+    await expect(collect(factory.events("../../x"))).rejects.toThrow(/expected a change id/);
+  });
+
   test("events reports an unknown type with the line and no event", async () => {
     installWorkspace(fx.root);
     const unknown = JSON.stringify({
