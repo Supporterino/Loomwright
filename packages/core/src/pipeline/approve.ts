@@ -64,7 +64,7 @@ export async function approve(p: Pipeline, id: string): Promise<Approval> {
   };
   p.events.emit("approval.requested", { specHash: approval.hash, specCommit });
   const checked = run.preserveProgress ? checkedTaskIds(dir, id) : new Set<string>();
-  await p.update(id, (d) => {
+  const updated = await p.update(id, (d) => {
     // Checked again under the run lock: another approve or resume may have moved on (P14).
     assertApprovable(id, d);
     writeApproval(p.root, approval);
@@ -82,6 +82,20 @@ export async function approve(p: Pipeline, id: string): Promise<Approval> {
       return task;
     });
   });
+  // Loading the task DAG is a state change the stream must carry: `queued` and one
+  // `task.queued` per task, so a replay equals the run file from here on.
+  p.emit("phase.changed", { from: run.phase, to: updated.phase });
+  for (const task of updated.tasks) {
+    p.emit("task.queued", {
+      task: { id: task.id, repo: task.repo, title: task.title },
+      attempt: task.failures + 1,
+    });
+    if (task.status === "merged")
+      p.emit("task.merged", {
+        task: { id: task.id, repo: task.repo, title: task.title },
+        commit: task.commit ?? specCommit,
+      });
+  }
   p.events.emit("approval.granted", {
     approver,
     specHash: approval.hash,

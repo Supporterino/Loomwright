@@ -14,6 +14,7 @@ import { instructionPaths } from "../config/instructions.ts";
 import { type FactoryConfig, repoLanguages } from "../config/schema.ts";
 import { PreconditionError } from "../errors.ts";
 import type { EventType, TruncationRef } from "../events/protocol.ts";
+import { readEventLines } from "../events/reader.ts";
 import { git, gitOk } from "../exec.ts";
 import { changedFiles } from "../gates/affected.ts";
 import { changedGateDefinitions } from "../gates/definitions.ts";
@@ -45,6 +46,7 @@ import { claimActive, enqueue, removeFromQueue } from "../state/active.ts";
 import { loadRun, type TaskState } from "../state/run.ts";
 import { agentForTask } from "../tasks/routing.ts";
 import { type GateSnapshot, loadGateSnapshot, snapshotDefinitions } from "../update/snapshot.ts";
+import { loadUsage } from "../usage/usage.ts";
 import { capText } from "../util/cap.ts";
 import { fence } from "../util/fence.ts";
 import { verifyApproval } from "./approve.ts";
@@ -310,11 +312,15 @@ export async function activate(p: Pipeline, id: string): Promise<Activation> {
       branches[name] = { branch: b.branch, base: b.base };
     }
   }
-  await p.update(id, (d) => {
+  const before = p.run(id);
+  const updated = await p.update(id, (d) => {
     Object.assign(d.branches, branches);
     if (d.phase === "queued" || d.phase === "awaiting-approval") d.phase = "implementing";
     d.abortRequested = false;
   });
+  if (updated.phase !== before.phase)
+    p.emit("phase.changed", { from: before.phase, to: updated.phase });
+  p.emit("run.branches", { branches: updated.branches });
   return { status: "active" };
 }
 
@@ -862,10 +868,35 @@ async function routeBlockedSpecFixes(
   return ids;
 }
 
+/**
+ * The intake session runs before the run id exists, so it cannot emit through the session
+ * choke point. Its ledger entry is replayed once when implementation starts, keeping the
+ * stream's aggregated usage equal to the ledger (spec: usage parity).
+ */
+function backfillIntakeUsage(p: Pipeline, id: string): void {
+  if (!p.bound) return;
+  const logged = new Set(
+    readEventLines(p.root, id).lines.flatMap((line) =>
+      line.event?.type === "usage.delta" ? [line.event.data.step] : [],
+    ),
+  );
+  if (logged.has("intake")) return;
+  for (const entry of loadUsage(p.root, id).entries) {
+    if (entry.step !== "intake") continue;
+    p.emit("usage.delta", {
+      step: entry.step,
+      agent: entry.agent,
+      model: entry.model,
+      usage: entry.usage,
+    });
+  }
+}
+
 /** §7 step 6–7: run the task DAG until every task merged, or the change pauses. */
 export async function implement(p: Pipeline, id: string): Promise<RunSummary> {
   const run = loadRun(p.root, id);
   if (run === undefined) throw new PreconditionError(`no change ${id}`);
+  backfillIntakeUsage(p, id);
   const pending = run.tasks.filter((t) => t.status !== "merged").length;
   p.progress.setChangeId(id);
   p.out(

@@ -1,0 +1,271 @@
+[
+  {
+    "name": "after run",
+    "uptoSeq": 12,
+    "state": {
+      "v": 1,
+      "runId": "add-health",
+      "lastSeq": 0,
+      "phase": "awaiting-approval",
+      "pausedReason": null,
+      "abortRequested": false,
+      "branches": {
+        ".": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        }
+      },
+      "tasks": {},
+      "questions": [],
+      "approval": null,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      },
+      "gates": {}
+    }
+  },
+  {
+    "name": "after approve",
+    "uptoSeq": 18,
+    "state": {
+      "v": 1,
+      "runId": "add-health",
+      "lastSeq": 0,
+      "phase": "queued",
+      "pausedReason": null,
+      "abortRequested": false,
+      "branches": {
+        ".": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        }
+      },
+      "tasks": {
+        "1.1": {
+          "status": "pending",
+          "attempt": 1
+        },
+        "1.2": {
+          "status": "pending",
+          "attempt": 1
+        }
+      },
+      "questions": [],
+      "approval": {
+        "specHash": "<sha>",
+        "specCommit": "<sha>",
+        "approver": "fixture@example.com"
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      },
+      "gates": {}
+    }
+  },
+  {
+    "name": "after task 1.1",
+    "uptoSeq": 55,
+    "state": {
+      "v": 1,
+      "runId": "add-health",
+      "lastSeq": 0,
+      "phase": "implementing",
+      "pausedReason": null,
+      "abortRequested": false,
+      "branches": {
+        ".": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        },
+        "app": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        }
+      },
+      "tasks": {
+        "1.1": {
+          "status": "merged",
+          "attempt": 1
+        },
+        "1.2": {
+          "status": "pending",
+          "attempt": 1
+        }
+      },
+      "questions": [],
+      "approval": {
+        "specHash": "<sha>",
+        "specCommit": "<sha>",
+        "approver": "fixture@example.com"
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      },
+      "gates": {}
+    }
+  },
+  {
+    "name": "after task 1.2",
+    "uptoSeq": 84,
+    "state": {
+      "v": 1,
+      "runId": "add-health",
+      "lastSeq": 0,
+      "phase": "implementing",
+      "pausedReason": null,
+      "abortRequested": false,
+      "branches": {
+        ".": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        },
+        "app": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        }
+      },
+      "tasks": {
+        "1.1": {
+          "status": "merged",
+          "attempt": 1
+        },
+        "1.2": {
+          "status": "merged",
+          "attempt": 1
+        }
+      },
+      "questions": [],
+      "approval": {
+        "specHash": "<sha>",
+        "specCommit": "<sha>",
+        "approver": "fixture@example.com"
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      },
+      "gates": {}
+    }
+  },
+  {
+    "name": "after task test-app",
+    "uptoSeq": 121,
+    "state": {
+      "v": 1,
+      "runId": "add-health",
+      "lastSeq": 0,
+      "phase": "implementing",
+      "pausedReason": null,
+      "abortRequested": false,
+      "branches": {
+        ".": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        },
+        "app": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        }
+      },
+      "tasks": {
+        "1.1": {
+          "status": "merged",
+          "attempt": 1
+        },
+        "1.2": {
+          "status": "merged",
+          "attempt": 1
+        },
+        "test-app": {
+          "status": "merged",
+          "attempt": 1
+        }
+      },
+      "questions": [],
+      "approval": {
+        "specHash": "<sha>",
+        "specCommit": "<sha>",
+        "approver": "fixture@example.com"
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      },
+      "gates": {}
+    }
+  },
+  {
+    "name": "final",
+    "uptoSeq": 152,
+    "state": {
+      "v": 1,
+      "runId": "add-health",
+      "lastSeq": 0,
+      "phase": "done",
+      "pausedReason": null,
+      "abortRequested": false,
+      "branches": {
+        ".": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        },
+        "app": {
+          "branch": "change/add-health",
+          "base": "<sha>"
+        }
+      },
+      "tasks": {
+        "1.1": {
+          "status": "merged",
+          "attempt": 1
+        },
+        "1.2": {
+          "status": "merged",
+          "attempt": 1
+        },
+        "test-app": {
+          "status": "merged",
+          "attempt": 1
+        }
+      },
+      "questions": [],
+      "approval": {
+        "specHash": "<sha>",
+        "specCommit": "<sha>",
+        "approver": "fixture@example.com"
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      },
+      "gates": {}
+    }
+  }
+]

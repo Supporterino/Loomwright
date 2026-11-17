@@ -51,7 +51,10 @@ function addTask(
   const state = TaskState.parse({ ...task, status: "pending" });
   recordTask(state, "added", task.kind);
   draft.tasks.push(state);
-  p.emit("task.queued", { task: { id: state.id, repo: state.repo, title: state.title } });
+  p.emit("task.queued", {
+    task: { id: state.id, repo: state.repo, title: state.title },
+    attempt: state.failures + 1,
+  });
   return true;
 }
 
@@ -481,6 +484,7 @@ export async function close(p: Pipeline, id: string): Promise<string> {
     d.phase = "done";
     d.reportPath = file;
   });
+  p.emit("phase.changed", { from: done.phase, to: "done" });
   // A record is a copy, never a precondition: a failure here leaves the run closed and the
   // local files intact, and `loomwright artifacts sync <id>` can retry.
   try {

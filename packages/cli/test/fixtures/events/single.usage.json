@@ -1,0 +1,8 @@
+{
+  "input": 8000,
+  "output": 800,
+  "reasoning": 0,
+  "cacheRead": 4800,
+  "cacheWrite": 1600,
+  "cost": 0.08
+}

@@ -1,0 +1,194 @@
+{"v":1,"runId":"add-health","seq":1,"ts":"1970-01-01T00:00:00.000Z","type":"run.started","data":{"phase":"design"}}
+{"v":1,"runId":"add-health","seq":2,"ts":"1970-01-01T00:00:00.000Z","type":"run.branches","data":{"branches":{".":{"branch":"change/add-health","base":"<sha>"}}}}
+{"v":1,"runId":"add-health","seq":3,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"  change add-health"}}
+{"v":1,"runId":"add-health","seq":4,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ explore: backend, frontend"}}
+{"v":1,"runId":"add-health","seq":5,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"explore:backend","agent":"explorer","model":"anthropic/claude-haiku-5-5"}}
+{"v":1,"runId":"add-health","seq":6,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"explore:backend","agent":"explorer","model":"anthropic/claude-haiku-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":7,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"explore:backend","role":"explorer","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":8,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"explore:frontend","agent":"explorer","model":"anthropic/claude-haiku-5-5"}}
+{"v":1,"runId":"add-health","seq":9,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"explore:frontend","agent":"explorer","model":"anthropic/claude-haiku-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":10,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"explore:frontend","role":"explorer","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":11,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ design: openspec/changes/add-health"}}
+{"v":1,"runId":"add-health","seq":12,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"design","agent":"architect","model":"anthropic/claude-opus-5-5"}}
+{"v":1,"runId":"add-health","seq":13,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"design","agent":"architect","model":"anthropic/claude-opus-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":14,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"design","role":"architect","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":15,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"awaiting-approval"}}
+{"v":1,"runId":"add-health","seq":16,"ts":"1970-01-01T00:00:00.000Z","type":"approval.requested","data":{"specHash":"<sha>","specCommit":"<sha>"}}
+{"v":1,"runId":"add-health","seq":17,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"awaiting-approval","to":"queued"}}
+{"v":1,"runId":"add-health","seq":18,"ts":"1970-01-01T00:00:00.000Z","type":"task.queued","data":{"task":{"id":"1.1","repo":"backend","title":"Add the health path to the OpenAPI contract"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":19,"ts":"1970-01-01T00:00:00.000Z","type":"task.queued","data":{"task":{"id":"1.2","repo":"backend","title":"Add the health handler"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":20,"ts":"1970-01-01T00:00:00.000Z","type":"task.queued","data":{"task":{"id":"1.3","repo":"backend","title":"Add a readiness metric"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":21,"ts":"1970-01-01T00:00:00.000Z","type":"approval.granted","data":{"approver":"fixture@example.com","specHash":"<sha>","specCommit":"<sha>"}}
+{"v":1,"runId":"add-health","seq":22,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"✓ approved add-health by fixture@example.com (spec <sha12>, 3 tasks)"}}
+{"v":1,"runId":"add-health","seq":23,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"queued","to":"implementing"}}
+{"v":1,"runId":"add-health","seq":24,"ts":"1970-01-01T00:00:00.000Z","type":"run.branches","data":{"branches":{".":{"branch":"change/add-health","base":"<sha>"},"backend":{"branch":"change/add-health","base":"<sha>"}}}}
+{"v":1,"runId":"add-health","seq":25,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ context packs (3)"}}
+{"v":1,"runId":"add-health","seq":26,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"context-packs","agent":"architect","model":"anthropic/claude-opus-5-5"}}
+{"v":1,"runId":"add-health","seq":27,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"context-packs","agent":"architect","model":"anthropic/claude-opus-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":28,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"context-packs","role":"architect","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":29,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"intake","agent":"orchestrator","model":"anthropic/claude-sonnet-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":30,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ implement: 3 tasks (max 1 agents)"}}
+{"v":1,"runId":"add-health","seq":31,"ts":"1970-01-01T00:00:00.000Z","type":"task.started","data":{"task":{"id":"1.1","repo":"backend","title":"Add the health path to the OpenAPI contract"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":32,"ts":"1970-01-01T00:00:00.000Z","type":"install.started","data":{"step":"1.1","repo":"backend"}}
+{"v":1,"runId":"add-health","seq":33,"ts":"1970-01-01T00:00:00.000Z","type":"install.finished","data":{"step":"1.1","repo":"backend","durationMs":0}}
+{"v":1,"runId":"add-health","seq":34,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"1.1","agent":"implementer-backend","model":"anthropic/claude-sonnet-5-5","label":"Add the health path to the OpenAPI contract","attempt":1}}
+{"v":1,"runId":"add-health","seq":35,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"1.1","agent":"implementer-backend","model":"anthropic/claude-sonnet-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":36,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"1.1","role":"implementer","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":37,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":38,"ts":"1970-01-01T00:00:00.000Z","type":"gate.planned","data":{"gates":[{"name":"format","type":"format","command":"true"},{"name":"lint","type":"lint","command":"true"},{"name":"types","type":"types","command":"true"},{"name":"testAffected","type":"testAffected","command":"true"}]}}
+{"v":1,"runId":"add-health","seq":39,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":40,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"format","type":"format","command":"true"}}
+{"v":1,"runId":"add-health","seq":41,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":42,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"format","type":"format","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":1398,"bytes":120}}}
+{"v":1,"runId":"add-health","seq":43,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":44,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"lint","type":"lint","command":"true"}}
+{"v":1,"runId":"add-health","seq":45,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":46,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"lint","type":"lint","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":1519,"bytes":118}}}
+{"v":1,"runId":"add-health","seq":47,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":48,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"types","type":"types","command":"true"}}
+{"v":1,"runId":"add-health","seq":49,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":50,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"types","type":"types","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":1638,"bytes":119}}}
+{"v":1,"runId":"add-health","seq":51,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":52,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"testAffected","type":"testAffected","command":"true"}}
+{"v":1,"runId":"add-health","seq":53,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":54,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"testAffected","type":"testAffected","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":1758,"bytes":126}}}
+{"v":1,"runId":"add-health","seq":55,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.1","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":56,"ts":"1970-01-01T00:00:00.000Z","type":"gate.report","data":{"passed":true,"results":[{"name":"format","type":"format","status":"pass","durationMs":0},{"name":"lint","type":"lint","status":"pass","durationMs":0},{"name":"types","type":"types","status":"pass","durationMs":0},{"name":"testAffected","type":"testAffected","status":"pass","durationMs":0}]}}
+{"v":1,"runId":"add-health","seq":57,"ts":"1970-01-01T00:00:00.000Z","type":"task.passed","data":{"task":{"id":"1.1","repo":"backend","title":"Add the health path to the OpenAPI contract"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":58,"ts":"1970-01-01T00:00:00.000Z","type":"task.merging","data":{"task":{"id":"1.1","repo":"backend","title":"Add the health path to the OpenAPI contract"}}}
+{"v":1,"runId":"add-health","seq":59,"ts":"1970-01-01T00:00:00.000Z","type":"task.merged","data":{"task":{"id":"1.1","repo":"backend","title":"Add the health path to the OpenAPI contract"},"commit":"<sha>"}}
+{"v":1,"runId":"add-health","seq":60,"ts":"1970-01-01T00:00:00.000Z","type":"task.started","data":{"task":{"id":"1.2","repo":"backend","title":"Add the health handler"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":61,"ts":"1970-01-01T00:00:00.000Z","type":"install.started","data":{"step":"1.2","repo":"backend"}}
+{"v":1,"runId":"add-health","seq":62,"ts":"1970-01-01T00:00:00.000Z","type":"install.finished","data":{"step":"1.2","repo":"backend","durationMs":0}}
+{"v":1,"runId":"add-health","seq":63,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"1.2","agent":"implementer-backend","model":"anthropic/claude-sonnet-5-5","label":"Add the health handler","attempt":1}}
+{"v":1,"runId":"add-health","seq":64,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"1.2","agent":"implementer-backend","model":"anthropic/claude-sonnet-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":65,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"1.2","role":"implementer","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":66,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":67,"ts":"1970-01-01T00:00:00.000Z","type":"gate.planned","data":{"gates":[{"name":"format","type":"format","command":"true"},{"name":"lint","type":"lint","command":"true"},{"name":"types","type":"types","command":"true"},{"name":"testAffected","type":"testAffected","command":"true"}]}}
+{"v":1,"runId":"add-health","seq":68,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":69,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"format","type":"format","command":"true"}}
+{"v":1,"runId":"add-health","seq":70,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":71,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"format","type":"format","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":3060,"bytes":120}}}
+{"v":1,"runId":"add-health","seq":72,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":73,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"lint","type":"lint","command":"true"}}
+{"v":1,"runId":"add-health","seq":74,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":75,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"lint","type":"lint","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":3181,"bytes":118}}}
+{"v":1,"runId":"add-health","seq":76,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":77,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"types","type":"types","command":"true"}}
+{"v":1,"runId":"add-health","seq":78,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":79,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"types","type":"types","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":3300,"bytes":119}}}
+{"v":1,"runId":"add-health","seq":80,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":81,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"testAffected","type":"testAffected","command":"true"}}
+{"v":1,"runId":"add-health","seq":82,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":83,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"testAffected","type":"testAffected","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":3420,"bytes":126}}}
+{"v":1,"runId":"add-health","seq":84,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.2","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":85,"ts":"1970-01-01T00:00:00.000Z","type":"gate.report","data":{"passed":true,"results":[{"name":"format","type":"format","status":"pass","durationMs":0},{"name":"lint","type":"lint","status":"pass","durationMs":0},{"name":"types","type":"types","status":"pass","durationMs":0},{"name":"testAffected","type":"testAffected","status":"pass","durationMs":0}]}}
+{"v":1,"runId":"add-health","seq":86,"ts":"1970-01-01T00:00:00.000Z","type":"task.passed","data":{"task":{"id":"1.2","repo":"backend","title":"Add the health handler"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":87,"ts":"1970-01-01T00:00:00.000Z","type":"task.merging","data":{"task":{"id":"1.2","repo":"backend","title":"Add the health handler"}}}
+{"v":1,"runId":"add-health","seq":88,"ts":"1970-01-01T00:00:00.000Z","type":"task.merged","data":{"task":{"id":"1.2","repo":"backend","title":"Add the health handler"},"commit":"<sha>"}}
+{"v":1,"runId":"add-health","seq":89,"ts":"1970-01-01T00:00:00.000Z","type":"task.started","data":{"task":{"id":"1.3","repo":"backend","title":"Add a readiness metric"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":90,"ts":"1970-01-01T00:00:00.000Z","type":"install.started","data":{"step":"1.3","repo":"backend"}}
+{"v":1,"runId":"add-health","seq":91,"ts":"1970-01-01T00:00:00.000Z","type":"install.finished","data":{"step":"1.3","repo":"backend","durationMs":0}}
+{"v":1,"runId":"add-health","seq":92,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"1.3","agent":"implementer-backend","model":"anthropic/claude-sonnet-5-5","label":"Add a readiness metric","attempt":1}}
+{"v":1,"runId":"add-health","seq":93,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"1.3","agent":"implementer-backend","model":"anthropic/claude-sonnet-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":94,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"1.3","role":"implementer","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":95,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":96,"ts":"1970-01-01T00:00:00.000Z","type":"gate.planned","data":{"gates":[{"name":"format","type":"format","command":"true"},{"name":"lint","type":"lint","command":"true"},{"name":"types","type":"types","command":"true"},{"name":"testAffected","type":"testAffected","command":"true"}]}}
+{"v":1,"runId":"add-health","seq":97,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":98,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"format","type":"format","command":"true"}}
+{"v":1,"runId":"add-health","seq":99,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":100,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"format","type":"format","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":4722,"bytes":120}}}
+{"v":1,"runId":"add-health","seq":101,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":102,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"lint","type":"lint","command":"true"}}
+{"v":1,"runId":"add-health","seq":103,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":104,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"lint","type":"lint","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":4843,"bytes":118}}}
+{"v":1,"runId":"add-health","seq":105,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":106,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"types","type":"types","command":"true"}}
+{"v":1,"runId":"add-health","seq":107,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":108,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"types","type":"types","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":4962,"bytes":119}}}
+{"v":1,"runId":"add-health","seq":109,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":110,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"testAffected","type":"testAffected","command":"true"}}
+{"v":1,"runId":"add-health","seq":111,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":112,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"testAffected","type":"testAffected","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":5082,"bytes":126}}}
+{"v":1,"runId":"add-health","seq":113,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"1.3","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":114,"ts":"1970-01-01T00:00:00.000Z","type":"gate.report","data":{"passed":true,"results":[{"name":"format","type":"format","status":"pass","durationMs":0},{"name":"lint","type":"lint","status":"pass","durationMs":0},{"name":"types","type":"types","status":"pass","durationMs":0},{"name":"testAffected","type":"testAffected","status":"pass","durationMs":0}]}}
+{"v":1,"runId":"add-health","seq":115,"ts":"1970-01-01T00:00:00.000Z","type":"task.passed","data":{"task":{"id":"1.3","repo":"backend","title":"Add a readiness metric"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":116,"ts":"1970-01-01T00:00:00.000Z","type":"task.merging","data":{"task":{"id":"1.3","repo":"backend","title":"Add a readiness metric"}}}
+{"v":1,"runId":"add-health","seq":117,"ts":"1970-01-01T00:00:00.000Z","type":"task.merged","data":{"task":{"id":"1.3","repo":"backend","title":"Add a readiness metric"},"commit":"<sha>"}}
+{"v":1,"runId":"add-health","seq":118,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"implementing","to":"reviewing"}}
+{"v":1,"runId":"add-health","seq":119,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ review + tests: backend"}}
+{"v":1,"runId":"add-health","seq":120,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"review:backend","agent":"reviewer","model":"anthropic/claude-opus-5-5"}}
+{"v":1,"runId":"add-health","seq":121,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"review:backend","agent":"reviewer","model":"anthropic/claude-opus-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":122,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"review:backend","role":"reviewer","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":123,"ts":"1970-01-01T00:00:00.000Z","type":"task.queued","data":{"task":{"id":"test-backend","repo":"backend","title":"Ensure every scenario of backend has a test"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":124,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"reviewing","to":"implementing"}}
+{"v":1,"runId":"add-health","seq":125,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ implement: 1 task (max 1 agents)"}}
+{"v":1,"runId":"add-health","seq":126,"ts":"1970-01-01T00:00:00.000Z","type":"task.started","data":{"task":{"id":"test-backend","repo":"backend","title":"Ensure every scenario of backend has a test"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":127,"ts":"1970-01-01T00:00:00.000Z","type":"install.started","data":{"step":"test-backend","repo":"backend"}}
+{"v":1,"runId":"add-health","seq":128,"ts":"1970-01-01T00:00:00.000Z","type":"install.finished","data":{"step":"test-backend","repo":"backend","durationMs":0}}
+{"v":1,"runId":"add-health","seq":129,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"test-backend","agent":"tester","model":"anthropic/claude-sonnet-5-5","label":"Ensure every scenario of backend has a test","attempt":1}}
+{"v":1,"runId":"add-health","seq":130,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"test-backend","agent":"tester","model":"anthropic/claude-sonnet-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":131,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"test-backend","role":"tester","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":132,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":133,"ts":"1970-01-01T00:00:00.000Z","type":"gate.planned","data":{"gates":[{"name":"format","type":"format","command":"true"},{"name":"lint","type":"lint","command":"true"},{"name":"types","type":"types","command":"true"},{"name":"testAffected","type":"testAffected","command":"true"}]}}
+{"v":1,"runId":"add-health","seq":134,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":135,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"format","type":"format","command":"true"}}
+{"v":1,"runId":"add-health","seq":136,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":137,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"format","type":"format","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":6671,"bytes":129}}}
+{"v":1,"runId":"add-health","seq":138,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":139,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"lint","type":"lint","command":"true"}}
+{"v":1,"runId":"add-health","seq":140,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":141,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"lint","type":"lint","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":6801,"bytes":127}}}
+{"v":1,"runId":"add-health","seq":142,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":143,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"types","type":"types","command":"true"}}
+{"v":1,"runId":"add-health","seq":144,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":145,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"types","type":"types","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":6929,"bytes":128}}}
+{"v":1,"runId":"add-health","seq":146,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":147,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"testAffected","type":"testAffected","command":"true"}}
+{"v":1,"runId":"add-health","seq":148,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":149,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"testAffected","type":"testAffected","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":7058,"bytes":135}}}
+{"v":1,"runId":"add-health","seq":150,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"test-backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":151,"ts":"1970-01-01T00:00:00.000Z","type":"gate.report","data":{"passed":true,"results":[{"name":"format","type":"format","status":"pass","durationMs":0},{"name":"lint","type":"lint","status":"pass","durationMs":0},{"name":"types","type":"types","status":"pass","durationMs":0},{"name":"testAffected","type":"testAffected","status":"pass","durationMs":0}]}}
+{"v":1,"runId":"add-health","seq":152,"ts":"1970-01-01T00:00:00.000Z","type":"task.passed","data":{"task":{"id":"test-backend","repo":"backend","title":"Ensure every scenario of backend has a test"},"attempt":1}}
+{"v":1,"runId":"add-health","seq":153,"ts":"1970-01-01T00:00:00.000Z","type":"task.merging","data":{"task":{"id":"test-backend","repo":"backend","title":"Ensure every scenario of backend has a test"}}}
+{"v":1,"runId":"add-health","seq":154,"ts":"1970-01-01T00:00:00.000Z","type":"task.merged","data":{"task":{"id":"test-backend","repo":"backend","title":"Ensure every scenario of backend has a test"},"commit":"<sha>"}}
+{"v":1,"runId":"add-health","seq":155,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"implementing","to":"reviewing"}}
+{"v":1,"runId":"add-health","seq":156,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"reviewing","to":"contracts"}}
+{"v":1,"runId":"add-health","seq":157,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ contract gate: 2 contracts"}}
+{"v":1,"runId":"add-health","seq":158,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"verbose","text":"  ⚙ [contracts] checking helm-values charts/app/values.schema.json"}}
+{"v":1,"runId":"add-health","seq":159,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"verbose","text":"  ⚙ [contracts] checking openapi api/openapi.yaml"}}
+{"v":1,"runId":"add-health","seq":160,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"  ✓ helm-values:deploy:charts/app/values.schema.json"}}
+{"v":1,"runId":"add-health","seq":161,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"  ✓ openapi:backend:api/openapi.yaml"}}
+{"v":1,"runId":"add-health","seq":162,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ contract review"}}
+{"v":1,"runId":"add-health","seq":163,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"contract-review","agent":"contract-reviewer","model":"anthropic/claude-opus-5-5"}}
+{"v":1,"runId":"add-health","seq":164,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"contract-review","agent":"contract-reviewer","model":"anthropic/claude-opus-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":165,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"contract-review","role":"contract-reviewer","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":166,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"contracts","to":"full-suite"}}
+{"v":1,"runId":"add-health","seq":167,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ full suite: backend"}}
+{"v":1,"runId":"add-health","seq":168,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":169,"ts":"1970-01-01T00:00:00.000Z","type":"gate.planned","data":{"gates":[{"name":"format","type":"format","command":"true"},{"name":"lint","type":"lint","command":"true"},{"name":"types","type":"types","command":"true"},{"name":"test","type":"test","command":"true"}]}}
+{"v":1,"runId":"add-health","seq":170,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":171,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"format","type":"format","command":"true"}}
+{"v":1,"runId":"add-health","seq":172,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":173,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"format","type":"format","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":8662,"bytes":124}}}
+{"v":1,"runId":"add-health","seq":174,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":175,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"lint","type":"lint","command":"true"}}
+{"v":1,"runId":"add-health","seq":176,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":177,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"lint","type":"lint","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":8787,"bytes":122}}}
+{"v":1,"runId":"add-health","seq":178,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":179,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"types","type":"types","command":"true"}}
+{"v":1,"runId":"add-health","seq":180,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":181,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"types","type":"types","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":8910,"bytes":123}}}
+{"v":1,"runId":"add-health","seq":182,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":183,"ts":"1970-01-01T00:00:00.000Z","type":"gate.started","data":{"name":"test","type":"test","command":"true"}}
+{"v":1,"runId":"add-health","seq":184,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":185,"ts":"1970-01-01T00:00:00.000Z","type":"gate.finished","data":{"name":"test","type":"test","status":"pass","durationMs":0,"outputRef":{"path":".factory/logs/add-health/<date>.jsonl","offset":9034,"bytes":122}}}
+{"v":1,"runId":"add-health","seq":186,"ts":"1970-01-01T00:00:00.000Z","type":"agent.activity","data":{"step":"backend","detail":"","kind":"step-started"}}
+{"v":1,"runId":"add-health","seq":187,"ts":"1970-01-01T00:00:00.000Z","type":"gate.report","data":{"passed":true,"results":[{"name":"format","type":"format","status":"pass","durationMs":0},{"name":"lint","type":"lint","status":"pass","durationMs":0},{"name":"types","type":"types","status":"pass","durationMs":0},{"name":"test","type":"test","status":"pass","durationMs":0}]}}
+{"v":1,"runId":"add-health","seq":188,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"full-suite","to":"closing"}}
+{"v":1,"runId":"add-health","seq":189,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ close"}}
+{"v":1,"runId":"add-health","seq":190,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"normal","text":"  ⚙ bumping submodule pointers"}}
+{"v":1,"runId":"add-health","seq":191,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"normal","text":"  ⚙ archiving the spec"}}
+{"v":1,"runId":"add-health","seq":192,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"closing","to":"done"}}
+{"v":1,"runId":"add-health","seq":193,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"✓ add-health done — report: <root>/.factory/reports/add-health.md"}}
+{"v":1,"runId":"add-health","seq":194,"ts":"1970-01-01T00:00:00.000Z","type":"run.finished","data":{"outcome":"done"}}
