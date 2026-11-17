@@ -1,0 +1,525 @@
+{
+  "active": null,
+  "corrupt": [],
+  "driverAlive": false,
+  "queue": [],
+  "runs": [
+    {
+      "abortRequested": false,
+      "archiveCommit": "<sha>",
+      "archivedAs": "<date>-add-health",
+      "branches": {
+        ".": {
+          "base": "<sha>",
+          "branch": "change/add-health"
+        },
+        "backend": {
+          "base": "<sha>",
+          "branch": "change/add-health"
+        }
+      },
+      "clarifications": [],
+      "contractResults": {
+        "helm-values:deploy:charts/app/values.schema.json": {
+          "passed": true,
+          "summary": "✓ helm-values:deploy:charts/app/values.schema.json"
+        },
+        "openapi:backend:api/openapi.yaml": {
+          "passed": true,
+          "summary": "✓ openapi:backend:api/openapi.yaml"
+        }
+      },
+      "contractReviewed": true,
+      "contractRounds": 0,
+      "createdAt": "<ts>",
+      "factoryVersion": "1.0.2",
+      "fullSuite": {
+        "backend": {
+          "output": "",
+          "passed": true
+        }
+      },
+      "graphSeq": 4,
+      "handoffs": {
+        "1.1": {
+          "decisions": [],
+          "filesChanged": ["api/openapi.yaml"],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "1.1"
+        },
+        "1.2": {
+          "decisions": [],
+          "filesChanged": ["internal/http/health.go"],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "1.2"
+        },
+        "1.3": {
+          "decisions": [],
+          "filesChanged": ["internal/metrics/ready.go"],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "1.3"
+        },
+        "context-packs": {
+          "decisions": [],
+          "filesChanged": [
+            ".factory/context/add-health/1.1.md",
+            ".factory/context/add-health/1.2.md",
+            ".factory/context/add-health/1.3.md"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "context-packs"
+        },
+        "contract-review": {
+          "decisions": [],
+          "filesChanged": [],
+          "findings": [],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "contract-review"
+        },
+        "design": {
+          "decisions": [],
+          "filesChanged": [
+            "openspec/changes/add-health/proposal.md",
+            "openspec/changes/add-health/design.md",
+            "openspec/changes/add-health/specs/health/spec.md",
+            "openspec/changes/add-health/tasks.md"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "design"
+        },
+        "intake": {
+          "decisions": [
+            "change-id: add-health",
+            "summary: Add a health endpoint and show it in the UI",
+            "repos: backend, frontend"
+          ],
+          "filesChanged": [],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "intake"
+        },
+        "review:backend": {
+          "decisions": [],
+          "filesChanged": [],
+          "findings": [],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "review:backend"
+        },
+        "test-backend": {
+          "decisions": [],
+          "filesChanged": ["internal/http/health_test.go"],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "test-backend"
+        }
+      },
+      "id": "add-health",
+      "likelyRepos": ["backend", "frontend"],
+      "mergeSeq": 4,
+      "origin": "factory",
+      "phase": "done",
+      "pointerCommit": "<sha>",
+      "pointers": ["repos/backend: <sha12> → <sha12>"],
+      "pointersBumped": true,
+      "preserveProgress": false,
+      "reReview": [],
+      "reportPath": "<root>/.factory/reports/add-health.md",
+      "request": "Add a health endpoint",
+      "reviewRound": 1,
+      "reviewed": ["backend"],
+      "serialOwner": {},
+      "specFindings": [],
+      "suiteRounds": 0,
+      "summary": "Add a health endpoint and show it in the UI",
+      "tasks": [
+        {
+          "branch": "change/add-health--1.1",
+          "commit": "<sha>",
+          "deps": [],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "event": "approved"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "1.1",
+          "installed": true,
+          "kind": "task",
+          "mergeSeq": 1,
+          "repo": "backend",
+          "serial": false,
+          "status": "merged",
+          "title": "Add the health path to the OpenAPI contract",
+          "touches": ["api/openapi.yaml"],
+          "worktree": "<root>/.factory/worktrees/add-health/backend/1.1"
+        },
+        {
+          "branch": "change/add-health--1.2",
+          "commit": "<sha>",
+          "deps": ["1.1"],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "event": "approved"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "1.2",
+          "installed": true,
+          "kind": "task",
+          "mergeSeq": 2,
+          "repo": "backend",
+          "serial": false,
+          "status": "merged",
+          "title": "Add the health handler",
+          "touches": ["internal/http/**"],
+          "worktree": "<root>/.factory/worktrees/add-health/backend/1.2"
+        },
+        {
+          "branch": "change/add-health--1.3",
+          "commit": "<sha>",
+          "deps": ["1.2"],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "event": "approved"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "1.3",
+          "installed": true,
+          "kind": "task",
+          "mergeSeq": 3,
+          "repo": "backend",
+          "serial": false,
+          "status": "merged",
+          "title": "Add a readiness metric",
+          "touches": ["internal/metrics/**"],
+          "worktree": "<root>/.factory/worktrees/add-health/backend/1.3"
+        },
+        {
+          "branch": "change/add-health--test-backend",
+          "commit": "<sha>",
+          "deps": [],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "detail": "test",
+              "event": "added"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "test-backend",
+          "installed": true,
+          "kind": "test",
+          "mergeSeq": 4,
+          "repo": "backend",
+          "serial": false,
+          "status": "merged",
+          "title": "Ensure every scenario of backend has a test",
+          "touches": ["**"],
+          "worktree": "<root>/.factory/worktrees/add-health/backend/test-backend"
+        }
+      ],
+      "updatedAt": "<ts>",
+      "usage": {
+        "byAgent": {
+          "architect": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "contract-reviewer": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "explorer": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "implementer-backend": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "orchestrator": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "reviewer": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "tester": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          }
+        },
+        "byModel": {
+          "anthropic/claude-haiku-5-5": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "anthropic/claude-opus-5-5": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "anthropic/claude-sonnet-5-5": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          }
+        },
+        "byStep": {
+          "1.1": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "1.2": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "1.3": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "context-packs": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "contract-review": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "design": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "explore:backend": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "explore:frontend": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "intake": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "review:backend": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "test-backend": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          }
+        },
+        "retryOverhead": {
+          "cacheRead": "<tokens>",
+          "cacheWrite": "<tokens>",
+          "cost": "<cost>",
+          "input": "<tokens>",
+          "output": "<tokens>",
+          "reasoning": "<tokens>"
+        },
+        "sessions": 11,
+        "top": [
+          {
+            "step": "intake",
+            "tokens": 1900
+          },
+          {
+            "step": "explore:backend",
+            "tokens": 1900
+          },
+          {
+            "step": "explore:frontend",
+            "tokens": 1900
+          },
+          {
+            "step": "design",
+            "tokens": 1900
+          },
+          {
+            "step": "context-packs",
+            "tokens": 1900
+          }
+        ],
+        "total": {
+          "cacheRead": "<tokens>",
+          "cacheWrite": "<tokens>",
+          "cost": "<cost>",
+          "input": "<tokens>",
+          "output": "<tokens>",
+          "reasoning": "<tokens>"
+        },
+        "wastedReads": 0
+      },
+      "version": 1
+    }
+  ]
+}

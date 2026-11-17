@@ -1,0 +1,12 @@
+===== init (exit 0) =====
+
+===== run (exit 0) =====
+
+===== approve --no-continue (exit 0) =====
+
+===== resume (exit 0) =====
+
+===== status <id> --json (exit 0) =====
+
+===== status --json (exit 0) =====
+
