@@ -40,6 +40,16 @@ function asker(p: Pipeline): Ask | undefined {
 
 const questionsLabel = (count: number): string => `${count} question${count === 1 ? "" : "s"}`;
 
+/** Emits one clarification as its event; intake replays its records once the stream is bound. */
+function emitQuestion(p: Pipeline, record: Clarification): void {
+  p.emit("question.raised", {
+    step: record.step,
+    question: record.question,
+    status: record.status,
+    ...(record.answer === undefined ? {} : { answer: record.answer }),
+  });
+}
+
 function slug(text: string): string {
   const words = text
     .toLowerCase()
@@ -137,6 +147,9 @@ export async function intake(p: Pipeline, request: string): Promise<string> {
   // banner, its questions and the orchestrator session) stays terminal-only.
   p.bindRun(id);
   if (p.events.lastSeq === 0) p.events.emit("run.started", { phase: "design" });
+  // Intake asked before the run file (and its stream) existed: replay its questions the way
+  // `backfillIntakeUsage` replays the intake usage entry, so `reduce` sees them.
+  for (const record of run.clarifications) emitQuestion(p, record);
   if (run.clarifications.length > 0) {
     writeClarifications({ root: p.root, id, records: run.clarifications });
   }
@@ -276,13 +289,7 @@ export async function design(p: Pipeline, id: string): Promise<{ ok: boolean; is
       const updated = await p.update(id, (d) => {
         d.clarifications = upsertClarifications(d.clarifications, records);
       });
-      for (const record of records)
-        p.emit("question.raised", {
-          step: record.step,
-          question: record.question,
-          status: record.status,
-          ...(record.answer === undefined ? {} : { answer: record.answer }),
-        });
+      for (const record of records) emitQuestion(p, record);
       writeClarifications({
         root: p.root,
         id,

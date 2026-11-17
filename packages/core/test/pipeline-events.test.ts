@@ -15,6 +15,7 @@ import { loadConfig } from "../src/config/load.ts";
 import { FactoryConfig } from "../src/config/schema.ts";
 import { eventLogPath } from "../src/events/jsonl.ts";
 import { MemorySink } from "../src/events/memory.ts";
+import { compareSnapshots } from "../src/events/parity.ts";
 import { RunEvent } from "../src/events/protocol.ts";
 import { TerminalSink } from "../src/events/terminal.ts";
 import { ExitCode } from "../src/exit-codes.ts";
@@ -23,6 +24,7 @@ import { Pipeline } from "../src/pipeline/context.ts";
 import { design, intake } from "../src/pipeline/design.ts";
 import { Progress } from "../src/pipeline/progress.ts";
 import type { AgentRuntime, Usage } from "../src/runtime/types.ts";
+import { loadRun } from "../src/state/run.ts";
 
 const ID = "add-health";
 
@@ -112,6 +114,47 @@ describe("pipeline event wiring", () => {
     const start = out.indexOf(expected[0] ?? "");
     expect(start).toBeGreaterThanOrEqual(0);
     expect(out.slice(start)).toEqual(expected);
+  });
+});
+
+describe("intake clarifications", () => {
+  test("intake questions are replayed as question.raised so the reduced snapshot matches", async () => {
+    const fx = await createSingleRepoFixture();
+    try {
+      expect((await cli(fx.root, "init")).code).toBe(ExitCode.Ok);
+      const runtime = new ScriptedRuntime(async (call) =>
+        call.agent === "orchestrator"
+          ? {
+              handoff: {
+                task: "intake",
+                decisions: [`change-id: ${ID}`, "summary: Math helpers", "repos: app"],
+                openQuestions: ["Which repos?"],
+              },
+            }
+          : { handoff: {} },
+      );
+      const sink = new MemorySink();
+      const p = new Pipeline(fx.root, loadConfig(fx.root).config, {
+        runtime,
+        out: () => {},
+        signal: new AbortController().signal,
+        events: { sink },
+        ask: async () => "app",
+        heartbeatMs: 0,
+      });
+      const id = await intake(p, "Add math helpers");
+      p.progress.stop();
+
+      const run = loadRun(fx.root, id);
+      if (run === undefined) throw new Error("intake did not save the run");
+      expect(sink.ofType("question.raised").map((event) => event.data)).toEqual([
+        { step: "intake", question: "Which repos?", status: "answered", answer: "app" },
+      ]);
+      const uptoSeq = sink.events.at(-1)?.seq ?? 0;
+      expect(compareSnapshots(sink.events, [{ name: "after intake", run, uptoSeq }])).toEqual([]);
+    } finally {
+      fx.cleanup();
+    }
   });
 });
 
