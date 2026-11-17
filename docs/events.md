@@ -216,9 +216,9 @@ the JSONL file is the stream, and the emitter is the only allocator of `seq`.
   type, with their 1-based line numbers. The rest of the stream still returns.
 
 `tailEvents(root, runId, { fromSeq, signal })` is an async iterator over `{ kind: "event" }` and
-`{ kind: "gap", missing }` items. It watches `.factory/events` with `fs.watch`, falls back to
-polling when the watch is unavailable, emits a gap marker whenever a sequence number is absent,
-and completes without error when the abort signal fires.
+`{ kind: "gap", missing }` items. It watches `.factory/events` with `fs.watch` and also polls, so
+a change the watch coalesces or drops still arrives within the poll period; it emits a gap marker
+whenever a sequence number is absent, and completes without error when the abort signal fires.
 
 ## The command inbox
 

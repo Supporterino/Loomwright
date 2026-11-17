@@ -20,9 +20,9 @@ interface ParsedLine {
 export interface TailOptions {
   readonly fromSeq?: number;
   readonly signal?: AbortSignal;
-  /** Test seam: polling period when the watch path is unavailable or disabled. */
+  /** Polling period: the safety net for changes `fs.watch` coalesces or drops. */
   readonly pollMs?: number;
-  /** Test seam: force the polling fallback (default: use fs.watch, fall back on error). */
+  /** Test seam: disable `fs.watch` and rely on polling alone (default: use both). */
   readonly useWatch?: boolean;
 }
 
@@ -109,8 +109,9 @@ function readAppended(path: string, cursor: Cursor): ParsedLine[] {
 
 /**
  * Follows a run's event log: yields the existing stream, then every appended event, inserting a
- * gap marker whenever a sequence number is absent. Reads only; the watcher and timer are always
- * closed, and aborting the signal completes the iterator without error.
+ * gap marker whenever a sequence number is absent. A timer polls alongside `fs.watch`, so a
+ * change the watch misses still arrives within `pollMs`. Reads only; the watcher and timer are
+ * always closed, and aborting the signal completes the iterator without error.
  */
 export async function* tailEvents(
   root: string,
@@ -137,13 +138,14 @@ export async function* tailEvents(
 
   let watcher: FSWatcher | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
+  // The timer is a safety net, not only a fallback: `fs.watch` may coalesce or drop a change,
+  // and a missed one would stall the tail until the next write.
   const startPolling = (): void => {
     timer ??= setInterval(notify, pollMs);
   };
   const onWatchError = (): void => {
     watcher?.close();
     watcher = undefined;
-    startPolling();
     notify();
   };
   const onAbort = (): void => notify();
@@ -151,16 +153,14 @@ export async function* tailEvents(
   try {
     if (aborted()) return;
     signal?.addEventListener("abort", onAbort, { once: true });
-    if (options.useWatch === false) {
-      startPolling();
-    } else {
+    startPolling();
+    if (options.useWatch !== false) {
       try {
         watcher = watch(factoryDir(root, "events"), () => notify());
       } catch {
         watcher = undefined;
       }
-      if (watcher === undefined) startPolling();
-      else watcher.on("error", onWatchError);
+      watcher?.on("error", onWatchError);
     }
 
     for (;;) {

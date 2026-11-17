@@ -91,7 +91,8 @@ async function collect(stream: AsyncIterable<EventLogLine>): Promise<EventLogLin
   return items;
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms = 2000): Promise<T> {
+// Bun's default test budget: `fs.watch` delivery is OS-scheduled, so 2 s was too tight.
+async function withTimeout<T>(promise: Promise<T>, ms = 5000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);

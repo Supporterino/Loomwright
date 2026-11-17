@@ -51,7 +51,9 @@ const writeLog = (root: string, lines: readonly string[]): string => {
 
 const appendLine = (path: string, entry: string): void => appendFileSync(path, `${entry}\n`);
 
-async function withTimeout<T>(promise: Promise<T>, ms = 2000): Promise<T> {
+// Bun's default test budget: `fs.watch` delivery is OS-scheduled and the suite runs next to the
+// 25 s golden file, so 2 s was too tight for the watch path.
+async function withTimeout<T>(promise: Promise<T>, ms = 5000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
