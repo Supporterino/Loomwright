@@ -32,7 +32,7 @@
       "contractReviewed": true,
       "contractRounds": 0,
       "createdAt": "<ts>",
-      "factoryVersion": "1.0.2",
+      "factoryVersion": "<version>",
       "fullSuite": {
         "backend": {
           "output": "",

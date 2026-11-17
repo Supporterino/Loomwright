@@ -1,5 +1,5 @@
 ===== init (exit 0) =====
-loomwright 1.0.2 in <root>
+loomwright <version> in <root>
 tools: git 2.56.1, opencode 2.2.0, openspec 1.14.3, graphify 0.9.93
 wrote factory.config.jsonc (review "models" and "contracts")
 created: .gitignore
@@ -45,7 +45,7 @@ created: AGENTS.md
 created: openspec/config.yaml
 hook app: installed
 graph: built (9 nodes, <duration>)
-committed <sha12> chore(factory): init v1.0.2
+committed <sha12> chore(factory): init <version>
 ===== run (exit 0) =====
 ▶ intake
   ▶ [intake] orchestrator (anthropic/claude-sonnet-5-5)
@@ -133,7 +133,7 @@ next: `loomwright land add-health` merges the finished change into its base bran
       "contractReviewed": false,
       "contractRounds": 0,
       "createdAt": "<ts>",
-      "factoryVersion": "1.0.2",
+      "factoryVersion": "<version>",
       "fullSuite": {
         "app": {
           "output": "",
@@ -579,7 +579,7 @@ next: `loomwright land add-health` merges the finished change into its base bran
       "contractReviewed": false,
       "contractRounds": 0,
       "createdAt": "<ts>",
-      "factoryVersion": "1.0.2",
+      "factoryVersion": "<version>",
       "fullSuite": {
         "app": {
           "output": "",

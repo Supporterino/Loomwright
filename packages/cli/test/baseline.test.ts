@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { FACTORY_VERSION } from "@loomwright/core/version";
 import {
   CONTROL_ACTIONS,
   captureAll,
@@ -128,6 +129,9 @@ describe("baseline: the two stub scenarios are captured", () => {
       "12.3k tok · $0.42",
       "updated 10:42:00",
       "/usr/local/bin/bun",
+      `loomwright ${FACTORY_VERSION} in /tmp/x`,
+      `committed 0123456789ab chore(factory): init v${FACTORY_VERSION}`,
+      `"factoryVersion": "${FACTORY_VERSION}"`,
     ].join("\n");
     const out = normalise(input, ctx);
     expect(out).toContain("<root>");
@@ -141,8 +145,27 @@ describe("baseline: the two stub scenarios are captured", () => {
     expect(out).toContain("<tokens>");
     expect(out).toContain("$<cost>");
     expect(out).toContain("updated <time>");
+    expect(out).toContain(`loomwright <version> in`);
+    expect(out).toContain("chore(factory): init <version>");
+    expect(out).toContain('"factoryVersion": "<version>"');
+    expect(out).not.toContain(FACTORY_VERSION);
     expect(out).not.toContain(homedir());
     expect(out).not.toContain("ses_test_");
+  });
+
+  test("the goldens are committed and normalised: no factory version survives a release bump", () => {
+    for (const name of [
+      "single.stdout.txt",
+      "submodules.stdout.txt",
+      "status.json",
+      "status-id.json",
+    ]) {
+      expect(read(name), name).not.toContain(FACTORY_VERSION);
+    }
+    expect(read("single.stdout.txt")).toContain("loomwright <version> in <root>");
+    expect(read("submodules.stdout.txt")).toContain("chore(factory): init <version>");
+    expect(read("status.json")).toContain('"factoryVersion": "<version>"');
+    expect(read("status-id.json")).toContain('"factoryVersion": "<version>"');
   });
 
   test("the normaliser sorts JSON keys so map iteration order cannot drift", () => {

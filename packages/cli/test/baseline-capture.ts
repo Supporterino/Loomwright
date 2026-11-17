@@ -28,6 +28,7 @@ import {
 } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
+import { FACTORY_VERSION } from "@loomwright/core/version";
 import { factoryScript, type ScriptedTask } from "../../../test/fixtures/factory-script.ts";
 import { ScriptedRuntime } from "../../../test/fixtures/scripted-runtime.ts";
 import {
@@ -207,7 +208,8 @@ function pathVariants(path: string): string[] {
 
 /**
  * Pure normaliser: two runs on the same machine differ only in timestamps, temp paths, pids,
- * scripted session ids, hashes, durations, token counts, costs and machine paths.
+ * scripted session ids, hashes, durations, token counts, costs, machine paths and the factory
+ * version.
  */
 function normaliseText(text: string, ctx: NormaliseContext): string {
   let out = text;
@@ -233,6 +235,9 @@ function normaliseText(text: string, ctx: NormaliseContext): string {
   out = out.replace(/\b(?:\d+h\d+m|\d+m\d+s|\d+(?:\.\d+)?ms|\d+(?:\.\d+)?s)\b/g, "<duration>");
   out = out.replace(/\b\d[\d.,]*[km]?\s+tok(?:en)?s?\b/g, "<tokens>");
   out = out.replace(/\$\d+(?:\.\d+)?/g, "$<cost>");
+  // The banner, the install commit, the lock and every run carry the factory version; a release
+  // bump must not invalidate a golden captured before it.
+  out = out.replace(new RegExp(`\\bv?${escapeRegExp(FACTORY_VERSION)}\\b`, "g"), "<version>");
   // Usage objects in `status --json`: token counts and cost are display data, not state.
   out = out.replace(/"(input|output|reasoning|cacheRead|cacheWrite)": -?\d+/g, '"$1": "<tokens>"');
   out = out.replace(/"cost": -?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, '"cost": "<cost>"');
