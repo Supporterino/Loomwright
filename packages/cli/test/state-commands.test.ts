@@ -106,6 +106,15 @@ describe("status, retry and abort", () => {
     expect((await cli(fx.root, "status", "nope", "--json")).code).toBe(ExitCode.Precondition);
   });
 
+  test("status --json resolves the workspace root from a subdirectory", async () => {
+    const nested = join(fx.root, "src", "deep");
+    mkdirSync(nested, { recursive: true });
+    const result = await cli(nested, "status", "--json");
+    expect(result.code).toBe(ExitCode.Ok);
+    const json = JSON.parse(result.out) as { active: { changeId: string } | null };
+    expect(json.active?.changeId).toBe("add-x");
+  });
+
   test("status --watch reprints frames until interrupted", async () => {
     const out: string[] = [];
     const code = await runCli(["status", "add-x", "--watch", "--interval", "0.01"], {

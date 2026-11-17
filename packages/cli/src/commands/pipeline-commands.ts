@@ -111,8 +111,10 @@ export async function openFactory(io: Io, verbosity?: Verbosity): Promise<Factor
     ...(io.runtime === undefined ? {} : { runtime: io.runtime }),
     ...(io.ask === undefined ? {} : { ask: io.ask }),
     ...(verbosity === undefined ? {} : { verbosity }),
+    // `Factory.open` treats a passed workspace as already resolved; the CLI runs from anywhere.
+    cwd: io.cwd,
   };
-  return open(io.cwd, options);
+  return open(undefined, options);
 }
 
 /** A paused or aborted drive exits 6; every other outcome exits 0, as before the rewiring. */

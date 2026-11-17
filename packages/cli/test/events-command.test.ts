@@ -89,6 +89,17 @@ describe("events", () => {
     expect(compareSnapshots(printed, [{ name: "final", run, uptoSeq: 6 }])).toEqual([]);
   });
 
+  test("events resolves the workspace root from a subdirectory", async () => {
+    const events = seedFinished();
+    const nested = join(fx.root, "src", "deep");
+    mkdirSync(nested, { recursive: true });
+
+    const result = await cli(nested, "events", ID);
+
+    expect(result.code).toBe(ExitCode.Ok);
+    expect(result.out).toBe(events.map((item) => JSON.stringify(item)).join("\n"));
+  });
+
   test("the default output is already JSONL", async () => {
     const events = seedFinished();
     const stored = events.map((item) => JSON.stringify(item));
