@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { eventLogPath } from "@loomwright/core/events/jsonl";
+import { RunEvent } from "@loomwright/core/events/protocol";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { open } from "@loomwright/core/factory";
 import { claimActive, enqueue, readActive, readQueue } from "@loomwright/core/state/active";
@@ -10,6 +12,29 @@ import { FACTORY_VERSION } from "@loomwright/core/version";
 import { createSingleRepoFixture, type Fixture } from "../../../test/fixtures/workspaces.ts";
 import { cli } from "../../../test/helpers.ts";
 import { runCli } from "../src/main.ts";
+
+const ISO = "2026-11-17T10:00:00.000Z";
+
+async function waitFor(predicate: () => boolean, ms = 20_000): Promise<void> {
+  const started = Date.now();
+  while (!predicate()) {
+    if (Date.now() - started > ms) throw new Error("timed out waiting for output");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+function heartbeat(seq: number): string {
+  return JSON.stringify(
+    RunEvent.parse({
+      v: 1,
+      runId: "add-x",
+      seq,
+      ts: ISO,
+      type: "heartbeat",
+      data: { text: "beat" },
+    }),
+  );
+}
 
 describe("status, retry and abort", () => {
   let fx: Fixture;
@@ -93,6 +118,93 @@ describe("status, retry and abort", () => {
     expect(out.filter((line) => line.startsWith("updated ")).length).toBeGreaterThanOrEqual(2);
     expect(out.join("\n")).toContain("change add-x — paused");
     expect((await cli(fx.root, "status", "add-x", "--watch", "--json")).code).toBe(ExitCode.Usage);
+  });
+
+  test("a new event produces a frame", async () => {
+    const log = eventLogPath(fx.root, "add-x");
+    mkdirSync(dirname(log), { recursive: true });
+    writeFileSync(log, `${heartbeat(1)}\n`);
+    const out: string[] = [];
+    const controller = new AbortController();
+    const pending = runCli(["status", "add-x", "--watch", "--interval", "0.05"], {
+      cwd: fx.root,
+      out: (line) => out.push(line),
+      err: () => {},
+      signal: controller.signal,
+    });
+    try {
+      await waitFor(() => out.some((line) => line.startsWith("updated ")));
+      const run = loadRun(fx.root, "add-x");
+      if (run === undefined) throw new Error("the seeded run is missing");
+      const task = run.tasks.find((candidate) => candidate.id === "1.1");
+      if (task === undefined) throw new Error("the seeded task is missing");
+      task.status = "merged";
+      task.commit = "1234567890abcdef";
+      saveRun(fx.root, run);
+      const merged = JSON.stringify(
+        RunEvent.parse({
+          v: 1,
+          runId: "add-x",
+          seq: 2,
+          ts: ISO,
+          type: "task.merged",
+          data: { task: { id: "1.1", repo: "app" }, commit: "1234567890abcdef" },
+        }),
+      );
+      appendFileSync(log, `${merged}\n`);
+      await waitFor(() => out.some((line) => line.includes("✓ 1.1")));
+    } finally {
+      controller.abort();
+    }
+    expect(await pending).toBe(ExitCode.Ok);
+  }, 30_000);
+
+  test("the frame format is unchanged", async () => {
+    const body = (await cli(fx.root, "status", "add-x")).out.split("\n");
+    const tty: string[] = [];
+    await runCli(["status", "add-x", "--watch", "--interval", "10"], {
+      cwd: fx.root,
+      out: (line) => tty.push(line),
+      err: () => {},
+      tty: true,
+      signal: AbortSignal.timeout(50),
+    });
+    expect(tty[0]).toBe("\x1b[2J\x1b[H");
+    expect(tty[1]).toStartWith("updated ");
+    expect(tty[1]).toEndWith(" · Ctrl-C to stop");
+    expect(tty.slice(2, 2 + body.length)).toEqual(body);
+
+    const piped: string[] = [];
+    await runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
+      cwd: fx.root,
+      out: (line) => piped.push(line),
+      err: () => {},
+      signal: AbortSignal.timeout(80),
+    });
+    expect(piped[0]).toStartWith("updated ");
+    expect(piped.includes("")).toBe(true);
+    expect(piped.join("\n")).toContain(body.join("\n"));
+  });
+
+  test("a missing event log falls back to polling", async () => {
+    const out: string[] = [];
+    const code = await runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
+      cwd: fx.root,
+      out: (line) => out.push(line),
+      err: () => {},
+      signal: AbortSignal.timeout(80),
+    });
+    expect(code).toBe(ExitCode.Ok);
+    expect(out.filter((line) => line.startsWith("updated ")).length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("the existing watch guards still apply", async () => {
+    const conflict = await cli(fx.root, "status", "add-x", "--watch", "--json");
+    expect(conflict.code).toBe(ExitCode.Usage);
+    expect(conflict.err).toContain("status: --watch and --json exclude each other");
+    const interval = await cli(fx.root, "status", "add-x", "--watch", "--interval", "0");
+    expect(interval.code).toBe(ExitCode.Usage);
+    expect(interval.err).toContain("status: --interval must be a positive number of seconds");
   });
 
   test("status shows the full suite, contract results and provisional pointers (audit G4)", async () => {

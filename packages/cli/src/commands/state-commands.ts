@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { findWorkspaceRoot } from "@loomwright/core/config/load";
 import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { eventLogPath, lastCompleteSeq } from "@loomwright/core/events/jsonl";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { CHANGE_ID } from "@loomwright/core/git/repo";
 import { type ActiveLock, driverAlive, readActive, readQueue } from "@loomwright/core/state/active";
@@ -200,7 +201,7 @@ function printRun(
 const STATUS_OPTIONS = {
   json: { type: "boolean", default: false, description: "Print the state as JSON" },
   watch: { type: "boolean", default: false, description: "Reprint the view until Ctrl-C" },
-  interval: { type: "string", description: "Seconds between --watch frames (default 2)" },
+  interval: { type: "string", description: "Minimum seconds between --watch frames (default 2)" },
 } satisfies CommandOptions;
 
 export const statusCommand: Command = {
@@ -213,9 +214,10 @@ export const statusCommand: Command = {
 Without an id: the active change (if any), the queue and every known change.
 With an id: that change's phase, branches, task DAG with states, retries and worktrees.
 
-  --watch            Reprint the same view every few seconds until Ctrl-C (a second
-                     terminal is the easiest way to watch a long run)
-  --interval <s>     Seconds between frames with --watch (default 2)`,
+  --watch            Reprint the same view after each event, at least once per interval,
+                     until Ctrl-C (a second terminal is the easiest way to watch a long run)
+  --interval <s>     Minimum seconds between frames with --watch (default 2); also the
+                     fallback poll period when the change has no event stream`,
   async run(args, io) {
     const { values, positionals } = parseCommandArgs("status", args, STATUS_OPTIONS, true);
     if (values.watch && values.json)
@@ -258,8 +260,21 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-/** `status --watch`: one frame per interval, cleared on a terminal, separated when piped. */
-async function watchStatus(
+/** The shortest gap between frames, so an event burst cannot flood the terminal. */
+const MIN_FRAME_MS = 10;
+
+/** One watch frame: clear on a terminal, separate when piped, then the unchanged view. */
+function watchFrame(io: Io, root: string, positionals: readonly string[], first: boolean): void {
+  const lines: string[] = [];
+  renderStatus({ ...io, out: (line) => lines.push(line) }, root, positionals);
+  if (io.tty === true) io.out("\x1b[2J\x1b[H");
+  else if (!first) io.out("");
+  io.out(`updated ${new Date().toLocaleTimeString()} · Ctrl-C to stop`);
+  for (const line of lines) io.out(line);
+}
+
+/** The fallback (and no-id) driver: one frame per interval, exactly as before the event log. */
+async function pollStatus(
   io: Io,
   root: string,
   positionals: readonly string[],
@@ -267,14 +282,79 @@ async function watchStatus(
 ): Promise<void> {
   let first = true;
   while (io.signal?.aborted !== true) {
-    const lines: string[] = [];
-    renderStatus({ ...io, out: (line) => lines.push(line) }, root, positionals);
-    if (io.tty === true) io.out("\x1b[2J\x1b[H");
-    else if (!first) io.out("");
-    io.out(`updated ${new Date().toLocaleTimeString()} · Ctrl-C to stop`);
-    for (const line of lines) io.out(line);
+    watchFrame(io, root, positionals, first);
     first = false;
     await sleep(intervalMs, io.signal);
+  }
+}
+
+/**
+ * `status --watch`: follows the change's event stream and re-renders after each event, with a
+ * heartbeat at least once per interval. A change with no event log keeps the interval poll.
+ */
+async function watchStatus(
+  io: Io,
+  root: string,
+  positionals: readonly string[],
+  intervalMs: number,
+): Promise<void> {
+  const id = positionals[0];
+  if (id === undefined) {
+    await pollStatus(io, root, positionals, intervalMs);
+    return;
+  }
+  const log = eventLogPath(root, id);
+  if (!existsSync(log)) {
+    await pollStatus(io, root, positionals, intervalMs);
+    return;
+  }
+
+  const controller = new AbortController();
+  const onAbort = (): void => controller.abort();
+  io.signal?.addEventListener("abort", onAbort, { once: true });
+  if (io.signal?.aborted === true) controller.abort();
+  let first = true;
+  let last = 0;
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  const frame = (): void => {
+    if (pending !== undefined) {
+      clearTimeout(pending);
+      pending = undefined;
+    }
+    last = Date.now();
+    watchFrame(io, root, positionals, first);
+    first = false;
+  };
+  // Bursts are coalesced, but the trailing event still gets a frame instead of waiting for the
+  // heartbeat: that is what makes a new event render "without waiting for the interval".
+  const scheduleFrame = (): void => {
+    const delay = MIN_FRAME_MS - (Date.now() - last);
+    if (delay <= 0) {
+      frame();
+      return;
+    }
+    pending ??= setTimeout(() => {
+      pending = undefined;
+      frame();
+    }, delay);
+  };
+  frame();
+  const timer = setInterval(frame, intervalMs);
+  try {
+    const factory = await openFactory(io);
+    for await (const item of factory.events(id, {
+      fromSeq: lastCompleteSeq(log) + 1,
+      follow: true,
+      signal: controller.signal,
+    })) {
+      // Any yielded line means the view may have changed.
+      if (item.line !== "") scheduleFrame();
+    }
+  } finally {
+    if (pending !== undefined) clearTimeout(pending);
+    clearInterval(timer);
+    controller.abort();
+    io.signal?.removeEventListener("abort", onAbort);
   }
 }
 

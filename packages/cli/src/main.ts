@@ -11,6 +11,7 @@ import { benchCommand } from "./commands/bench.ts";
 import { completeCommand, completionCommand } from "./commands/completion.ts";
 import { detectCommand } from "./commands/detect.ts";
 import { doctorCommand } from "./commands/doctor.ts";
+import { eventsCommand } from "./commands/events.ts";
 import { gateCommand } from "./commands/gate.ts";
 import { graphCommand } from "./commands/graph.ts";
 import { initCommand } from "./commands/init.ts";
@@ -41,6 +42,7 @@ export const COMMANDS: readonly Command[] = [
   rewordCommand,
   reapproveCommand,
   statusCommand,
+  eventsCommand,
   usageCommand,
   gateCommand,
   graphCommand,
