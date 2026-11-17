@@ -351,7 +351,7 @@ The run-state CLI commands (`run`, `approve`, `resume`, `status`, `abort`, `retr
 
 ### Requirement: `status --watch` follows the event stream
 
-`status --watch` SHALL subscribe to `tailEvents` for the watched change and re-render the existing view after each event, instead of polling run state every two seconds. It SHALL also re-render at least once per `--interval` so an idle run still shows a fresh timestamp. It SHALL keep the current frame format (`updated <time> · Ctrl-C to stop` followed by the same view), the terminal clear and the piped separator, and the `--watch`/`--json` exclusion with `ExitCode.Usage`. When no event log exists for the change (an older run or a run that never bound), it SHALL fall back to the current interval poll. `--interval` SHALL stay accepted as the minimum time between frames and the fallback poll interval.
+`status --watch` SHALL subscribe to `tailEvents` for the watched change and re-render the existing view after each event, instead of polling run state every two seconds. Event bursts SHALL be coalesced so at most one frame is drawn every 10 ms. It SHALL also re-render at least once per `--interval` so an idle run still shows a fresh timestamp. It SHALL keep the current frame format (`updated <time> · Ctrl-C to stop` followed by the same view), the terminal clear and the piped separator, and the `--watch`/`--json` exclusion with `ExitCode.Usage`. When no event log exists for the change (an older run or a run that never bound), it SHALL fall back to the current interval poll. `--interval` SHALL stay accepted as the heartbeat period and the fallback poll interval; it SHALL NOT delay a frame that an event triggers.
 
 #### Scenario: a new event produces a frame
 
