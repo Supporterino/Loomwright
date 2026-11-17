@@ -132,7 +132,10 @@ export class TerminalSink implements EventSink {
             this.#progress.activity(step, { kind: "step-started" });
             return;
           case "step-done":
-            this.#progress.activity(step, { kind: "step-done", usage: ZERO_USAGE });
+            this.#progress.activity(step, {
+              kind: "step-done",
+              usage: event.data.usage ?? ZERO_USAGE,
+            });
             return;
           case "retry":
             this.#progress.activity(step, { kind: "retry", reason: detail });

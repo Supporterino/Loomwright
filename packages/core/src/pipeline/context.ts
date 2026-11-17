@@ -104,6 +104,10 @@ export class Pipeline {
       maxAttempts: config.gates.maxRetries + 1,
       ...(deps.heartbeatMs === undefined ? {} : { heartbeatMs: deps.heartbeatMs }),
       ...(deps.now === undefined ? {} : { now: deps.now }),
+      onHeartbeat: (text) => {
+        if (this.#bound === undefined) this.deps.out(text);
+        else this.#events.emit("heartbeat", { text });
+      },
     });
     this.#events = this.#newEmitter();
   }
@@ -382,7 +386,12 @@ export class Pipeline {
         this.#events.emit("agent.activity", { step, detail: "", kind: "step-started" });
         return;
       case "step-done":
-        this.#events.emit("agent.activity", { step, detail: "", kind: "step-done" });
+        this.#events.emit("agent.activity", {
+          step,
+          detail: "",
+          kind: "step-done",
+          usage: activity.usage,
+        });
         return;
       case "retry":
         this.#events.emit("agent.retry", {

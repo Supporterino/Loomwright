@@ -111,15 +111,17 @@ output: `outputRef` points at it in `.factory/logs/`.
 
 ### agent
 
-| Event            | Payload                                                                  |
-| ---------------- | ------------------------------------------------------------------------ |
-| `agent.started`  | `{ step, agent, model, label?, attempt? }`                               |
-| `agent.finished` | `{ step, role, outcome, durationMs, usage, sessionId, problem? }`        |
-| `agent.activity` | `{ step, detail, kind, status? }` — tool and step detail for `--verbose` |
-| `agent.retry`    | `{ step, reason? }`                                                      |
+| Event            | Payload                                                                          |
+| ---------------- | -------------------------------------------------------------------------------- |
+| `agent.started`  | `{ step, agent, model, label?, attempt? }`                                       |
+| `agent.finished` | `{ step, role, outcome, durationMs, usage, sessionId, problem? }`                |
+| `agent.activity` | `{ step, detail, kind, status?, usage? }` — tool and step detail for `--verbose` |
+| `agent.retry`    | `{ step, reason? }`                                                              |
 
 `outcome` is `succeeded`, `failed` or `interrupted`; `usage` is
-`{ input, output, reasoning, cacheRead, cacheWrite, cost }`.
+`{ input, output, reasoning, cacheRead, cacheWrite, cost }`. A `step-done` activity carries the
+turn's `usage`, so the heartbeat line keeps its token count and reaches the stream as a
+`heartbeat` event.
 
 ### install
 
@@ -168,6 +170,9 @@ for progress, not a second log.
 | Event       | Payload    |
 | ----------- | ---------- |
 | `heartbeat` | `{ text }` |
+
+The renderer builds the line (one entry per running session, gate and install, with elapsed
+time and tokens) and the stream carries it pre-rendered, once per heartbeat interval.
 
 ## The 8 KiB cap and truncation references
 

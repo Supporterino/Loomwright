@@ -286,6 +286,7 @@ export const RunEvent = z.discriminatedUnion("type", [
       detail: z.string(),
       kind: z.enum(["step-started", "tool", "tool-done", "step-done", "retry"]),
       status: z.enum(["ok", "failed"]).optional(),
+      usage: Usage.optional(),
       ...Bounded,
     }),
   ),

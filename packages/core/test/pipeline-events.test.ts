@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { factoryScript, type ScriptedTask } from "../../../test/fixtures/factory-script.ts";
 import { ScriptedRuntime } from "../../../test/fixtures/scripted-runtime.ts";
@@ -11,6 +12,7 @@ import {
 import { cli, cliWith } from "../../../test/helpers.ts";
 import { readApproval } from "../src/approval/approval.ts";
 import { loadConfig } from "../src/config/load.ts";
+import { FactoryConfig } from "../src/config/schema.ts";
 import { eventLogPath } from "../src/events/jsonl.ts";
 import { MemorySink } from "../src/events/memory.ts";
 import { RunEvent } from "../src/events/protocol.ts";
@@ -20,6 +22,7 @@ import { approve } from "../src/pipeline/approve.ts";
 import { Pipeline } from "../src/pipeline/context.ts";
 import { design, intake } from "../src/pipeline/design.ts";
 import { Progress } from "../src/pipeline/progress.ts";
+import type { AgentRuntime, Usage } from "../src/runtime/types.ts";
 
 const ID = "add-health";
 
@@ -109,6 +112,122 @@ describe("pipeline event wiring", () => {
     const start = out.indexOf(expected[0] ?? "");
     expect(start).toBeGreaterThanOrEqual(0);
     expect(out.slice(start)).toEqual(expected);
+  });
+});
+
+describe("heartbeats in the event stream", () => {
+  const usage: Usage = {
+    input: 1000,
+    output: 100,
+    reasoning: 0,
+    cacheRead: 600,
+    cacheWrite: 200,
+    cost: 0.01,
+  };
+
+  /** A pipeline whose one session reports a completed step, then ticks the heartbeat. */
+  const runSession = async (
+    pulses: (pipeline: Pipeline) => void,
+  ): Promise<{ root: string; sink: MemorySink; lines: string[]; atPulse: string[] }> => {
+    const root = mkdtempSync(join(tmpdir(), "loomwright-heartbeat-"));
+    const sink = new MemorySink();
+    const lines: string[] = [];
+    const atPulse: string[] = [];
+    const config = FactoryConfig.parse({
+      schemaVersion: 2,
+      layout: "single",
+      repos: [{ name: "app", path: ".", languages: [] }],
+      models: {
+        orchestrator: "anthropic/claude-sonnet-5-5",
+        architect: "anthropic/claude-sonnet-5-5",
+        reviewer: "anthropic/claude-sonnet-5-5",
+        implementer: "anthropic/claude-sonnet-5-5",
+        tester: "anthropic/claude-sonnet-5-5",
+        explorer: "anthropic/claude-sonnet-5-5",
+      },
+    });
+    let pipeline: Pipeline | undefined;
+    const runtime: AgentRuntime = {
+      async open(spec) {
+        return {
+          id: "ses_test",
+          prompt: async () => {
+            spec.onActivity?.({ kind: "step-started", model: "stub/model" });
+            spec.onActivity?.({ kind: "step-done", usage });
+            if (pipeline !== undefined) {
+              pulses(pipeline);
+              const last = lines.at(-1);
+              if (last !== undefined) atPulse.push(last);
+            }
+            const handoff = {
+              status: "done",
+              task: "x",
+              filesChanged: [],
+              decisions: [],
+              risks: [],
+              openQuestions: [],
+            };
+            return {
+              text: `Done.\n\`\`\`json\n${JSON.stringify(handoff)}\n\`\`\``,
+              outcome: "succeeded",
+              usage,
+            };
+          },
+        };
+      },
+      async close() {},
+    };
+    pipeline = new Pipeline(root, config, {
+      runtime,
+      out: (line) => lines.push(line),
+      signal: new AbortController().signal,
+      events: { sink },
+      heartbeatMs: 0,
+      now: () => 1000,
+    });
+    pipeline.bindRun(ID);
+    await pipeline.call({
+      changeId: ID,
+      agent: "implementer-app",
+      role: "implementer",
+      modelRole: "implementer",
+      context: { directory: root, workspace: root },
+      title: "Heartbeat",
+      prompt: "Do the thing.",
+      step: "1.1",
+    });
+    pipeline.progress.stop();
+    pipeline.events.close();
+    return { root, sink, lines, atPulse };
+  };
+
+  test("a step-done activity streams its usage so the heartbeat keeps the token count", async () => {
+    const { root, sink } = await runSession((pipeline) => pipeline.progress.tick());
+    try {
+      const stepDone = sink
+        .ofType("agent.activity")
+        .find((event) => event.data.kind === "step-done");
+      expect(stepDone?.data.usage).toEqual(usage);
+      const beat = sink.ofType("heartbeat")[0];
+      expect(beat?.data.text).toContain("1.1 0ms");
+      expect(beat?.data.text).toContain("1.9k tok");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("the heartbeat line is emitted as a heartbeat event and rendered by the sink", async () => {
+    const { root, sink, lines, atPulse } = await runSession((pipeline) => pipeline.progress.tick());
+    try {
+      const beat = sink.ofType("heartbeat")[0];
+      if (beat === undefined) throw new Error("no heartbeat event was written");
+      expect(beat.data.text).toContain("running 1");
+      // With the hook set the renderer prints nothing itself; the sink replays the event text.
+      expect(atPulse).toEqual([beat.data.text]);
+      expect(lines.filter((line) => line.includes("running 1"))).toHaveLength(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
