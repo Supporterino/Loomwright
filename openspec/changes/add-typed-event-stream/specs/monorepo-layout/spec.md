@@ -18,7 +18,7 @@ The root `package.json` SHALL be a private workspace manifest and declare `works
 - **WHEN** `packages/protocol/package.json`, `packages/core/package.json` and `packages/cli/package.json` are read
 - **THEN** their names are `@loomwright/protocol`, `@loomwright/core` and `@loomwright/cli`
 - **AND** `protocol` and `core` have `private: true`
-- **AND** `cli` is not private and has version `1.0.0`
+- **AND** `cli` is not private and keeps the version it had before the change
 
 #### Scenario: protocol is a versioned skeleton with no engine imports
 
@@ -36,7 +36,7 @@ The root `package.json` SHALL be a private workspace manifest and declare `works
 #### Scenario: the published CLI identity is unchanged
 
 - **WHEN** `packages/cli/package.json` is read
-- **THEN** `name` is `@loomwright/cli`, `version` is `1.0.0`
+- **THEN** `name` is `@loomwright/cli`, `version` is unchanged from before the change
 - **AND** `bin` equals `{ "loomwright": "./dist/cli.js", "ai-factory": "./dist/cli.js" }`
 - **AND** `files` still lists `dist`, `README.md`, `CHANGELOG.md`, `LICENSE` and `templates/addons/ponytail/LICENSE`
 - **AND** it has no runtime dependency on the private `@loomwright/core` or `@loomwright/protocol` packages, because the tarball is a self-contained bundle
