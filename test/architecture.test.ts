@@ -340,3 +340,53 @@ describe("tests follow the packages", () => {
     expect(total).toBeGreaterThanOrEqual(baselineTotal);
   });
 });
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readManifest(path: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(readFileSync(join(repoRoot, path), "utf8"));
+  if (!isRecord(parsed)) throw new Error(`${path} is not a JSON object`);
+  return parsed;
+}
+
+describe("monorepo layout", () => {
+  test("the root manifest declares the workspaces and publishes nothing", () => {
+    const root = readManifest("package.json");
+    expect(root.private).toBe(true);
+    expect(root.workspaces).toEqual(["packages/*"]);
+    expect(root).not.toHaveProperty("bin");
+    expect(root).not.toHaveProperty("files");
+    expect(root).not.toHaveProperty("publishConfig");
+  });
+
+  test("the three package identities are correct", () => {
+    const protocol = readManifest("packages/protocol/package.json");
+    const core = readManifest("packages/core/package.json");
+    const cli = readManifest("packages/cli/package.json");
+    expect([protocol.name, core.name, cli.name]).toEqual([
+      "@loomwright/protocol",
+      "@loomwright/core",
+      "@loomwright/cli",
+    ]);
+    expect(protocol.private).toBe(true);
+    expect(core.private).toBe(true);
+    expect(cli.private).toBeUndefined();
+  });
+
+  test("core exposes subpath exports", async () => {
+    const core = readManifest("packages/core/package.json");
+    if (!isRecord(core.exports)) throw new Error("packages/core/package.json has no exports map");
+    const pattern = core.exports["./*"];
+    expect(pattern).toBe("./src/*.ts");
+    if (typeof pattern !== "string") throw new Error("core exports lacks the ./* pattern");
+
+    // `@loomwright/core/policy/permissions` resolves straight to its module; no barrel is needed.
+    const target = pattern.replace("*", "policy/permissions");
+    expect(existsSync(join(repoRoot, "packages/core", target))).toBe(true);
+    expect(existsSync(join(repoRoot, "packages/core/src/index.ts"))).toBe(false);
+    const permissions: unknown = await import("@loomwright/core/policy/permissions");
+    expect(isRecord(permissions) && typeof permissions.ruleEffect === "function").toBe(true);
+  });
+});
