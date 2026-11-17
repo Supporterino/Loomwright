@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { factoryScript, type ScriptedTask } from "../../../test/fixtures/factory-script.ts";
 import { ScriptedRuntime } from "../../../test/fixtures/scripted-runtime.ts";
 import {
@@ -17,6 +17,7 @@ import { eventLogPath } from "../src/events/jsonl.ts";
 import { MemorySink } from "../src/events/memory.ts";
 import { compareSnapshots } from "../src/events/parity.ts";
 import { RunEvent } from "../src/events/protocol.ts";
+import { readEventLines } from "../src/events/reader.ts";
 import { TerminalSink } from "../src/events/terminal.ts";
 import { ExitCode } from "../src/exit-codes.ts";
 import { approve } from "../src/pipeline/approve.ts";
@@ -152,6 +153,47 @@ describe("intake clarifications", () => {
       ]);
       const uptoSeq = sink.events.at(-1)?.seq ?? 0;
       expect(compareSnapshots(sink.events, [{ name: "after intake", run, uptoSeq }])).toEqual([]);
+    } finally {
+      fx.cleanup();
+    }
+  });
+});
+
+describe("landed change ids", () => {
+  test("a landed change's kept event log does not absorb a later change's stream", async () => {
+    const fx = await createSingleRepoFixture();
+    try {
+      expect((await cli(fx.root, "init")).code).toBe(ExitCode.Ok);
+      // `land` removes the run state and the spec but keeps the stream for replay.
+      const landedLog = eventLogPath(fx.root, ID);
+      mkdirSync(dirname(landedLog), { recursive: true });
+      const landedLine = `${JSON.stringify({
+        v: 1,
+        runId: ID,
+        seq: 9,
+        ts: "2026-01-01T00:00:00.000Z",
+        type: "run.started",
+        data: { phase: "design" },
+      })}\n`;
+      writeFileSync(landedLog, landedLine);
+
+      const sink = new MemorySink();
+      const p = new Pipeline(fx.root, loadConfig(fx.root).config, {
+        runtime: new ScriptedRuntime(script()),
+        out: () => {},
+        signal: new AbortController().signal,
+        events: { sink },
+        heartbeatMs: 0,
+      });
+      const id = await intake(p, "Add math helpers");
+      p.progress.stop();
+
+      expect(id).toBe(`${ID}-2`);
+      expect(sink.events[0]?.type).toBe("run.started");
+      expect(sink.events[0]?.seq).toBe(1);
+      expect(sink.events[0]?.runId).toBe(`${ID}-2`);
+      expect(readFileSync(landedLog, "utf8")).toBe(landedLine);
+      expect(readEventLines(fx.root, id).lines[0]?.seq).toBe(1);
     } finally {
       fx.cleanup();
     }

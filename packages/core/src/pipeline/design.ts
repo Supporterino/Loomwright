@@ -8,6 +8,7 @@ import { graphStatus, updateGraph } from "../graph/graph.ts";
 import { checkDesign, newChange } from "../openspec/cli.ts";
 import { decisionValues } from "../runtime/handoff.ts";
 import { readActive } from "../state/active.ts";
+import { factoryDir } from "../state/files.ts";
 import { type Clarification, loadRun, newRun, saveRun } from "../state/run.ts";
 import { recordUsage } from "../usage/usage.ts";
 import {
@@ -61,8 +62,11 @@ function slug(text: string): string {
 }
 
 function uniqueId(p: Pipeline, wanted: string): string {
+  // A landed change keeps its event log after its run state and spec are gone; reusing its id
+  // would make the new run append to that stream instead of starting at seq 1 with run.started.
   const taken = (id: string): boolean =>
     loadRun(p.root, id) !== undefined ||
+    existsSync(factoryDir(p.root, "events", `${id}.jsonl`)) ||
     existsSync(join(p.root, "openspec", "changes", id)) ||
     existsSync(join(p.root, ".factory", "drafts", id));
   let id = wanted;
