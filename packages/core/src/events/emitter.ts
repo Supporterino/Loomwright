@@ -33,6 +33,12 @@ export interface Emitter {
 }
 
 const DEFAULT_CAP_BYTES = 8 * 1024;
+/** Bytes kept free for `truncated`, `ref` and the JSON punctuation of the truncated payload. */
+const CAP_RESERVE_BYTES = 512;
+/** Longest single string the truncated form keeps, so one field cannot crowd out the rest. */
+const CAP_STRING_BYTES = 1024;
+/** What a string keeps of itself in the truncated form. */
+const CUT = "…";
 
 /**
  * Allocates `seq`, redacts the payload, caps it and validates the result before any sink sees
@@ -133,6 +139,64 @@ export class EventEmitter implements Emitter {
     const json = JSON.stringify(data) ?? "null";
     if (Buffer.byteLength(json) <= this.#capBytes) return data;
     const ref = appendTruncatedValue(this.#root, runId, at, json);
-    return { truncated: true, ref };
+    // shortcut: a payload whose structure alone fills the cap (hundreds of record entries) loses
+    // trailing keys; upgrade to a per-event required-field list if such a payload appears.
+    const kept = shrink(data, Math.max(this.#capBytes - CAP_RESERVE_BYTES, 0)).value;
+    if (!isRecord(kept)) return { truncated: true, ref };
+    return { ...kept, truncated: true, ref };
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+interface Shrunk {
+  readonly value: unknown;
+  /** False when a key of this object was dropped, so an array must not keep it as an entry. */
+  readonly complete: boolean;
+}
+
+/** JSON size of one value, which is what the cap measures. */
+function jsonBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value) ?? "null");
+}
+
+/**
+ * Keeps the payload's shape so `RunEvent.parse` still sees the required fields: strings are cut,
+ * arrays keep a valid prefix of whole entries, and an object keeps its keys until the budget runs
+ * out. Objects are trimmed rather than replaced, so a long question, answer or reason no longer
+ * loses the fields the parser needs.
+ */
+function shrink(value: unknown, budget: number): Shrunk {
+  if (typeof value === "string") return { value: cutString(value, budget), complete: true };
+  if (value === null || typeof value !== "object") return { value, complete: true };
+  if (Array.isArray(value)) {
+    const kept: unknown[] = [];
+    for (const item of value) {
+      const shrunk: Shrunk = shrink(item, Math.max(budget - jsonBytes(kept) - 1, 0));
+      if (!shrunk.complete || jsonBytes([...kept, shrunk.value]) > budget) break;
+      kept.push(shrunk.value);
+    }
+    return { value: kept, complete: true };
+  }
+  if (!isRecord(value)) return { value: {}, complete: false };
+  const kept: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const shrunk = shrink(item, Math.max(budget - jsonBytes(kept) - jsonBytes(key) - 2, 0));
+    if (jsonBytes({ ...kept, [key]: shrunk.value }) > budget)
+      return { value: kept, complete: false };
+    kept[key] = shrunk.value;
+  }
+  return { value: kept, complete: true };
+}
+
+/** Cuts a string so its JSON stays within `budget` bytes; JSON escaping can cost more than 1. */
+function cutString(value: string, budget: number): string {
+  const limit = Math.min(budget, CAP_STRING_BYTES);
+  if (jsonBytes(value) <= limit) return value;
+  let keep = Math.max(limit - jsonBytes(CUT), 0);
+  while (keep > 0 && jsonBytes(`${value.slice(0, keep)}${CUT}`) > limit)
+    keep = Math.floor(keep / 2);
+  return `${value.slice(0, keep)}${CUT}`;
 }

@@ -305,6 +305,36 @@ describe("payload cap", () => {
     expect(value).toEqual({ reason });
   });
 
+  test("a large payload is truncated with a reference and keeps question.answered's required fields", () => {
+    const root = makeRoot();
+    const emitter = new EventEmitter({
+      root,
+      sinks: [new JsonlSink(root)],
+      now: () => new Date(ISO),
+    });
+    emitter.bind(RUN);
+    const answer = "y".repeat(9 * 1024);
+    const data = { step: "clarify", question: "Which ports?", status: "answered", answer };
+    const written = emitter.emit("question.answered", data);
+    if (written.type !== "question.answered") throw new Error("expected question.answered");
+
+    expect(written.data.truncated).toBe(true);
+    expect(written.data.step).toBe("clarify");
+    expect(written.data.question).toBe("Which ports?");
+    expect(written.data.status).toBe("answered");
+    expect(written.data.answer?.length).toBeLessThan(answer.length);
+
+    const ref = written.data.ref;
+    if (ref === undefined) throw new Error("missing truncation ref");
+    const full = readFileSync(join(root, ref.path));
+    const value = JSON.parse(full.subarray(ref.offset, ref.offset + ref.bytes).toString("utf8"));
+    expect(value).toEqual(data);
+
+    const stored = JSON.parse(readFileSync(logPath(root), "utf8").trimEnd());
+    expect(Buffer.byteLength(JSON.stringify(stored))).toBeLessThanOrEqual(CAP + 512);
+    expect(RunEventSchema.parse(stored).type).toBe("question.answered");
+  });
+
   test("a payload just under the cap is not truncated", () => {
     const root = makeRoot();
     const emitter = new EventEmitter({
