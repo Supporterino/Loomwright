@@ -201,7 +201,7 @@ function printRun(
 const STATUS_OPTIONS = {
   json: { type: "boolean", default: false, description: "Print the state as JSON" },
   watch: { type: "boolean", default: false, description: "Reprint the view until Ctrl-C" },
-  interval: { type: "string", description: "Minimum seconds between --watch frames (default 2)" },
+  interval: { type: "string", description: "Heartbeat seconds with --watch (default 2)" },
 } satisfies CommandOptions;
 
 export const statusCommand: Command = {
@@ -216,8 +216,8 @@ With an id: that change's phase, branches, task DAG with states, retries and wor
 
   --watch            Reprint the same view after each event, at least once per interval,
                      until Ctrl-C (a second terminal is the easiest way to watch a long run)
-  --interval <s>     Minimum seconds between frames with --watch (default 2); also the
-                     fallback poll period when the change has no event stream`,
+  --interval <s>     Heartbeat seconds with --watch (default 2) and the fallback poll period;
+                     it never delays a frame that an event triggers`,
   async run(args, io) {
     const { values, positionals } = parseCommandArgs("status", args, STATUS_OPTIONS, true);
     if (values.watch && values.json)

@@ -241,8 +241,7 @@ no wrapper, sort or reformatting. The default output is already that canonical J
 `--json` is only the explicit spelling. `--follow` keeps printing, `--from <n>` starts at a
 sequence number, and a corrupt line is reported on stderr while the rest still prints.
 
-`loomwright status <runId> --watch` reprints its frame after each event, with a polling
-fallback and a minimum interval, until Ctrl-C. Both read; neither writes the stream.
+`loomwright status <runId> --watch` reprints its frame after each event, with an idle heartbeat and a polling fallback, until Ctrl-C. Both read; neither writes the stream.
 
 ## The retention rule
 
