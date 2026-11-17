@@ -409,7 +409,9 @@ describe("gate events", () => {
         expect(entry).toMatchObject({ kind: "gate", status: event.data.status });
         expect(entry).toHaveProperty("output");
       }
-      expect(events.some((event) => event.type === "gate.report")).toBe(true);
+      const reports = events.filter((event) => event.type === "gate.report");
+      expect(reports.length).toBeGreaterThan(0);
+      for (const event of reports) expect(event.data.durationMs).toBeGreaterThanOrEqual(0);
     } finally {
       fx.cleanup();
     }

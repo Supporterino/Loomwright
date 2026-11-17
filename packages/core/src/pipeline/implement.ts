@@ -229,7 +229,12 @@ export function emitGateEvent(
 }
 
 /** Emits the per-run gate summary the terminal renders through `Progress.gatesDone`. */
-export function emitGateReport(p: Pipeline, step: string, report: GateReport): void {
+export function emitGateReport(
+  p: Pipeline,
+  step: string,
+  report: GateReport,
+  durationMs: number,
+): void {
   markStep(p, step);
   p.events.emit("gate.report", {
     passed: report.passed,
@@ -239,6 +244,7 @@ export function emitGateReport(p: Pipeline, step: string, report: GateReport): v
       status: result.status,
       durationMs: result.durationMs,
     })),
+    durationMs,
   });
 }
 
@@ -504,7 +510,7 @@ export class PipelineTaskRunner implements TaskRunner {
           emitGateEvent(this.p, this.id, task.id, event, { task: task.id });
         },
       });
-      if (streamed) emitGateReport(this.p, task.id, report);
+      if (streamed) emitGateReport(this.p, task.id, report, this.p.progress.now() - started);
       else this.p.progress.gatesDone(task.id, report, this.p.progress.now() - started, stage);
       return report;
     });

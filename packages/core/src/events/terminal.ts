@@ -184,7 +184,9 @@ export class TerminalSink implements EventSink {
         this.#progress.gatesDone(
           this.#step,
           gateReport(event.data),
-          event.data.results.reduce((total, result) => total + result.durationMs, 0),
+          // Old streams predate the elapsed duration; the sum is the closest reconstruction.
+          event.data.durationMs ??
+            event.data.results.reduce((total, result) => total + result.durationMs, 0),
         );
         return;
       case "install.started":

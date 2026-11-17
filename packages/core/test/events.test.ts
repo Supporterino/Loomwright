@@ -353,6 +353,7 @@ describe("events", () => {
           { name: "format", type: "format", status: "pass", durationMs: 1200 },
           { name: "test", type: "test", status: "fail", durationMs: 12_400 },
         ],
+        durationMs: 13_600,
       }),
       (p) => p.gatesDone("1.1", report(false), 13_600),
       { step: "1.1" },
@@ -418,6 +419,34 @@ describe("events", () => {
       () => {},
     );
     compare(event("usage.delta", { step: "1.1", usage: usage() }), () => {});
+  });
+
+  test("gate.report renders the elapsed duration, not the sum of the gate runtimes", () => {
+    const ev = event("gate.report", {
+      passed: true,
+      results: [
+        { name: "format", type: "format", status: "pass", durationMs: 1200 },
+        { name: "test", type: "test", status: "pass", durationMs: 12_400 },
+      ],
+      // Queued gates: the wall clock is much larger than the per-gate sum.
+      durationMs: 60_000,
+    });
+    compare(ev, (p) => p.gatesDone("1.1", report(true), 60_000), { step: "1.1" });
+
+    const sink = collect();
+    const sinkProgress = new Progress({ out: sink.out, heartbeatMs: 0, now: () => 1000 });
+    new TerminalSink(sinkProgress, "1.1").write(ev);
+    expect(sink.lines).toEqual(["  ✓ [1.1] gates passed in 1m00s"]);
+
+    // Streams written before `durationMs` existed fall back to the per-gate sum.
+    const legacy = event("gate.report", {
+      passed: true,
+      results: [
+        { name: "format", type: "format", status: "pass", durationMs: 1200 },
+        { name: "test", type: "test", status: "pass", durationMs: 12_400 },
+      ],
+    });
+    compare(legacy, (p) => p.gatesDone("1.1", report(true), 13_600), { step: "1.1" });
   });
 
   test("quiet and verbose remain unchanged", () => {

@@ -226,7 +226,7 @@ export async function fullSuite(p: Pipeline, id: string): Promise<string[]> {
             else p.progress.gate(name, event);
           },
         });
-        if (p.bound) emitGateReport(p, name, gated);
+        if (p.bound) emitGateReport(p, name, gated, p.progress.now() - started);
         else p.progress.gatesDone(name, gated, p.progress.now() - started);
         return gated;
       });

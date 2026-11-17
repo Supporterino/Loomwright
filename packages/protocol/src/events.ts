@@ -252,6 +252,8 @@ export const RunEvent = z.discriminatedUnion("type", [
           durationMs: Duration,
         }),
       ),
+      /** Elapsed wall clock of the gate run; absent in streams written before it was added. */
+      durationMs: Duration.optional(),
       ...Bounded,
     }),
   ),

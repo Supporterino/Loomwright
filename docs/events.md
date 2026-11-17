@@ -98,16 +98,18 @@ grow also accept the cap marker `truncated?` and `ref?` described below.
 
 ### gate
 
-| Event           | Payload                                                     |
-| --------------- | ----------------------------------------------------------- |
-| `gate.planned`  | `{ gates: GateRef[] }`                                      |
-| `gate.started`  | `GateRef`                                                   |
-| `gate.finished` | `{ name, type, status, durationMs, outputRef? }`            |
-| `gate.report`   | `{ passed, results: [{ name, type, status, durationMs }] }` |
+| Event           | Payload                                                                  |
+| --------------- | ------------------------------------------------------------------------ |
+| `gate.planned`  | `{ gates: GateRef[] }`                                                   |
+| `gate.started`  | `GateRef`                                                                |
+| `gate.finished` | `{ name, type, status, durationMs, outputRef? }`                         |
+| `gate.report`   | `{ passed, results: [{ name, type, status, durationMs }], durationMs? }` |
 
 `type` is `format`, `lint`, `types`, `test` or `testAffected`; `status` is `pass`, `fail`,
 `missing`, `skipped`, `not-check-only` or `timeout`. `gate.finished` never carries the gate
-output: `outputRef` points at it in `.factory/logs/`.
+output: `outputRef` points at it in `.factory/logs/`. `gate.report.durationMs` is the elapsed
+wall clock of the whole gate run (`results[].durationMs` is one gate's own runtime); it is
+absent in streams written before it existed, and the terminal falls back to the sum.
 
 ### agent
 

@@ -545,11 +545,12 @@ describe("gate output is never inlined", () => {
         },
       ],
     };
-    emitGateReport(p, "1.1", report);
+    emitGateReport(p, "1.1", report, 55_000);
 
     const summary = sink.ofType("gate.report")[0];
     if (summary === undefined) throw new Error("missing gate.report");
     expect(summary.data).not.toHaveProperty("output");
+    expect(summary.data.durationMs).toBe(55_000);
     expect(summary.data.results).toEqual([
       { name: "tests", type: "test", status: "pass", durationMs: 42 },
     ]);
