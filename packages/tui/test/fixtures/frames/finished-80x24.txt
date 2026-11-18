@@ -1,0 +1,24 @@
++ add-health - done - 8s - 54.3k tokens - $1.23 - idle
+Tasks
+  [+] first merged app attempt 0 Health endpoint
+  [+] second merged api attempt 0 Wire client
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+? help - q quit
