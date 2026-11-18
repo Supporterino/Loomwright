@@ -77,8 +77,11 @@ Exit codes: 0 ok, 2 invalid --from, 4 unknown change.`,
         fromSeq: start,
         follow: values.follow === true,
         signal: controller.signal,
-      }))
+      })) {
+        if (item.reason !== undefined)
+          io.err(`warning: .factory/events/${id}.jsonl appended line skipped (${item.reason})`);
         io.out(item.line);
+      }
     } finally {
       if (io.signal === undefined) process.off("SIGINT", onAbort);
       else io.signal.removeEventListener("abort", onAbort);

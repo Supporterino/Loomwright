@@ -155,6 +155,32 @@ describe("events", () => {
     expect(await pending).toBe(ExitCode.Ok);
   }, 30_000);
 
+  test("--follow prints an appended corrupt line and warns instead of dropping it", async () => {
+    const prefix = seedFinished();
+    const stored = prefix.map((item) => JSON.stringify(item));
+    const out: string[] = [];
+    const err: string[] = [];
+    const controller = new AbortController();
+    const pending = runCli(["events", ID, "--follow"], {
+      cwd: fx.root,
+      out: (line) => out.push(line),
+      err: (line) => err.push(line),
+      signal: controller.signal,
+    });
+    try {
+      await waitFor(() => out.length >= stored.length);
+      appendFileSync(eventLogPath(fx.root, ID), "{not json\n");
+      await waitFor(() => out.length >= stored.length + 1);
+      expect(out.slice(0, stored.length)).toEqual(stored);
+      expect(out[stored.length]).toBe("{not json");
+      await waitFor(() => err.some((line) => line.includes("appended line skipped")));
+      expect(err.join("\n")).toContain("(invalid)");
+    } finally {
+      controller.abort();
+    }
+    expect(await pending).toBe(ExitCode.Ok);
+  }, 30_000);
+
   test("help and completion include the command", async () => {
     const help = await cli(fx.root, "--help");
     expect(help.out).toContain("events");

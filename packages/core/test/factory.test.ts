@@ -328,6 +328,60 @@ describe("Factory read API", () => {
     }
   });
 
+  test("events follow prints an appended corrupt or unknown line with its reason", async () => {
+    installWorkspace(fx.root);
+    const corruptPrefix = "{not json";
+    const path = writeLog(fx.root, RUN, [lineFor(1), corruptPrefix]);
+    const factory = await open(fx.root);
+    const controller = new AbortController();
+    const iterator = factory
+      .events(RUN, { follow: true, signal: controller.signal })
+      [Symbol.asyncIterator]();
+
+    try {
+      const first = await withTimeout(iterator.next());
+      if (first.done === true) throw new Error("follow ended before the stored prefix");
+      expect(first.value.event?.seq).toBe(1);
+
+      // The stored prefix's unusable line is printed once, by the initial pass, not the tail.
+      const prefix = await withTimeout(iterator.next());
+      if (prefix.done === true) throw new Error("follow ended before the stored prefix");
+      expect(prefix.value.line).toBe(corruptPrefix);
+      expect(prefix.value.reason).toBeUndefined();
+
+      const corrupt = "{still not json";
+      appendFileSync(path, `${corrupt}\n`);
+      const appended = await withTimeout(iterator.next());
+      if (appended.done === true) throw new Error("follow ended before the appended line");
+      expect(appended.value.line).toBe(corrupt);
+      expect(appended.value.event).toBeUndefined();
+      expect(appended.value.reason).toBe("invalid");
+
+      // A newer writer's unknown type is tolerated and printed, not dropped.
+      const unknown = JSON.stringify({
+        v: 1,
+        runId: RUN,
+        seq: 3,
+        ts: ISO,
+        type: "future.thing",
+        data: {},
+      });
+      appendFileSync(path, `${unknown}\n`);
+      const future = await withTimeout(iterator.next());
+      if (future.done === true) throw new Error("follow ended before the unknown line");
+      expect(future.value.line).toBe(unknown);
+      expect(future.value.event).toBeUndefined();
+      expect(future.value.reason).toBe("unknown-type");
+
+      controller.abort();
+      const done = await withTimeout(iterator.next());
+      expect(done.done).toBe(true);
+    } finally {
+      controller.abort();
+      await iterator.return?.(undefined);
+    }
+  });
+
   test("open rejects an empty directory that is not installed", async () => {
     const dir = mkdtempSync(join(tmpdir(), "loom-factory-empty-"));
     try {

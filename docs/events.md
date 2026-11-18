@@ -223,10 +223,13 @@ the JSONL file is the stream, and the emitter is the only allocator of `seq`.
 - `skipped` lists complete lines that did not parse, failed the envelope, or named an unknown
   type, with their 1-based line numbers. The rest of the stream still returns.
 
-`tailEvents(root, runId, { fromSeq, signal })` is an async iterator over `{ kind: "event" }` and
-`{ kind: "gap", missing }` items. It watches `.factory/events` with `fs.watch` and also polls, so
-a change the watch coalesces or drops still arrives within the poll period; it emits a gap marker
-whenever a sequence number is absent, and completes without error when the abort signal fires.
+`tailEvents(root, runId, { fromSeq, signal })` is an async iterator over `{ kind: "event" }`,
+`{ kind: "raw", text, reason, seq? }` and `{ kind: "gap", missing }` items. A stored line that is
+malformed, has a bad envelope or names an unknown type is yielded as `raw` rather than dropped,
+so a follower prints what a replay prints. It watches `.factory/events` with `fs.watch` and also
+polls, so a change the watch coalesces or drops still arrives within the poll period; it emits a
+gap marker whenever a sequence number is absent, and completes without error when the abort
+signal fires.
 
 ## The command inbox
 

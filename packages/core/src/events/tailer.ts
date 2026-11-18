@@ -2,6 +2,7 @@ import { closeSync, type FSWatcher, fstatSync, openSync, readSync, watch } from 
 import { factoryDir } from "../state/files.ts";
 import { eventLogPath } from "./jsonl.ts";
 import { EventEnvelope, RunEvent } from "./protocol.ts";
+import type { SkipReason } from "./reader.ts";
 
 export type TailItem =
   | {
@@ -10,12 +11,19 @@ export type TailItem =
       /** The stored line, byte-exact and without its trailing newline. */
       readonly text: string;
     }
+  | {
+      /** A stored line that is not an event: malformed, a bad envelope or an unknown type. */
+      readonly kind: "raw";
+      /** The stored line, byte-exact and without its trailing newline. */
+      readonly text: string;
+      readonly reason: SkipReason;
+      /** The envelope's sequence number, when the line has a readable envelope. */
+      readonly seq?: number;
+    }
   | { readonly kind: "gap"; readonly missing: number[] };
 
-interface ParsedLine {
-  readonly event: RunEvent;
-  readonly text: string;
-}
+/** A line the file can carry: an event, or the raw bytes that failed to become one. */
+type StoredItem = Exclude<TailItem, { kind: "gap" }>;
 
 export interface TailOptions {
   readonly fromSeq?: number;
@@ -46,24 +54,34 @@ const reset = (cursor: Cursor): void => {
   cursor.remainder = Buffer.alloc(0);
 };
 
-function parseLine(line: string): ParsedLine | undefined {
+function parseLine(line: string): StoredItem | undefined {
   if (line.trim() === "") return undefined;
   let value: unknown;
   try {
     value = JSON.parse(line);
   } catch {
-    return undefined;
+    return { kind: "raw", reason: "invalid", text: line };
   }
-  if (!EventEnvelope.safeParse(value).success) return undefined;
+  const envelope = EventEnvelope.safeParse(value);
+  if (!envelope.success) return { kind: "raw", reason: "invalid-envelope", text: line };
   const event = RunEvent.safeParse(value);
-  return event.success ? { event: event.data, text: line } : undefined;
+  if (event.success) return { kind: "event", event: event.data, text: line };
+  const unknownType = event.error.issues.some(
+    (issue) => issue.code === "invalid_union" && issue.discriminator === "type",
+  );
+  return {
+    kind: "raw",
+    reason: unknownType ? "unknown-type" : "invalid",
+    text: line,
+    seq: envelope.data.seq,
+  };
 }
 
 /**
  * Reads only the bytes appended since the cursor, carrying the unfinished tail over. A smaller
  * file or a different inode means the log was rewritten, so the cursor restarts at byte 0.
  */
-function readAppended(path: string, cursor: Cursor): ParsedLine[] {
+function readAppended(path: string, cursor: Cursor): StoredItem[] {
   let fd: number;
   try {
     fd = openSync(path, "r");
@@ -99,19 +117,21 @@ function readAppended(path: string, cursor: Cursor): ParsedLine[] {
     return [];
   }
   cursor.remainder = buffer.subarray(end + 1);
-  const events: ParsedLine[] = [];
+  const items: StoredItem[] = [];
   for (const line of buffer.subarray(0, end).toString("utf8").split("\n")) {
     const parsed = parseLine(line);
-    if (parsed !== undefined) events.push(parsed);
+    if (parsed !== undefined) items.push(parsed);
   }
-  return events;
+  return items;
 }
 
 /**
  * Follows a run's event log: yields the existing stream, then every appended event, inserting a
- * gap marker whenever a sequence number is absent. A timer polls alongside `fs.watch`, so a
- * change the watch misses still arrives within `pollMs`. Reads only; the watcher and timer are
- * always closed, and aborting the signal completes the iterator without error.
+ * gap marker whenever a sequence number is absent. A stored line that is not an event (malformed,
+ * a bad envelope or an unknown type) is yielded as `raw` instead of being dropped. A timer polls
+ * alongside `fs.watch`, so a change the watch misses still arrives within `pollMs`. Reads only;
+ * the watcher and timer are always closed, and aborting the signal completes the iterator
+ * without error.
  */
 export async function* tailEvents(
   root: string,
@@ -165,8 +185,15 @@ export async function* tailEvents(
 
     for (;;) {
       if (aborted()) return;
-      for (const { event, text } of readAppended(path, cursor)) {
+      for (const item of readAppended(path, cursor)) {
         if (aborted()) return;
+        if (item.kind === "raw") {
+          // A stored line the reader would report as skipped; it still reaches the consumer.
+          if (item.seq !== undefined && item.seq < fromSeq) continue;
+          yield item;
+          continue;
+        }
+        const { event, text } = item;
         if (event.seq <= lastSeq) continue;
         if (event.seq > lastSeq + 1) {
           const missing: number[] = [];

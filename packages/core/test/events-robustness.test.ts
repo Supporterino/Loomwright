@@ -92,7 +92,7 @@ const startTail = (
 };
 
 const seqOf = (item: TailItem): number => {
-  if (item.kind !== "event") throw new Error(`expected an event, got a gap: ${item.missing}`);
+  if (item.kind !== "event") throw new Error(`expected an event, got ${item.kind}`);
   return item.event.seq;
 };
 

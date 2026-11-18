@@ -89,7 +89,7 @@ const startTail = (
 };
 
 const seqOf = (item: TailItem): number => {
-  if (item.kind !== "event") throw new Error(`expected an event, got a gap: ${item.missing}`);
+  if (item.kind !== "event") throw new Error(`expected an event, got ${item.kind}`);
   return item.event.seq;
 };
 
@@ -362,6 +362,39 @@ describe("events tailer", () => {
       if (item.kind !== "event") throw new Error("expected an event");
       expect(item.text).toBe(appended);
       expect(item.event).toEqual(event(2, "heartbeat", { text: "two" }));
+    } finally {
+      controller.abort();
+      await close();
+    }
+  });
+
+  test("an appended corrupt or unknown line is tailed verbatim, not dropped", async () => {
+    const root = makeRoot();
+    const path = writeLog(root, [line(1, "heartbeat", { text: "one" })]);
+    const controller = new AbortController();
+    const { cursor, close } = startTail(root, {
+      signal: controller.signal,
+      useWatch: false,
+      pollMs: 10,
+    });
+
+    try {
+      expect(seqOf(await cursor.next())).toBe(1);
+
+      appendLine(path, "{not json");
+      const corrupt = await cursor.next();
+      if (corrupt.kind !== "raw") throw new Error(`expected a raw line, got ${corrupt.kind}`);
+      expect(corrupt.text).toBe("{not json");
+      expect(corrupt.reason).toBe("invalid");
+      expect(corrupt.seq).toBeUndefined();
+
+      const unknown = envelope(2, "future.thing");
+      appendLine(path, unknown);
+      const future = await cursor.next();
+      if (future.kind !== "raw") throw new Error(`expected a raw line, got ${future.kind}`);
+      expect(future.text).toBe(unknown);
+      expect(future.reason).toBe("unknown-type");
+      expect(future.seq).toBe(2);
     } finally {
       controller.abort();
       await close();

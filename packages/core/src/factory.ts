@@ -6,7 +6,7 @@ import type { FactoryConfig } from "./config/schema.ts";
 import { PreconditionError, UsageError } from "./errors.ts";
 import { setCommandErrorReporter, writeCommand } from "./events/inbox.ts";
 import { assertRunId, Command, type RunEvent } from "./events/protocol.ts";
-import { readEventLines } from "./events/reader.ts";
+import { readEventLines, type SkipReason } from "./events/reader.ts";
 import { tailEvents } from "./events/tailer.ts";
 import { LOCK_FILE } from "./lock/lock.ts";
 import { pruneLogs } from "./logs/log.ts";
@@ -82,6 +82,11 @@ export interface EventLogLine {
   readonly line: string;
   /** Parsed, when the line validates and names a known type. */
   readonly event?: RunEvent;
+  /**
+   * Why a line appended while following is not an event. The stored prefix's unusable lines are
+   * reported by `readEventLines` instead, so they carry no reason here.
+   */
+  readonly reason?: SkipReason;
 }
 
 /** Options for `Factory.run`; `clarify: false` records questions instead of asking them. */
@@ -268,9 +273,20 @@ function createFactory(
         fromSeq: lastSeq + 1,
         ...(signal === undefined ? {} : { signal }),
       });
+      // The tail re-reads from byte 0, and it cannot drop an unsequenced stored line by seq, so
+      // the prefix's unusable lines are counted and skipped; the reader already reported them.
+      let prefixUnsequenced = stored.lines.filter((line) => line.seq === undefined).length;
       for await (const item of tail) {
         // Gaps are not stored events; the CLI renders them from the stream it chooses.
-        if (item.kind !== "event") continue;
+        if (item.kind === "gap") continue;
+        if (item.kind === "raw") {
+          if (item.seq === undefined && prefixUnsequenced > 0) {
+            prefixUnsequenced -= 1;
+            continue;
+          }
+          yield { line: item.text, reason: item.reason };
+          continue;
+        }
         yield { line: item.text, event: item.event };
       }
     },

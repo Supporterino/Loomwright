@@ -8,10 +8,13 @@ export interface ReadOptions {
   readonly fromSeq?: number;
 }
 
+/** Why a complete stored line is not an event. */
+export type SkipReason = "unknown-type" | "invalid" | "invalid-envelope";
+
 export interface SkippedLine {
   /** 1-based line number in the file. */
   readonly line: number;
-  readonly reason: "unknown-type" | "invalid" | "invalid-envelope";
+  readonly reason: SkipReason;
   readonly error?: string;
 }
 
