@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findWorkspaceRoot } from "@loomwright/core/config/load";
@@ -53,12 +53,16 @@ export const tuiCommand: Command = {
     }
     const replayPath = replay === undefined ? undefined : resolve(io.cwd, replay);
     if (replay !== undefined && replayPath !== undefined) {
+      let regularFile = false;
       try {
-        accessSync(replayPath, constants.R_OK);
+        regularFile = statSync(replayPath).isFile();
       } catch (err: unknown) {
         throw new UsageError(`tui: cannot read --replay ${replay}`, [
           err instanceof Error ? err.message : String(err),
         ]);
+      }
+      if (!regularFile) {
+        throw new UsageError(`tui: --replay ${replay} is not a regular file`);
       }
     }
     if (io.tty !== true && replay === undefined) {

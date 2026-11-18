@@ -60,6 +60,13 @@ describe("tui command", () => {
     expect(run.err).toContain("./missing.jsonl");
   });
 
+  test("bad flags are usage errors: a --replay path that is a directory", async () => {
+    const run = await cli(fx.root, "tui", "--replay", ".");
+    expect(run.code).toBe(ExitCode.Usage);
+    expect(run.err).toContain(".");
+    expect(run.err).not.toContain("internal error");
+  });
+
   test("a recorded replay renders one frame and exits 0", async () => {
     const run = await cli(fx.root, "tui", "--replay", REPLAY_FIXTURE, "--once");
     expect(run.code).toBe(ExitCode.Ok);
