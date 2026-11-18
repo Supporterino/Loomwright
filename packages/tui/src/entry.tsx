@@ -456,15 +456,18 @@ function Interactive({
           if (controller.signal.aborted) return;
           if (item.event !== undefined) events.push(item.event);
         }
-        if (events.length === 0 || controller.signal.aborted) return;
-        const folded = foldRun(null, events);
+        if (controller.signal.aborted) return;
+        const folded = events.length === 0 ? null : foldRun(null, events);
         foldRef.current = folded;
-        setData((current) =>
-          current.screen === "run" && current.selectedRunId === id
-            ? syncApproval({ ...current, snapshot: folded.snapshot, facts: folded.facts })
-            : current,
-        );
-        await appendTail(id, folded.snapshot.lastSeq + 1, controller.signal);
+        if (folded !== null) {
+          setData((current) =>
+            current.screen === "run" && current.selectedRunId === id
+              ? syncApproval({ ...current, snapshot: folded.snapshot, facts: folded.facts })
+              : current,
+          );
+        }
+        // A queued run has no log yet: follow from 1 so its first events still reach the view.
+        await appendTail(id, folded === null ? 1 : folded.snapshot.lastSeq + 1, controller.signal);
       };
       void load().catch((err: unknown) => {
         // An abort ends a tail normally; anything else is shown without breaking the frame.

@@ -589,4 +589,91 @@ describe("the interactive entry", () => {
     expect(leaves).toBe(1);
     expect(output.text()).toContain("> newest");
   });
+
+  test("live detail arrives from the tail: a queued run opened before its log exists updates", async () => {
+    const run = runState({
+      phase: "queued",
+      tasks: [taskState({ id: "first", status: "running" })],
+    });
+    const status = statusDoc([{ run, tokens: 0, cost: 0 }], { queue: [RUN] });
+    resetSeq();
+    const merged = event("task.merged", { task: { id: "first", repo: "app" }, commit: "abc" });
+    const queries: {
+      readonly runId: string;
+      readonly follow: boolean;
+      readonly fromSeq: number | undefined;
+    }[] = [];
+    const fail = (): never => {
+      throw new Error("opening a run must not write");
+    };
+    const factory: Factory = {
+      status: async () => status,
+      listRuns: async () => [run],
+      events: async function* (runId, query) {
+        queries.push({ runId, follow: query?.follow === true, fromSeq: query?.fromSeq });
+        if (query?.follow !== true) return;
+        yield { line: JSON.stringify(merged), event: merged };
+      },
+      run: async () => fail(),
+      resume: async () => fail(),
+      approve: async () => fail(),
+      retry: async () => fail(),
+      abort: async () => fail(),
+      answer: async () => fail(),
+      pause: async () => fail(),
+    };
+    const input = new FakeInput();
+    const output = new FakeOutput();
+    const realStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+    const realStdout = Object.getOwnPropertyDescriptor(process, "stdout");
+    const session: TerminalSession = {
+      enter: () => {},
+      leave: () => {},
+      get columns(): number {
+        return 80;
+      },
+      get rows(): number {
+        return 24;
+      },
+      onKey: () => () => {},
+      onResize: () => () => {},
+      onSignal: () => () => {},
+    };
+
+    try {
+      Object.defineProperty(process, "stdin", { value: input, configurable: true });
+      Object.defineProperty(process, "stdout", { value: output, configurable: true });
+      const code = runTui({
+        workspace: "/workspace",
+        once: false,
+        ascii: true,
+        columns: 80,
+        rows: 24,
+        out: () => {},
+        env: {},
+        isTTY: false,
+        factory,
+        launcher: {
+          launch: async () => {
+            throw new Error("the run view must not launch");
+          },
+        },
+        session,
+      });
+
+      await until(() => input.isRaw);
+      input.press("\r");
+      await until(() => queries.some((query) => query.follow && query.fromSeq === 1));
+      expect(queries).toContainEqual({ runId: RUN, follow: false, fromSeq: undefined });
+      // A run with no log yet still gets a tail. Ink writes no frames mid-run under CI, so let
+      // the 100 ms frame flush fold the tail; the frame written on unmount shows it.
+      await Bun.sleep(1_000);
+      input.press("q");
+      expect(await code).toBe(0);
+      expect(output.text()).toContain("first merged");
+    } finally {
+      if (realStdin !== undefined) Object.defineProperty(process, "stdin", realStdin);
+      if (realStdout !== undefined) Object.defineProperty(process, "stdout", realStdout);
+    }
+  });
 });
