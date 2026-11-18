@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { StatusDocument } from "@loomwright/core/factory";
+import { EventEmitter } from "node:events";
+import type { Factory, StatusDocument } from "@loomwright/core/factory";
 import type { ActiveLock } from "@loomwright/core/state/active";
 import { RunState, TaskState } from "@loomwright/core/state/run";
 import type { UsageSummary } from "@loomwright/core/usage/usage";
@@ -10,10 +11,11 @@ import {
   RunEvent as RunEventSchema,
   reduce,
 } from "@loomwright/protocol";
+import { runTui } from "../src/entry.tsx";
 import { collectFacts } from "../src/model/facts.ts";
 import { applyKey } from "../src/model/keys.ts";
 import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/model/view-model.ts";
-import { createTerminalSession } from "../src/session.ts";
+import { createTerminalSession, type TerminalSession } from "../src/session.ts";
 import { emptyWorkspace } from "../src/strings.ts";
 import { renderFrame } from "../src/views/frame.tsx";
 
@@ -443,5 +445,148 @@ describe("the terminal session", () => {
     expect(raw).toEqual([true, false]);
     session.leave();
     expect(writes).toHaveLength(2);
+  });
+});
+
+class FakeInput extends EventEmitter {
+  readonly isTTY = true;
+  isRaw = false;
+  readonly #chunks: string[] = [];
+
+  setRawMode(enabled: boolean): void {
+    this.isRaw = enabled;
+  }
+
+  setEncoding(): void {}
+
+  ref(): void {}
+
+  unref(): void {}
+
+  resume(): void {}
+
+  pause(): void {}
+
+  read(): string | null {
+    return this.#chunks.shift() ?? null;
+  }
+
+  press(text: string): void {
+    this.#chunks.push(text);
+    this.emit("readable");
+  }
+}
+
+class FakeOutput {
+  readonly columns = 80;
+  readonly rows = 24;
+  readonly writes: string[] = [];
+
+  write(chunk: string): boolean {
+    this.writes.push(chunk);
+    return true;
+  }
+
+  on(): void {}
+
+  off(): void {}
+
+  text(): string {
+    return this.writes.join("");
+  }
+}
+
+/** The list only reads; every write method fails so a stray control call is visible. */
+function listFactory(status: StatusDocument, runs: readonly RunState[]): Factory {
+  const fail = (): never => {
+    throw new Error("opening the run list must not write");
+  };
+  return {
+    status: async () => status,
+    listRuns: async () => [...runs],
+    events: async function* () {},
+    run: async () => fail(),
+    resume: async () => fail(),
+    approve: async () => fail(),
+    retry: async () => fail(),
+    abort: async () => fail(),
+    answer: async () => fail(),
+    pause: async () => fail(),
+  };
+}
+
+async function until(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+  const started = Date.now();
+  while (!predicate()) {
+    if (Date.now() - started > timeoutMs) throw new Error("timed out waiting for the run list");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+describe("the interactive entry", () => {
+  test("a terminal opens the run list: newest selected, no exit until quit", async () => {
+    const oldest = runState({ id: "oldest", createdAt: "2026-11-17T09:00:00.000Z" });
+    const newest = runState({ id: "newest", createdAt: "2026-11-17T10:00:00.000Z" });
+    const status = statusDoc([
+      { run: oldest, tokens: 0, cost: 0 },
+      { run: newest, tokens: 0, cost: 0 },
+    ]);
+    const input = new FakeInput();
+    const output = new FakeOutput();
+    const realStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+    const realStdout = Object.getOwnPropertyDescriptor(process, "stdout");
+    let settled = false;
+    let leaves = 0;
+    const session: TerminalSession = {
+      enter: () => {},
+      leave: () => {
+        leaves += 1;
+      },
+      get columns(): number {
+        return 80;
+      },
+      get rows(): number {
+        return 24;
+      },
+      onKey: () => () => {},
+      onResize: () => () => {},
+      onSignal: () => () => {},
+    };
+
+    try {
+      Object.defineProperty(process, "stdin", { value: input, configurable: true });
+      Object.defineProperty(process, "stdout", { value: output, configurable: true });
+      const code = runTui({
+        workspace: "/workspace",
+        once: false,
+        ascii: true,
+        columns: 80,
+        rows: 24,
+        out: () => {},
+        env: {},
+        isTTY: false,
+        factory: listFactory(status, [newest, oldest]),
+        launcher: {
+          launch: async () => {
+            throw new Error("the run list must not launch");
+          },
+        },
+        session,
+      }).then((value) => {
+        settled = true;
+        return value;
+      });
+
+      await until(() => input.isRaw);
+      expect(settled).toBe(false);
+      input.press("q");
+      expect(await code).toBe(0);
+    } finally {
+      if (realStdin !== undefined) Object.defineProperty(process, "stdin", realStdin);
+      if (realStdout !== undefined) Object.defineProperty(process, "stdout", realStdout);
+    }
+
+    expect(leaves).toBe(1);
+    expect(output.text()).toContain("> newest");
   });
 });
