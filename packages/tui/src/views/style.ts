@@ -28,6 +28,7 @@ export function statusGlyph(status: string, glyphs: GlyphSet): string {
     case "fail":
     case "timeout":
       return glyphs.failed;
+    case "blocked":
     case "cancelled":
     case "missing":
     case "not-check-only":
@@ -52,6 +53,7 @@ export function statusToken(status: string): TokenName {
     case "fail":
     case "timeout":
       return "failed";
+    case "blocked":
     case "cancelled":
     case "missing":
     case "not-check-only":

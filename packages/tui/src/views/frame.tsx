@@ -1,6 +1,7 @@
 import { Box, render } from "ink";
 import type { ReactElement } from "react";
 import type { ViewModel } from "../model/view-model.ts";
+import { detectColorDepth, type TerminalEnv } from "../theme/env.ts";
 import { type GlyphSet, glyphsFor } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
 import { KeyFooter } from "./footer.tsx";
@@ -49,14 +50,18 @@ function stripAnsi(text: string): string {
   return text.replace(ANSI_PATTERN, "");
 }
 
-/**
- * Mounts the tree into an in-memory stdout, waits one tick for layout, unmounts and returns the
- * plain text of the final frame: no ANSI, no trailing spaces, no trailing blank lines.
- */
-export async function renderFrame(
+export interface FrameRenderOptions {
+  readonly ascii?: boolean;
+  readonly env?: TerminalEnv;
+  /** Default: colour off, because the captured stream is not a TTY. */
+  readonly depth?: ColorDepth;
+}
+
+/** Mounts the tree into an in-memory stdout and returns the final frame with its SGR intact. */
+async function captureFrame(
   viewModel: ViewModel,
   size: FrameSize,
-  options: { ascii?: boolean } = {},
+  options: FrameRenderOptions,
 ): Promise<string> {
   const chunks: string[] = [];
   const stdout = {
@@ -84,10 +89,16 @@ export async function renderFrame(
     rows: size.rows,
     twoPane: size.columns >= 100,
   };
+  const env = options.env ?? {};
+  const depth = options.depth ?? detectColorDepth(env, false);
   // shortcut: Ink reads only these fields from the alternate streams; replace with real streams
   // if a future Ink release grows the interface.
   const instance = render(
-    <Frame viewModel={sized} glyphs={glyphsFor(options.ascii ?? false)} depth="none" />,
+    <Frame
+      viewModel={sized}
+      glyphs={glyphsFor({ ascii: options.ascii ?? false, env })}
+      depth={depth}
+    />,
     {
       stdout: stdout as unknown as NodeJS.WriteStream,
       stdin: stdin as unknown as NodeJS.ReadStream,
@@ -99,9 +110,31 @@ export async function renderFrame(
   instance.unmount();
   // Ink's throttled log writes the frame twice (leading and trailing); the last write is the
   // complete frame, and earlier ones are the same text with erase sequences in front.
-  return (chunks.at(-1) ?? "")
+  return chunks.at(-1) ?? "";
+}
+
+/**
+ * The plain text of one frame: no ANSI, no trailing spaces, no trailing blank lines. Snapshots and
+ * `--once` use this; the colour tests inspect `renderAnsiFrame` before the strip.
+ */
+export async function renderFrame(
+  viewModel: ViewModel,
+  size: FrameSize,
+  options: FrameRenderOptions = {},
+): Promise<string> {
+  const raw = await captureFrame(viewModel, size, options);
+  return raw
     .split("\n")
     .map((line) => stripAnsi(line).replace(/[ \t]+$/u, ""))
     .join("\n")
     .replace(/\n+$/u, "");
+}
+
+/** The same frame with SGR intact, for tests that assert the palette rather than the text. */
+export async function renderAnsiFrame(
+  viewModel: ViewModel,
+  size: FrameSize,
+  options: FrameRenderOptions = {},
+): Promise<string> {
+  return captureFrame(viewModel, size, options);
 }

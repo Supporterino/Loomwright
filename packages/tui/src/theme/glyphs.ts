@@ -1,7 +1,8 @@
 /**
- * Status glyphs. ASCII markers are single-width so a `--ascii` or `NO_COLOR` frame still reads;
+ * Status glyphs. ASCII markers are single-width so an `--ascii` or `NO_COLOR` frame still reads;
  * the focus marker is what carries selection when colour is unavailable.
  */
+import { isUtf8Locale, type TerminalEnv } from "./env.ts";
 
 export interface GlyphSet {
   readonly passed: string;
@@ -45,6 +46,19 @@ export const ASCII_GLYPHS: GlyphSet = {
   approval: "!",
 };
 
-export function glyphsFor(ascii: boolean): GlyphSet {
-  return ascii ? ASCII_GLYPHS : UNICODE_GLYPHS;
+export interface GlyphOptions {
+  readonly ascii: boolean;
+  readonly env: TerminalEnv;
+}
+
+/**
+ * ASCII when asked, on `TERM=dumb`, or when the locale is explicitly not UTF-8. The boolean form
+ * stays for callers that only pass `--ascii`.
+ */
+export function glyphsFor(options: GlyphOptions | boolean): GlyphSet {
+  if (typeof options === "boolean") return options ? ASCII_GLYPHS : UNICODE_GLYPHS;
+  if (options.ascii || options.env.TERM === "dumb" || !isUtf8Locale(options.env)) {
+    return ASCII_GLYPHS;
+  }
+  return UNICODE_GLYPHS;
 }

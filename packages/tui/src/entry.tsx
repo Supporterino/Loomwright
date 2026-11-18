@@ -48,18 +48,20 @@ import {
 } from "./launch/launcher.ts";
 import { collectFacts, type EventFacts } from "./model/facts.ts";
 import { applyKey, type KeyInput } from "./model/keys.ts";
+import { createStatusPoller, type StatusPoller } from "./model/poll.ts";
+import { createFrameScheduler, type FrameScheduler } from "./model/render-loop.ts";
 import {
   buildViewModel,
   type Screen,
   type ViewModel,
   type ViewModelInput,
 } from "./model/view-model.ts";
-import { renderOnceFrame } from "./replay/once.ts";
 import { type ReplayLoad, readReplayFile, replayModel } from "./replay/replay.ts";
 import { createTerminalSession, type TerminalSession } from "./session.ts";
+import { detectColorDepth, type TerminalEnv, terminalEnv } from "./theme/env.ts";
 import { type GlyphSet, glyphsFor } from "./theme/glyphs.ts";
 import type { ColorDepth } from "./theme/tokens.ts";
-import { Frame } from "./views/frame.tsx";
+import { Frame, renderFrame } from "./views/frame.tsx";
 
 export interface TuiOptions {
   /** Resolved workspace root; null when replaying a recording. */
@@ -72,8 +74,9 @@ export interface TuiOptions {
   readonly out: (text: string) => void;
   /** The workspace path's TTY and abort signal; replay never touches it. */
   readonly io?: Io;
-  /** Tests inject NO_COLOR / TERM / LANG. */
+  /** Tests inject NO_COLOR / TERM / LANG and whether stdout is a TTY. */
   readonly env?: NodeJS.ProcessEnv;
+  readonly isTTY?: boolean;
   /** Tests inject a factory, launcher and terminal session. */
   readonly factory?: Factory;
   readonly launcher?: Launcher;
@@ -86,8 +89,18 @@ interface TerminalOptions extends TuiOptions {
   readonly rows: number;
 }
 
-function depthFor(env: NodeJS.ProcessEnv | undefined): ColorDepth {
-  return env?.NO_COLOR === undefined ? "truecolor" : "none";
+interface ResolvedTheme {
+  readonly glyphs: GlyphSet;
+  readonly depth: ColorDepth;
+}
+
+/** One place resolves the theme for the live view, replay and the captured frames. */
+function themeFor(options: TuiOptions): ResolvedTheme {
+  const env = terminalEnv(options.env);
+  return {
+    glyphs: glyphsFor({ ascii: options.ascii, env }),
+    depth: detectColorDepth(env, options.isTTY ?? process.stdout.isTTY === true),
+  };
 }
 
 function keyName(
@@ -246,6 +259,7 @@ function initialData(
   options: TerminalOptions,
   status: StatusDocument,
   runs: readonly RunState[],
+  glyphs: GlyphSet,
 ): UiData {
   const base: UiData = {
     screen: "list",
@@ -265,7 +279,7 @@ function initialData(
     identity: null,
   };
   // The list is newest first, so the first item is the run the list opens on.
-  const view = viewOf(base, glyphsFor(options.ascii));
+  const view = viewOf(base, glyphs);
   return { ...base, selectedRunId: view.list[0]?.id ?? null };
 }
 
@@ -336,24 +350,25 @@ export async function runInSession(input: SessionRun): Promise<void> {
 }
 
 interface InteractiveProps {
-  readonly options: TerminalOptions;
   readonly workspace: string;
   readonly factory: Factory;
   readonly launcher: Launcher;
   readonly initial: UiData;
+  readonly glyphs: GlyphSet;
+  readonly depth: ColorDepth;
 }
 
 function Interactive({
-  options,
   workspace,
   factory,
   launcher,
   initial,
+  glyphs,
+  depth,
 }: InteractiveProps): ReactElement {
   const { exit } = useApp();
   const [data, setData] = useState<UiData>(initial);
   const [openError, setOpenError] = useState<string | null>(null);
-  const glyphs = useMemo(() => glyphsFor(options.ascii), [options.ascii]);
   const view = useMemo(() => viewOf(data, glyphs), [data, glyphs]);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -362,8 +377,8 @@ function Interactive({
   const eventsRef = useRef<RunEvent[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const intakeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const depth = depthFor(options.env);
+  const schedulerRef = useRef<FrameScheduler | null>(null);
+  const pollerRef = useRef<StatusPoller | null>(null);
 
   const stopIntakePoll = useCallback((): void => {
     if (intakeTimer.current !== null) {
@@ -377,25 +392,42 @@ function Interactive({
     abortRef.current = null;
   }, []);
 
+  /** The frame's only state write: whatever events arrived since the last flush are all here. */
+  const flushFrame = useCallback((): void => {
+    const events = eventsRef.current;
+    if (events.length === 0) return;
+    setData((current) =>
+      current.screen === "run" && current.selectedRunId !== null
+        ? syncApproval({
+            ...current,
+            snapshot: reduce(events),
+            facts: collectFacts(events),
+          })
+        : current,
+    );
+  }, []);
+
+  useEffect(() => {
+    const scheduler = createFrameScheduler({ render: flushFrame });
+    schedulerRef.current = scheduler;
+    return () => {
+      scheduler.stop();
+      schedulerRef.current = null;
+    };
+  }, [flushFrame]);
+
   const appendTail = useCallback(
     async (id: string, fromSeq: number, signal: AbortSignal): Promise<void> => {
       for await (const item of factory.events(id, { fromSeq, follow: true, signal })) {
         if (signal.aborted) return;
         if (item.event === undefined) continue;
         eventsRef.current.push(item.event);
-        const events = eventsRef.current;
-        setData((current) =>
-          current.screen === "run" && current.selectedRunId === id
-            ? syncApproval({
-                ...current,
-                snapshot: reduce(events),
-                facts: collectFacts(events),
-              })
-            : current,
-        );
+        const scheduler = schedulerRef.current;
+        if (scheduler === null) flushFrame();
+        else scheduler.request();
       }
     },
-    [factory],
+    [factory, flushFrame],
   );
 
   const openRun = useCallback(
@@ -483,6 +515,8 @@ function Interactive({
           return;
         }
 
+        // A spawn is the one extra poll that does not wait for the next second.
+        pollerRef.current?.kick();
         const previous = new Set(dataRef.current.status.runs.map((run) => run.id));
         stopIntakePoll();
         setData((current) =>
@@ -598,6 +632,7 @@ function Interactive({
           );
           return;
         }
+        pollerRef.current?.kick();
         setData((current) =>
           current.approval === null
             ? current
@@ -683,11 +718,13 @@ function Interactive({
 
   useEffect(() => {
     if (isReadOnly(viewRef.current)) return;
-    const timer = setInterval(() => {
-      void refreshStatus();
-    }, 1000);
-    timer.unref();
-    return () => clearInterval(timer);
+    const poller = createStatusPoller({ poll: refreshStatus });
+    pollerRef.current = poller;
+    poller.start();
+    return () => {
+      poller.stop();
+      pollerRef.current = null;
+    };
   }, [refreshStatus]);
 
   useEffect(() => {
@@ -893,12 +930,13 @@ export interface ReplayViewOptions {
   readonly ascii: boolean;
   readonly columns: number;
   readonly rows: number;
+  readonly env?: TerminalEnv;
 }
 
 /** The same view-model the live entry builds, with the approval panel driven by the stream. */
 export function replayView(load: ReplayLoad, options: ReplayViewOptions): ViewModel {
   const model = replayModel(load, options.now);
-  const glyphs = glyphsFor(options.ascii);
+  const glyphs = glyphsFor({ ascii: options.ascii, env: options.env ?? {} });
   const input: ViewModelInput = {
     source: "replay",
     screen: "run",
@@ -928,14 +966,13 @@ export function replayView(load: ReplayLoad, options: ReplayViewOptions): ViewMo
 
 interface ReplayProps {
   readonly view: ViewModel;
-  readonly ascii: boolean;
-  readonly env: NodeJS.ProcessEnv | undefined;
+  readonly glyphs: GlyphSet;
+  readonly depth: ColorDepth;
 }
 
-function Replay({ view, ascii, env }: ReplayProps): ReactElement {
+function Replay({ view, glyphs, depth }: ReplayProps): ReactElement {
   const { exit } = useApp();
   const [notice, setNotice] = useState<string | null>(null);
-  const glyphs = useMemo(() => glyphsFor(ascii), [ascii]);
   const current = useMemo(() => (notice === null ? view : { ...view, notice }), [view, notice]);
   const currentRef = useRef(current);
   currentRef.current = current;
@@ -949,24 +986,27 @@ function Replay({ view, ascii, env }: ReplayProps): ReactElement {
     if (outcome.notice !== null) setNotice(outcome.notice);
   });
 
-  return <Frame viewModel={current} glyphs={glyphs} depth={depthFor(env)} />;
+  return <Frame viewModel={current} glyphs={glyphs} depth={depth} />;
 }
 
 async function runReplay(options: TerminalOptions, replay: string): Promise<number> {
+  const { glyphs, depth } = themeFor(options);
+  const env = terminalEnv(options.env);
   const load = await readReplayFile(replay);
   const view = replayView(load, {
     now: Date.now(),
     ascii: options.ascii,
     columns: options.columns,
     rows: options.rows,
+    env,
   });
   if (options.once) {
     options.out(
-      await renderOnceFrame(view, {
-        ascii: options.ascii,
-        columns: options.columns,
-        rows: options.rows,
-      }),
+      await renderFrame(
+        view,
+        { columns: options.columns, rows: options.rows },
+        { ascii: options.ascii, env },
+      ),
     );
     return 0;
   }
@@ -980,7 +1020,7 @@ async function runReplay(options: TerminalOptions, replay: string): Promise<numb
     await runInSession({
       session,
       render: async () => {
-        const instance = render(<Replay view={view} ascii={options.ascii} env={options.env} />, {
+        const instance = render(<Replay view={view} glyphs={glyphs} depth={depth} />, {
           stdout: process.stdout,
           stdin: process.stdin,
           patchConsole: false,
@@ -1010,7 +1050,8 @@ export async function runTui(options: TuiOptions): Promise<number> {
   // Read-only: the run list must open without the install marker (`open` is for intake, 1.5).
   const factory = options.factory ?? (await openReadOnly(workspace));
   const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
-  const initial = initialData(terminal, status, runs);
+  const { glyphs, depth } = themeFor(terminal);
+  const initial = initialData(terminal, status, runs, glyphs);
   const session = options.session ?? createTerminalSession(process.stdin, process.stdout);
   const offSignal = session.onSignal(() => {
     session.leave();
@@ -1028,11 +1069,12 @@ export async function runTui(options: TuiOptions): Promise<number> {
       render: async () => {
         const instance = render(
           <Interactive
-            options={terminal}
             workspace={workspace}
             factory={factory}
             launcher={options.launcher ?? createLauncher({ workspace })}
             initial={initial}
+            glyphs={glyphs}
+            depth={depth}
           />,
           {
             stdout: process.stdout,

@@ -1,8 +1,8 @@
 import type { RunEvent } from "@loomwright/protocol";
+import { ActivityRing } from "./activity.ts";
 import type { ActivityLine, AgentFact, GateRow } from "./view-model.ts";
 
-/** The activity tail keeps the newest lines only; `seq` is monotonic so the drop is stable. */
-export const ACTIVITY_LIMIT = 2_000;
+export { ACTIVITY_LIMIT, ActivityRing } from "./activity.ts";
 
 export interface EventFacts {
   /** Gate results keyed by the task (or step) the gate ran for, in arrival order. */
@@ -20,7 +20,7 @@ export function collectFacts(events: readonly RunEvent[]): EventFacts {
   const gates: Record<string, GateRow[]> = {};
   const agents: Record<string, AgentFact> = {};
   const retries: Record<string, number> = {};
-  const activity: ActivityLine[] = [];
+  const activity = new ActivityRing();
 
   const bump = (key: string): void => {
     retries[key] = (retries[key] ?? 0) + 1;
@@ -74,7 +74,6 @@ export function collectFacts(events: readonly RunEvent[]): EventFacts {
           text: event.data.detail,
           ...(ref === undefined ? {} : { logRef: ref }),
         });
-        if (activity.length > ACTIVITY_LIMIT) activity.splice(0, activity.length - ACTIVITY_LIMIT);
         break;
       }
       default:
@@ -82,5 +81,5 @@ export function collectFacts(events: readonly RunEvent[]): EventFacts {
     }
   }
 
-  return { gates, agents, retries, activity };
+  return { gates, agents, retries, activity: activity.toArray() };
 }
