@@ -13,9 +13,16 @@ import {
   RunEvent as RunEventSchema,
   reduce,
 } from "@loomwright/protocol";
+import {
+  type IntakeState,
+  initialIntake,
+  intakePanel,
+  QUEUED_NOTE,
+} from "../src/intake/dialog.tsx";
 import { collectFacts } from "../src/model/facts.ts";
 import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/model/view-model.ts";
 import { emptyWorkspace } from "../src/strings.ts";
+import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
 import { renderFrame } from "../src/views/frame.tsx";
 
 const ISO = "2026-11-17T10:00:00.000Z";
@@ -249,11 +256,62 @@ function finished(): ViewModel {
   return buildViewModel(runInput(run, events, 54_321, 1.23, { selectedTaskId: null }));
 }
 
+function newRunText(): ViewModel {
+  return buildViewModel(
+    vmInput({
+      screen: "list",
+      panel: intakePanel({ ...initialIntake, text: "add a health endpoint" }, ASCII_GLYPHS),
+    }),
+  );
+}
+
+function newRunFile(): ViewModel {
+  const preview = Array.from({ length: 20 }, (_, index) => `request line ${index + 1}`);
+  const state: IntakeState = {
+    ...initialIntake,
+    mode: "file",
+    path: ".factory/requests/faster-imports.md",
+    candidates: [
+      {
+        path: ".factory/requests/faster-imports.md",
+        absolute: "/work/app/.factory/requests/faster-imports.md",
+        kind: "file",
+      },
+    ],
+    file: {
+      absolute: "/work/app/.factory/requests/faster-imports.md",
+      bytes: 512,
+      preview,
+    },
+  };
+  return buildViewModel(vmInput({ screen: "list", panel: intakePanel(state, ASCII_GLYPHS) }));
+}
+
+function queuedAfterApproval(): ViewModel {
+  const run = runState({ id: "another-change" });
+  const lock: ActiveLock = { changeId: "another-change", pid: 4242, host: "host", since: ISO };
+  return buildViewModel(
+    vmInput({
+      screen: "list",
+      status: statusDoc([{ run, tokens: 0, cost: 0 }], { active: lock }),
+      runs: [run],
+      selectedRunId: run.id,
+      panel: intakePanel(
+        { ...initialIntake, text: "add a health endpoint", queuedNote: QUEUED_NOTE },
+        ASCII_GLYPHS,
+      ),
+    }),
+  );
+}
+
 const STATES = {
   "no-runs": noRuns,
   "running-graph": runningGraph,
   "failing-task": failingTask,
   finished,
+  "new-run-text": newRunText,
+  "new-run-file": newRunFile,
+  "queued-after-approval": queuedAfterApproval,
 } satisfies Record<string, () => ViewModel>;
 
 const SIZES = [

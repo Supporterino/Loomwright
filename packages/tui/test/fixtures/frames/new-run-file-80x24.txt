@@ -1,0 +1,24 @@
++------------------------------------------------------------------------------+
+| New change - file                                                            |
+| path: .factory/requests/faster-imports.md                                    |
+|   - .factory/requests/faster-imports.md                                      |
+| file: /work/app/.factory/requests/faster-imports.md                          |
+| size: 512 bytes                                                              |
+| preview (20 lines):                                                          |
+|   | request line 1                                                           |
+|   | request line 2                                                           |
+|   | request line 3                                                           |
+|   | request line 4                                                           |
+|   | request line 5                                                           |
+|   | request line 6                                                           |
+|   | request line 7                                                           |
+|   | request line 8                                                           |
+|   | request line 9                                                           |
+|   | request line 10                                                          |
+|   | request line 11                                                          |
+|   | request line 12                                                          |
+|   | request line 13                                                          |
+|   | request line 14                                                          |
+| Tab text mode - Enter start - Esc cancel                                     |
++------------------------------------------------------------------------------+
+Tab text mode - Enter start - Esc cancel

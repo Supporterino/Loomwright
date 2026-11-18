@@ -4,11 +4,18 @@
  * path; 1.8 wires the real screens into it.
  */
 import process from "node:process";
-import { type Factory, openReadOnly, type StatusDocument } from "@loomwright/core/factory";
+import { type Factory, open, openReadOnly, type StatusDocument } from "@loomwright/core/factory";
 import type { RunState } from "@loomwright/core/state/run";
 import { type RunEvent, type RunSnapshot, reduce } from "@loomwright/protocol";
 import { render, Text, useApp, useInput } from "ink";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type IntakeState, initialIntake, intakeKeys, intakePanel } from "./intake/dialog.tsx";
+import {
+  createLauncher,
+  type LaunchAction,
+  type LaunchResult,
+  tailLog,
+} from "./launch/launcher.ts";
 import { collectFacts, type EventFacts } from "./model/facts.ts";
 import { applyKey } from "./model/keys.ts";
 import {
@@ -18,7 +25,7 @@ import {
   type ViewModelInput,
 } from "./model/view-model.ts";
 import { createTerminalSession } from "./session.ts";
-import { glyphsFor } from "./theme/glyphs.ts";
+import { type GlyphSet, glyphsFor } from "./theme/glyphs.ts";
 import type { ColorDepth } from "./theme/tokens.ts";
 import { Frame } from "./views/frame.tsx";
 
@@ -67,9 +74,11 @@ interface UiData {
   readonly snapshot: RunSnapshot | null;
   readonly facts: EventFacts;
   readonly notice: string | null;
+  /** The new-run dialog, or null when no panel is open. */
+  readonly intake: IntakeState | null;
 }
 
-function viewOf(data: UiData): ViewModel {
+function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
   const input: ViewModelInput = {
     source: "live",
     screen: data.screen,
@@ -82,7 +91,7 @@ function viewOf(data: UiData): ViewModel {
     runs: data.runs,
     selectedRunId: data.selectedRunId,
     selectedTaskId: data.selectedTaskId,
-    panel: null,
+    panel: data.intake === null ? null : intakePanel(data.intake, glyphs),
     notice: data.notice,
   };
   return buildViewModel(input);
@@ -104,28 +113,43 @@ function initialData(
     snapshot: null,
     facts: collectFacts([]),
     notice: null,
+    intake: null,
   };
   // The list is newest first, so the first item is the run the list opens on.
-  return { ...base, selectedRunId: viewOf(base).list[0]?.id ?? null };
+  const view = viewOf(base, glyphsFor(options.ascii));
+  return { ...base, selectedRunId: view.list[0]?.id ?? null };
 }
 
 interface InteractiveProps {
   readonly options: TuiOptions;
+  readonly workspace: string;
   readonly factory: Factory;
   readonly initial: UiData;
 }
 
-function Interactive({ options, factory, initial }: InteractiveProps): ReactElement {
+function Interactive({ options, workspace, factory, initial }: InteractiveProps): ReactElement {
   const { exit } = useApp();
   const [data, setData] = useState<UiData>(initial);
-  const view = useMemo(() => viewOf(data), [data]);
+  const [openError, setOpenError] = useState<string | null>(null);
+  const glyphs = useMemo(() => glyphsFor(options.ascii), [options.ascii]);
+  const view = useMemo(() => viewOf(data, glyphs), [data, glyphs]);
   const viewRef = useRef(view);
   viewRef.current = view;
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const eventsRef = useRef<RunEvent[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const intakeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const launcher = useMemo(() => createLauncher({ workspace }), [workspace]);
 
-  const glyphs = useMemo(() => glyphsFor(options.ascii), [options.ascii]);
   const depth = depthFor(options.env);
+
+  const stopIntakePoll = useCallback((): void => {
+    if (intakeTimer.current !== null) {
+      clearInterval(intakeTimer.current);
+      intakeTimer.current = null;
+    }
+  }, []);
 
   const stopTail = useCallback((): void => {
     abortRef.current?.abort();
@@ -161,6 +185,7 @@ function Interactive({ options, factory, initial }: InteractiveProps): ReactElem
         snapshot: null,
         facts: collectFacts([]),
         notice: null,
+        intake: null,
       }));
       const load = async (): Promise<void> => {
         const controller = new AbortController();
@@ -190,6 +215,119 @@ function Interactive({ options, factory, initial }: InteractiveProps): ReactElem
       });
     },
     [appendTail, factory, stopTail],
+  );
+
+  const submitAction = useCallback(
+    (action: LaunchAction): void => {
+      void (async () => {
+        try {
+          await open(workspace);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          setOpenError(message);
+          setData((current) =>
+            current.intake === null
+              ? current
+              : {
+                  ...current,
+                  intake: {
+                    ...current.intake,
+                    submitting: false,
+                    error: `${message} — run \`loomwright init\``,
+                  },
+                },
+          );
+          return;
+        }
+
+        let result: LaunchResult;
+        try {
+          result = await launcher.launch(action);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          setData((current) =>
+            current.intake === null
+              ? current
+              : { ...current, intake: { ...current.intake, submitting: false, error: message } },
+          );
+          return;
+        }
+
+        const previous = new Set(dataRef.current.status.runs.map((run) => run.id));
+        stopIntakePoll();
+        setData((current) =>
+          current.intake === null
+            ? current
+            : {
+                ...current,
+                intake: {
+                  ...current.intake,
+                  spawned: {
+                    logPath: result.logPath,
+                    displayPath: result.displayPath,
+                    tail: tailLog(result.logPath),
+                  },
+                },
+              },
+        );
+
+        const tick = async (): Promise<void> => {
+          try {
+            const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
+            const started = status.runs.find((run) => !previous.has(run.id));
+            setData((current) => {
+              const intake = current.intake;
+              return {
+                ...current,
+                status,
+                runs,
+                intake:
+                  intake === null || intake.spawned === null
+                    ? intake
+                    : {
+                        ...intake,
+                        spawned: { ...intake.spawned, tail: tailLog(result.logPath) },
+                      },
+              };
+            });
+            if (started !== undefined) {
+              stopIntakePoll();
+              openRun(started.id);
+            }
+          } catch {
+            // The next tick retries; the dialog keeps showing the log path meanwhile.
+          }
+        };
+        const timer = setInterval(() => {
+          void tick();
+        }, 500);
+        timer.unref();
+        intakeTimer.current = timer;
+        void tick();
+
+        void result.exited.then(({ code }) => {
+          if (code === null || code === 0) return;
+          stopIntakePoll();
+          setData((current) =>
+            current.intake === null
+              ? current
+              : {
+                  ...current,
+                  intake: {
+                    ...current.intake,
+                    submitting: false,
+                    error: `exited with code ${code}`,
+                    spawned:
+                      current.intake.spawned === null
+                        ? current.intake.spawned
+                        : { ...current.intake.spawned, tail: tailLog(result.logPath) },
+                  },
+                },
+          );
+        });
+      })();
+    },
+    [factory, launcher, openRun, stopIntakePoll, workspace],
   );
 
   useEffect(() => {
@@ -222,10 +360,31 @@ function Interactive({ options, factory, initial }: InteractiveProps): ReactElem
   }, []);
 
   useEffect(() => () => stopTail(), [stopTail]);
+  useEffect(() => () => stopIntakePoll(), [stopIntakePoll]);
 
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       exit();
+      return;
+    }
+    const state = dataRef.current;
+    if (state.intake !== null) {
+      if (key.escape) {
+        setData((current) => ({ ...current, intake: null }));
+        return;
+      }
+      const outcome = intakeKeys(state.intake, input, key, {
+        cwd: workspace,
+        workspace,
+        status: state.status,
+        openError,
+      });
+      setData((current) => ({ ...current, intake: outcome.state }));
+      if (outcome.submit !== undefined) submitAction(outcome.submit);
+      return;
+    }
+    if (!key.ctrl && input === "n") {
+      setData((current) => ({ ...current, intake: initialIntake }));
       return;
     }
     const current = viewRef.current;
@@ -364,9 +523,10 @@ export async function runTui(options: TuiOptions): Promise<number> {
     return 0;
   }
   if (options.workspace === null) return runPlaceholder(options);
+  const workspace = options.workspace;
 
   // Read-only: the run list must open without the install marker (`open` is for intake, 1.5).
-  const factory = await openReadOnly(options.workspace);
+  const factory = await openReadOnly(workspace);
   const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
   const initial = initialData(options, status, runs);
   const session = createTerminalSession(process.stdin, process.stdout);
@@ -376,12 +536,15 @@ export async function runTui(options: TuiOptions): Promise<number> {
     process.exit(0);
   });
   try {
-    const instance = render(<Interactive options={options} factory={factory} initial={initial} />, {
-      stdout: process.stdout,
-      stdin: process.stdin,
-      patchConsole: false,
-      exitOnCtrlC: false,
-    });
+    const instance = render(
+      <Interactive options={options} workspace={workspace} factory={factory} initial={initial} />,
+      {
+        stdout: process.stdout,
+        stdin: process.stdin,
+        patchConsole: false,
+        exitOnCtrlC: false,
+      },
+    );
     await instance.waitUntilExit();
   } finally {
     offSignal();

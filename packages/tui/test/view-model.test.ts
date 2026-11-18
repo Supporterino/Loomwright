@@ -557,7 +557,11 @@ describe("no engine imports", () => {
     for (const file of sourceFiles(packageSrc)) {
       const name = relative(packageSrc, file);
       const text = readFileSync(file, "utf8");
-      if (text.includes(".factory/")) violations.push(`${name}: references .factory/`);
+      // 1.5: the intake dialog names the draft dir and request completion ranks factory files;
+      // runs, approvals and event logs stay off limits everywhere.
+      const namesFactoryPath = name === "intake/dialog.tsx" || name === "intake/paths.ts";
+      if (text.includes(".factory/") && !namesFactoryPath)
+        violations.push(`${name}: references .factory/`);
       for (const match of text.matchAll(imports)) {
         const clause = match[1] ?? "";
         const specifier = match[2] ?? "";
