@@ -453,11 +453,15 @@ describe("resume is a child, not a call", () => {
     expect(fake.resumes).toEqual([]);
   });
 
-  test("an aborted run resumes the same way and an implementing run offers nothing", () => {
+  test("an aborted and a queued run resume the same way and an implementing run offers nothing", () => {
     expect(resumeFor(buildViewModel(viewInput(runState({ phase: "aborted" }))))).toEqual({
       kind: "resume",
       id: RUN,
     });
+    // Approve only leaves the run queued: the footer and `r` must still offer resume.
+    const queued = buildViewModel(viewInput(runState({ phase: "queued" })));
+    expect(resumeFor(queued)).toEqual({ kind: "resume", id: RUN });
+    expect(queued.footer.some((hint) => hint.key === "r")).toBe(true);
     expect(resumeFor(buildViewModel(viewInput(runState())))).toBeNull();
   });
 });

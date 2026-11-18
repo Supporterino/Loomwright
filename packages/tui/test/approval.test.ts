@@ -15,6 +15,7 @@ import {
   APPROVAL_TOKEN,
   type ApprovalActionKind,
   type ApprovalEvidence,
+  type ApprovalState,
   approvalAvailable,
   approvalColor,
   approvalExited,
@@ -304,18 +305,31 @@ describe("approve only changes what the overlay says", () => {
     expect(text).toContain("waiting for queued - read-only");
   });
 
-  test("the waiting overlay is read-only: action keys and Enter are ignored", () => {
+  test("the waiting overlay is read-only: the other action keys and Enter are ignored", () => {
     const waiting = approvalStarted({ kind: "launching", action: "approve-only" });
     for (const [input, overrides] of [
       ["a", {}],
       ["A", {}],
-      ["r", {}],
       ["", { return: true }],
     ] as const) {
       const outcome = approvalKeys(waiting, input, key(overrides));
       expect(outcome.state).toBe(waiting);
       expect(outcome.launch).toBeUndefined();
+      expect(outcome.resume).toBeUndefined();
     }
+  });
+
+  test("approve only changes what the overlay says: r launches resume through the launcher", () => {
+    const waiting = approvalStarted({ kind: "launching", action: "approve-only" });
+    expect(approvalKeys(waiting, "r", key())).toEqual({ state: waiting, resume: true });
+
+    // Only the approve-only wait resumes: the approve wait added nothing to resume.
+    const approving = approvalStarted({ kind: "launching", action: "approve" });
+    expect(approvalKeys(approving, "r", key())).toEqual({ state: approving });
+
+    // During the spawn the approval is still being recorded; `r` would race it.
+    const spawning: ApprovalState = { kind: "launching", action: "approve-only" };
+    expect(approvalKeys(spawning, "r", key())).toEqual({ state: spawning });
   });
 });
 

@@ -780,6 +780,7 @@ function Interactive({
           setData((current) => ({ ...current, approval: outcome.state }));
         }
         if (outcome.launch !== undefined) launchApproval(run.id, outcome.launch);
+        if (outcome.resume === true) applyControl({ kind: "resume", id: run.id });
       }
       return;
     }

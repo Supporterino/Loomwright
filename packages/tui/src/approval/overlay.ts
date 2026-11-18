@@ -147,6 +147,8 @@ export interface ApprovalOutcome {
   readonly state: ApprovalState;
   /** The action to spawn; `entry.tsx` adds the run id and calls the launcher. */
   readonly launch?: ApprovalActionKind;
+  /** `r` in the approve-only wait: `entry.tsx` launches `resume <id>` for that run. */
+  readonly resume?: boolean;
 }
 
 function actionForKey(input: string): ApprovalActionKind | null {
@@ -171,7 +173,15 @@ export function approvalKeys(
   key: KeyInput,
   available: Readonly<Record<ApprovalActionKind, boolean>> = ALL_AVAILABLE,
 ): ApprovalOutcome {
-  if (state.kind === "waiting" || state.kind === "launching" || state.kind === "done") {
+  if (state.kind === "waiting") {
+    // The approve-only wait is read-only except `r`: the CLI recorded the approval and
+    // started nothing, so the only way on is `resume <id>`.
+    if (state.action === "approve-only" && !key.ctrl && input === "r") {
+      return { state, resume: true };
+    }
+    return { state };
+  }
+  if (state.kind === "launching" || state.kind === "done") {
     return { state };
   }
   if (state.kind === "confirming") {
@@ -281,9 +291,10 @@ function panelKeys(input: ApprovalInput): PanelView["keys"] {
   if (state.kind === "confirming") {
     return [keyHint("Enter", "confirm"), keyHint("Esc", "cancel")];
   }
-  if (state.kind === "waiting" || state.kind === "launching") {
+  if (state.kind === "waiting") {
     return state.action === "approve-only" ? [keyHint("r", "resume")] : [];
   }
+  if (state.kind === "launching") return [];
   if (state.kind === "done") return [];
   const available = approvalAvailable(evidence);
   const keys: PanelView["keys"][number][] = [];

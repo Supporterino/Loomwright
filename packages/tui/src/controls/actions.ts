@@ -29,11 +29,13 @@ export function retryFor(viewModel: ViewModel): ControlAction | null {
   return { kind: "retry", id: run.id, taskId: task.id };
 }
 
-/** An interrupted run surfaces as paused in run state; aborted runs resume the same way. */
+/** Paused, aborted and queued runs resume; approve only leaves its run queued. */
 export function resumeFor(viewModel: ViewModel): ControlAction | null {
   const run = viewModel.run;
   if (run === null) return null;
-  return run.phase === "paused" || run.phase === "aborted" ? { kind: "resume", id: run.id } : null;
+  return run.phase === "paused" || run.phase === "aborted" || run.phase === "queued"
+    ? { kind: "resume", id: run.id }
+    : null;
 }
 
 function dash(glyphs: GlyphSet): string {

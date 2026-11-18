@@ -45,23 +45,23 @@ task graph on the left, the detail and activity on the right. Below 100 columns 
 
 ## Keys
 
-| Key       | Action                                                        | When                                          |
-| --------- | ------------------------------------------------------------- | --------------------------------------------- |
-| `n`       | Start a new change (text or request file)                     | Run list                                      |
-| `Tab`     | Toggle text mode and file mode                                | New-run dialog                                |
-| `Enter`   | Open the selected run or task; confirm                        | List, task graph, a confirmation              |
-| `Esc`     | Back out of a panel; cancel                                   | Panels and confirmations                      |
-| `j` / `k` | Move the selection (arrow keys work too)                      | List, task graph, questions                   |
-| `a`       | Approve and run: record the approval and start implementation | Approval overlay, with `git user.email`       |
-| `A`       | Approve only: record the approval, implement nothing          | Approval overlay, with `git user.email`       |
-| `w`       | Reword: let the architect apply the spec findings             | Approval overlay, when the run has findings   |
-| `R`       | Reapprove: accept a hand-edited spec                          | Approval overlay, after an approval recorded  |
-| `r`       | Resume a paused or aborted run                                | Paused/aborted run, and the approve-only wait |
-| `x`       | Abort, after a confirmation                                   | Any run not done or aborted                   |
-| `t`       | Retry the selected failed task                                | Only when the selected task is failed         |
-| `Q`       | Open the questions pane                                       | Only when the run has questions               |
-| `?`       | Help                                                          | Everywhere                                    |
-| `q`       | Quit                                                          | Everywhere                                    |
+| Key       | Action                                                        | When                                                 |
+| --------- | ------------------------------------------------------------- | ---------------------------------------------------- |
+| `n`       | Start a new change (text or request file)                     | Run list                                             |
+| `Tab`     | Toggle text mode and file mode                                | New-run dialog                                       |
+| `Enter`   | Open the selected run or task; confirm                        | List, task graph, a confirmation                     |
+| `Esc`     | Back out of a panel; cancel                                   | Panels and confirmations                             |
+| `j` / `k` | Move the selection (arrow keys work too)                      | List, task graph, questions                          |
+| `a`       | Approve and run: record the approval and start implementation | Approval overlay, with `git user.email`              |
+| `A`       | Approve only: record the approval, implement nothing          | Approval overlay, with `git user.email`              |
+| `w`       | Reword: let the architect apply the spec findings             | Approval overlay, when the run has findings          |
+| `R`       | Reapprove: accept a hand-edited spec                          | Approval overlay, after an approval recorded         |
+| `r`       | Resume a paused, aborted or queued run                        | Paused/aborted/queued run, and the approve-only wait |
+| `x`       | Abort, after a confirmation                                   | Any run not done or aborted                          |
+| `t`       | Retry the selected failed task                                | Only when the selected task is failed                |
+| `Q`       | Open the questions pane                                       | Only when the run has questions                      |
+| `?`       | Help                                                          | Everywhere                                           |
+| `q`       | Quit                                                          | Everywhere                                           |
 
 The approval keys are conditional: the overlay only exists at `awaiting-approval`, and `w`/`R` only
 appear when they apply. `t` appears only for a failed task and `Q` only when questions exist. The
@@ -89,7 +89,9 @@ The approval overlay is driven by the phase, not by a keystroke: a run at `await
 it on its own. Four actions are available, each behind a confirmation:
 - `a` **approve and run** records the approval, commits the spec and starts implementation locally.
 - `A` **approve only** records the approval and implements nothing; the waiting state then shows the
-  `r` resume hint and the equivalent CLI command.
+  `r` resume hint and the equivalent CLI command. `r` launches `resume <id>` through the same
+  launcher seam, and it stays offered on the `queued` run after the overlay closes, so approving
+  only never strands a run in the UI.
 - `w` **reword** starts the architect to apply the spec findings; it is offered only when findings
   exist and may take long.
 - `R` **reapprove** accepts a spec edited after approval, naming the short spec commit.
