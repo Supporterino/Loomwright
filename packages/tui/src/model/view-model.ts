@@ -214,13 +214,6 @@ function taskRow(
   };
 }
 
-/** With duplicate gate names the later result wins, in the order the names first appeared. */
-function latestGates(rows: readonly GateRow[]): GateRow[] {
-  const byName = new Map<string, GateRow>();
-  for (const row of rows) byName.set(row.name, row);
-  return [...byName.values()];
-}
-
 function questionRows(run: RunState): QuestionRow[] {
   const questionsFile =
     run.draft === undefined
@@ -255,7 +248,7 @@ function taskDetail(row: TaskRow, facts: EventFacts): TaskDetail {
     task: row,
     agent: facts.agents[row.id] ?? null,
     retries: facts.retries[row.id] ?? 0,
-    gates: latestGates(facts.gates[row.id] ?? []),
+    gates: facts.gates[row.id] ?? [],
     activity: facts.activity.filter((line) => line.step === row.id),
   };
 }

@@ -5,7 +5,7 @@ import type { ActivityLine, AgentFact, GateRow } from "./view-model.ts";
 export { ACTIVITY_LIMIT, ActivityRing } from "./activity.ts";
 
 export interface EventFacts {
-  /** Gate results keyed by the task (or step) the gate ran for, in arrival order. */
+  /** Gate results keyed by the task (or step) they ran for, at most one row per gate name. */
   readonly gates: Readonly<Record<string, readonly GateRow[]>>;
   /** The last agent seen for a step. */
   readonly agents: Readonly<Record<string, AgentFact>>;
@@ -46,9 +46,15 @@ export function appendFacts(prior: EventFacts, events: readonly RunEvent[]): Eve
           status: event.data.status,
           durationMs: event.data.durationMs,
         };
+        // A retry replaces the earlier result, so retained rows are bounded by gate name.
         const rows = gates[step];
-        if (rows === undefined) gates[step] = [row];
-        else rows.push(row);
+        if (rows === undefined) {
+          gates[step] = [row];
+          break;
+        }
+        const index = rows.findIndex((existing) => existing.name === row.name);
+        if (index === -1) rows.push(row);
+        else rows[index] = row;
         break;
       }
       case "agent.started":

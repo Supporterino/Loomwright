@@ -4,7 +4,7 @@ import { RunState } from "@loomwright/core/state/run";
 import type { UsageSummary } from "@loomwright/core/usage/usage";
 import { PROTOCOL_VERSION, type RunEvent } from "@loomwright/protocol";
 import { watchSpawn } from "../src/intake/follow.ts";
-import { ACTIVITY_LIMIT, collectFacts, type EventFacts } from "../src/model/facts.ts";
+import { ACTIVITY_LIMIT, appendFacts, collectFacts, type EventFacts } from "../src/model/facts.ts";
 import { createStatusPoller } from "../src/model/poll.ts";
 import { createFrameScheduler } from "../src/model/render-loop.ts";
 import { buildViewModel } from "../src/model/view-model.ts";
@@ -85,14 +85,14 @@ function activity(seq: number, step = "first", text = `line ${seq}`): RunEvent {
   };
 }
 
-function gate(seq: number, step: string): RunEvent {
+function gate(seq: number, step: string, status: "pass" | "fail" = "pass"): RunEvent {
   return {
     v: PROTOCOL_VERSION,
     runId: RUN,
     seq,
     ts: ISO,
     type: "gate.finished",
-    data: { name: "lint", type: "lint", status: "pass", durationMs: 10, step },
+    data: { name: "lint", type: "lint", status, durationMs: 10, step },
   };
 }
 
@@ -227,6 +227,16 @@ describe("rendering and polling stay bounded", () => {
     expect(Object.keys(facts.retries)).toHaveLength(steps.length);
     expect(facts.activity).toHaveLength(ACTIVITY_LIMIT);
     expect(facts.activity.length).toBeLessThan(events.length);
+  });
+
+  test("gate retries replace in place: retained gates stay one row per gate name", () => {
+    let facts = collectFacts([]);
+    for (let round = 1; round <= 5_000; round += 1) {
+      facts = appendFacts(facts, [gate(round, "first", round % 2 === 0 ? "pass" : "fail")]);
+    }
+
+    expect(facts.gates.first).toHaveLength(1);
+    expect(facts.gates.first?.[0]?.status).toBe("pass");
   });
 
   test("status is polled once a second: ten seconds give at most ten calls and a kick adds one", async () => {
