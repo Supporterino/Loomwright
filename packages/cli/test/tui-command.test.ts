@@ -64,8 +64,9 @@ describe("tui command", () => {
     const run = await cli(fx.root, "tui", "--replay", REPLAY_FIXTURE, "--once");
     expect(run.code).toBe(ExitCode.Ok);
     expect(run.err).toBe("");
-    expect(run.out).toContain("loomwright tui");
-    expect(run.out).toContain("replay:");
-    expect(run.out).toContain("approval-gate.jsonl");
+    expect(run.out).toContain("add-health");
+    expect(run.out).toContain("Approval");
+    expect(run.out).toContain("spec hash: <sha>");
+    expect(run.out).not.toContain("\u001b[");
   });
 });

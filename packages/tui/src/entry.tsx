@@ -1,14 +1,15 @@
 /**
  * The TUI entry. Interactive mode reads the workspace through `Factory`, renders the run list and
- * run view, and restores the terminal from a `finally`. `--once` still uses the 1.2 placeholder
- * path; 1.8 wires the real screens into it.
+ * run view, and restores the terminal from a `finally`. Replay builds the same model from a
+ * recorded stream; `--once` renders one frame into an in-memory stdout and writes it out.
  */
 import { execFile } from "node:child_process";
 import process from "node:process";
 import { type Factory, open, openReadOnly, type StatusDocument } from "@loomwright/core/factory";
+import type { Io } from "@loomwright/core/io";
 import type { RunState } from "@loomwright/core/state/run";
 import { type RunEvent, type RunSnapshot, reduce } from "@loomwright/protocol";
-import { render, Text, useApp, useInput } from "ink";
+import { render, useApp, useInput } from "ink";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ExecResult, readApprover } from "./approval/identity.ts";
 import {
@@ -46,13 +47,15 @@ import {
   tailLog,
 } from "./launch/launcher.ts";
 import { collectFacts, type EventFacts } from "./model/facts.ts";
-import { applyKey } from "./model/keys.ts";
+import { applyKey, type KeyInput } from "./model/keys.ts";
 import {
   buildViewModel,
   type Screen,
   type ViewModel,
   type ViewModelInput,
 } from "./model/view-model.ts";
+import { renderOnceFrame } from "./replay/once.ts";
+import { type ReplayLoad, readReplayFile, replayModel } from "./replay/replay.ts";
 import { createTerminalSession, type TerminalSession } from "./session.ts";
 import { type GlyphSet, glyphsFor } from "./theme/glyphs.ts";
 import type { ColorDepth } from "./theme/tokens.ts";
@@ -64,17 +67,23 @@ export interface TuiOptions {
   readonly replay?: string;
   readonly once: boolean;
   readonly ascii: boolean;
-  readonly columns: number;
-  readonly rows: number;
+  readonly columns?: number;
+  readonly rows?: number;
   readonly out: (text: string) => void;
+  /** The workspace path's TTY and abort signal; replay never touches it. */
+  readonly io?: Io;
   /** Tests inject NO_COLOR / TERM / LANG. */
   readonly env?: NodeJS.ProcessEnv;
+  /** Tests inject a factory, launcher and terminal session. */
+  readonly factory?: Factory;
+  readonly launcher?: Launcher;
+  readonly session?: TerminalSession;
 }
 
-function label(options: { workspace: string | null; replay: string | undefined }): string {
-  return options.replay === undefined
-    ? `workspace: ${options.workspace ?? "(none)"}`
-    : `replay: ${options.replay}`;
+/** The entry normalises the terminal size once; every rendered component gets both numbers. */
+interface TerminalOptions extends TuiOptions {
+  readonly columns: number;
+  readonly rows: number;
 }
 
 function depthFor(env: NodeJS.ProcessEnv | undefined): ColorDepth {
@@ -90,6 +99,42 @@ function keyName(
   if (key.upArrow) return "Up";
   if (key.downArrow) return "Down";
   return input;
+}
+
+/** One guard for every effect: a replayed view-model may never write or poll. */
+export function isReadOnly(view: ViewModel): boolean {
+  return view.source === "replay";
+}
+
+/** What a write key says in replay instead of doing anything. */
+export const REPLAY_READ_ONLY = "this stream is replayed — read-only";
+
+/** The keys that start a write in the live UI: intake, approvals, resume, abort, retry, answers. */
+const REPLAY_WRITE_KEYS: ReadonlySet<string> = new Set([
+  "n",
+  "a",
+  "A",
+  "w",
+  "R",
+  "r",
+  "x",
+  "t",
+  "Q",
+]);
+
+export interface ReplayKeyOutcome {
+  readonly quit: boolean;
+  readonly notice: string | null;
+}
+
+/** A replay consumes only quit; every write key becomes the read-only notice. */
+export function replayKey(view: ViewModel, input: string, key: KeyInput): ReplayKeyOutcome {
+  if (key.ctrl && input === "c") return { quit: true, notice: null };
+  if (!key.ctrl && input === "q") return { quit: true, notice: null };
+  if (isReadOnly(view) && REPLAY_WRITE_KEYS.has(input)) {
+    return { quit: false, notice: REPLAY_READ_ONLY };
+  }
+  return { quit: false, notice: null };
 }
 
 interface UiData {
@@ -198,7 +243,7 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
 }
 
 function initialData(
-  options: TuiOptions,
+  options: TerminalOptions,
   status: StatusDocument,
   runs: readonly RunState[],
 ): UiData {
@@ -291,13 +336,20 @@ export async function runInSession(input: SessionRun): Promise<void> {
 }
 
 interface InteractiveProps {
-  readonly options: TuiOptions;
+  readonly options: TerminalOptions;
   readonly workspace: string;
   readonly factory: Factory;
+  readonly launcher: Launcher;
   readonly initial: UiData;
 }
 
-function Interactive({ options, workspace, factory, initial }: InteractiveProps): ReactElement {
+function Interactive({
+  options,
+  workspace,
+  factory,
+  launcher,
+  initial,
+}: InteractiveProps): ReactElement {
   const { exit } = useApp();
   const [data, setData] = useState<UiData>(initial);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -310,7 +362,6 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
   const eventsRef = useRef<RunEvent[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const intakeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const launcher = useMemo(() => createLauncher({ workspace }), [workspace]);
 
   const depth = depthFor(options.env);
 
@@ -397,6 +448,7 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
 
   const submitAction = useCallback(
     (action: LaunchAction): void => {
+      if (isReadOnly(viewRef.current)) return;
       void (async () => {
         try {
           await open(workspace);
@@ -510,6 +562,7 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
 
   const launchApproval = useCallback(
     (id: string, kind: ApprovalActionKind): void => {
+      if (isReadOnly(viewRef.current)) return;
       let action: LaunchAction;
       switch (kind) {
         case "approve":
@@ -578,7 +631,7 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
   /** Records the answer, then waits only for the short command write, never for the run. */
   const submitAnswer = useCallback(
     (id: string, question: string, answer: string): void => {
-      if (answering.current) return;
+      if (isReadOnly(viewRef.current) || answering.current) return;
       answering.current = true;
       void (async () => {
         try {
@@ -614,6 +667,7 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
   /** Abort and retry return immediately; resume is a detached child. Never a whole phase. */
   const applyControl = useCallback(
     (action: ControlAction): void => {
+      if (isReadOnly(viewRef.current)) return;
       void (async () => {
         try {
           await performControl({ factory, launcher }, action);
@@ -628,6 +682,7 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
   );
 
   useEffect(() => {
+    if (isReadOnly(viewRef.current)) return;
     const timer = setInterval(() => {
       void refreshStatus();
     }, 1000);
@@ -655,7 +710,7 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
   // Read the identity once per overlay opening; a missing email disables the approval actions.
   const approvalOpen = data.approval !== null;
   useEffect(() => {
-    if (!approvalOpen || data.identity !== null) return;
+    if (isReadOnly(viewRef.current) || !approvalOpen || data.identity !== null) return;
     let cancelled = false;
     void readApprover(workspace, gitExec).then((identity) => {
       if (cancelled) return;
@@ -833,92 +888,90 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
   return <Frame viewModel={view} glyphs={glyphs} depth={depth} />;
 }
 
-interface PlaceholderProps {
-  readonly workspace: string | null;
-  readonly replay: string | undefined;
-  readonly once: boolean;
+export interface ReplayViewOptions {
+  readonly now: number;
+  readonly ascii: boolean;
+  readonly columns: number;
+  readonly rows: number;
 }
 
-function PlaceholderFrame({ workspace, replay, once }: PlaceholderProps): ReactElement {
-  const { exit } = useApp();
-  useEffect(() => {
-    // Defer past `waitUntilExit()`, which Ink registers only after render returns.
-    if (once) queueMicrotask(() => exit());
-  }, [exit, once]);
-  return <Text>{`loomwright tui — ${label({ workspace, replay })}`}</Text>;
-}
-
-function PlaceholderInteractive({ workspace, replay }: PlaceholderProps): ReactElement {
-  const { exit } = useApp();
-  useInput((input) => {
-    if (input === "q") exit();
-  });
-  return <Text>{`loomwright tui — ${label({ workspace, replay })} (press q to quit)`}</Text>;
-}
-
-/** Renders once into an in-memory stdout: the same tree, without a terminal. */
-async function renderOnce(options: TuiOptions): Promise<string> {
-  const chunks: string[] = [];
-  const stdout = {
+/** The same view-model the live entry builds, with the approval panel driven by the stream. */
+export function replayView(load: ReplayLoad, options: ReplayViewOptions): ViewModel {
+  const model = replayModel(load, options.now);
+  const glyphs = glyphsFor(options.ascii);
+  const input: ViewModelInput = {
+    source: "replay",
+    screen: "run",
     columns: options.columns,
     rows: options.rows,
-    isTTY: false,
-    write(chunk: string): boolean {
-      chunks.push(chunk);
-      return true;
-    },
-    on(): void {},
-    off(): void {},
+    now: options.now,
+    snapshot: model.snapshot,
+    facts: model.facts,
+    status: model.status,
+    runs: [model.run],
+    selectedRunId: model.run.id,
+    selectedTaskId: null,
+    panel: null,
+    notice: null,
   };
-  // shortcut: Ink only reads write/columns/rows/on/off/isTTY from the alternate stdout,
-  // cast to its NodeJS.WriteStream type; replace with a real stream if Ink starts using more.
-  const instance = render(
-    <PlaceholderFrame workspace={options.workspace} replay={options.replay} once />,
-    {
-      stdout: stdout as unknown as NodeJS.WriteStream,
-      stdin: { isTTY: false } as unknown as NodeJS.ReadStream,
-      patchConsole: false,
-      exitOnCtrlC: false,
-    },
-  );
-  await instance.waitUntilExit();
-  instance.unmount();
-  return chunks.join("");
-}
-
-async function runPlaceholder(options: TuiOptions): Promise<number> {
-  const session = createTerminalSession(process.stdin, process.stdout);
-  await runInSession({
-    session,
-    render: async () => {
-      const instance = render(
-        <PlaceholderInteractive
-          workspace={options.workspace}
-          replay={options.replay}
-          once={false}
-        />,
-        { stdout: process.stdout, stdin: process.stdin, patchConsole: false, exitOnCtrlC: false },
-      );
-      await instance.waitUntilExit();
-    },
+  const base = buildViewModel(input);
+  // The phase drives the overlay; an older stream without `approval.pending` still shows it.
+  if (base.run === null || model.snapshot.phase !== "awaiting-approval") return base;
+  const panel = approvalPanel({
+    run: base.run,
+    evidence: { identity: "", findings: 0, specCommit: null },
+    state: { kind: "idle" },
+    glyphs,
   });
-  return 0;
+  return buildViewModel({ ...input, panel: { ...panel, notice: "replay: read-only" } });
 }
 
-/** Opens the UI and resolves with the process exit code. */
-export async function runTui(options: TuiOptions): Promise<number> {
+interface ReplayProps {
+  readonly view: ViewModel;
+  readonly ascii: boolean;
+  readonly env: NodeJS.ProcessEnv | undefined;
+}
+
+function Replay({ view, ascii, env }: ReplayProps): ReactElement {
+  const { exit } = useApp();
+  const [notice, setNotice] = useState<string | null>(null);
+  const glyphs = useMemo(() => glyphsFor(ascii), [ascii]);
+  const current = useMemo(() => (notice === null ? view : { ...view, notice }), [view, notice]);
+  const currentRef = useRef(current);
+  currentRef.current = current;
+
+  useInput((input, key) => {
+    const outcome = replayKey(currentRef.current, input, key);
+    if (outcome.quit) {
+      exit();
+      return;
+    }
+    if (outcome.notice !== null) setNotice(outcome.notice);
+  });
+
+  return <Frame viewModel={current} glyphs={glyphs} depth={depthFor(env)} />;
+}
+
+async function runReplay(options: TerminalOptions, replay: string): Promise<number> {
+  const load = await readReplayFile(replay);
+  const view = replayView(load, {
+    now: Date.now(),
+    ascii: options.ascii,
+    columns: options.columns,
+    rows: options.rows,
+  });
   if (options.once) {
-    options.out(await renderOnce(options));
+    options.out(
+      await renderOnceFrame(view, {
+        ascii: options.ascii,
+        columns: options.columns,
+        rows: options.rows,
+      }),
+    );
     return 0;
   }
-  if (options.workspace === null) return runPlaceholder(options);
-  const workspace = options.workspace;
 
-  // Read-only: the run list must open without the install marker (`open` is for intake, 1.5).
-  const factory = await openReadOnly(workspace);
-  const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
-  const initial = initialData(options, status, runs);
-  const session = createTerminalSession(process.stdin, process.stdout);
+  const session = options.session ?? createTerminalSession(process.stdin, process.stdout);
   const offSignal = session.onSignal(() => {
     session.leave();
     process.exit(0);
@@ -927,11 +980,58 @@ export async function runTui(options: TuiOptions): Promise<number> {
     await runInSession({
       session,
       render: async () => {
+        const instance = render(<Replay view={view} ascii={options.ascii} env={options.env} />, {
+          stdout: process.stdout,
+          stdin: process.stdin,
+          patchConsole: false,
+          exitOnCtrlC: false,
+        });
+        await instance.waitUntilExit();
+      },
+    });
+  } finally {
+    offSignal();
+  }
+  return 0;
+}
+
+/** Opens the UI and resolves with the process exit code. */
+export async function runTui(options: TuiOptions): Promise<number> {
+  const terminal: TerminalOptions = {
+    ...options,
+    columns: options.columns ?? 80,
+    rows: options.rows ?? 24,
+  };
+  if (options.replay !== undefined) return runReplay(terminal, options.replay);
+  if (options.once) throw new Error("tui: --once needs --replay");
+  if (options.workspace === null) throw new Error("tui: a workspace or --replay is required");
+  const workspace = options.workspace;
+
+  // Read-only: the run list must open without the install marker (`open` is for intake, 1.5).
+  const factory = options.factory ?? (await openReadOnly(workspace));
+  const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
+  const initial = initialData(terminal, status, runs);
+  const session = options.session ?? createTerminalSession(process.stdin, process.stdout);
+  const offSignal = session.onSignal(() => {
+    session.leave();
+    process.exit(0);
+  });
+  const signal = options.io?.signal;
+  const onAbort = (): void => {
+    session.leave();
+    process.exit(0);
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+  try {
+    await runInSession({
+      session,
+      render: async () => {
         const instance = render(
           <Interactive
-            options={options}
+            options={terminal}
             workspace={workspace}
             factory={factory}
+            launcher={options.launcher ?? createLauncher({ workspace })}
             initial={initial}
           />,
           {
@@ -945,6 +1045,7 @@ export async function runTui(options: TuiOptions): Promise<number> {
       },
     });
   } finally {
+    signal?.removeEventListener("abort", onAbort);
     offSignal();
   }
   return 0;

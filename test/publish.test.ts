@@ -351,8 +351,9 @@ describe("published package", () => {
       { cwd: dir, encoding: "utf8", timeout: 60_000 },
     );
     expect(run.status).toBe(0);
-    expect(run.stdout).toContain("loomwright tui");
-    expect(run.stdout).toContain("replay:");
-    expect(run.stdout).toContain("approval-gate.jsonl");
+    expect(run.stdout).toContain("add-health");
+    expect(run.stdout).toContain("Approval");
+    expect(run.stdout).toContain("replay: read-only");
+    expect(run.stdout).not.toContain("\u001b[");
   });
 });
