@@ -316,14 +316,22 @@ async function watchStatus(
   let first = true;
   let last = 0;
   let pending: ReturnType<typeof setTimeout> | undefined;
+  let failure: unknown;
   const frame = (): void => {
     if (pending !== undefined) {
       clearTimeout(pending);
       pending = undefined;
     }
     last = Date.now();
-    watchFrame(io, root, positionals, first);
-    first = false;
+    try {
+      watchFrame(io, root, positionals, first);
+      first = false;
+    } catch (err: unknown) {
+      // A timer-driven frame has no awaiting caller (a landed change removes the run file), so
+      // stop the watch here and rethrow from the awaited scope for the usual clean report.
+      failure = err;
+      controller.abort();
+    }
   };
   // Bursts are coalesced, but the trailing event still gets a frame instead of waiting for the
   // heartbeat: that is what makes a new event render "without waiting for the interval".
@@ -356,6 +364,7 @@ async function watchStatus(
     controller.abort();
     io.signal?.removeEventListener("abort", onAbort);
   }
+  if (failure !== undefined) throw failure;
 }
 
 export const abortCommand: Command = {

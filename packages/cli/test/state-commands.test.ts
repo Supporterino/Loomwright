@@ -7,7 +7,7 @@ import { RunEvent } from "@loomwright/core/events/protocol";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { open } from "@loomwright/core/factory";
 import { claimActive, enqueue, readActive, readQueue } from "@loomwright/core/state/active";
-import { loadRun, newRun, saveRun, TaskState } from "@loomwright/core/state/run";
+import { loadRun, newRun, runFile, saveRun, TaskState } from "@loomwright/core/state/run";
 import { FACTORY_VERSION } from "@loomwright/core/version";
 import { createSingleRepoFixture, type Fixture } from "../../../test/fixtures/workspaces.ts";
 import { cli } from "../../../test/helpers.ts";
@@ -166,6 +166,25 @@ describe("status, retry and abort", () => {
       controller.abort();
     }
     expect(await pending).toBe(ExitCode.Ok);
+  }, 30_000);
+
+  test("a status --watch whose run file is removed exits cleanly", async () => {
+    const log = eventLogPath(fx.root, "add-x");
+    mkdirSync(dirname(log), { recursive: true });
+    writeFileSync(log, `${heartbeat(1)}\n`);
+    const out: string[] = [];
+    const err: string[] = [];
+    const pending = runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
+      cwd: fx.root,
+      out: (line) => out.push(line),
+      err: (line) => err.push(line),
+      signal: AbortSignal.timeout(20_000),
+    });
+    await waitFor(() => out.some((line) => line.startsWith("updated ")));
+    rmSync(runFile(fx.root, "add-x"));
+    expect(await pending).toBe(ExitCode.Precondition);
+    expect(err.join("\n")).toContain("no change add-x in this workspace");
+    expect(err.join("\n")).not.toContain("internal error");
   }, 30_000);
 
   test("the frame format is unchanged", async () => {
