@@ -7,6 +7,7 @@ Status: approved 2026-10-23. Slices 1–13 done. Inputs: [research/tooling.md](r
 | Module                                                        | Responsibility                                                                                                               |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `packages/cli/src/`                                           | Command parsing (one file per command), `--json`, exit codes                                                                 |
+| `packages/tui/src/`                                           | Terminal UI: run list, run view, intake, approval overlay, questions; Ink, no engine imports                                 |
 | `packages/core/src/exec.ts`                                   | The single shell-out wrapper: timeout, captured output, env presets (OpenSpec/Graphify quiet env, agent git env)             |
 | `packages/core/src/config/`                                   | zod schema, JSONC read and comment-preserving edit (`jsonc-parser`), `migrations/NNN-*.ts`                                   |
 | `packages/core/src/detect/`                                   | Layout, languages per repo/sub-path, contract proposals, diff against config                                                 |

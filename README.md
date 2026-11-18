@@ -149,6 +149,30 @@ loomwright quick "fix the login typo" --repo frontend   # add --agent <id> for a
 
 `refine` asks a few questions before any model work starts. During `run`, the intake orchestrator and architect may raise questions; the CLI asks them in the terminal and records the Q&A in the change. Pass `--no-interactive` to record without asking. Spec approval is still the only hard gate. `quick` is the no-OpenSpec path: it creates a `task/<slug>` branch, implements, runs the gates, runs one review pass, and makes one local commit. It never pushes.
 
+## Watching and driving from the terminal
+
+```bash
+loomwright tui
+```
+
+The terminal UI reads the run state and the event stream and shows every change in one place: the
+run list (newest first, with phase, role, tokens, cost and elapsed time) and, on `Enter`, the task
+graph, each task's role, model, retries, gates and activity. At 100 columns and wider it uses two
+panes; below that, one pane with drill-down.
+- `n` starts a change: type the request, `Ctrl-J` for a newline, or `Tab` to pick a request file with
+  a preview. It launches `loomwright run` as a detached child and shows the spawn log.
+- At `awaiting-approval` the overlay offers `a` approve and run, `A` approve only, `w` reword (when
+  the run has spec findings) and `R` reapprove (after an approval). It needs `git user.email`; `Esc`
+  cancels.
+- `Q` opens the questions pane. A recorded answer reads "recorded — applies at the next step" until
+  the run emits `question.answered`, and only then "answered"; the UI never claims it was applied.
+- `r` resumes, `x` aborts and `t` retries a failed task; `?` is help and `q` quits.
+- `loomwright tui --replay <file>` replays a recorded stream read-only; `--once` prints one frame and
+  is what CI smoke-tests.
+
+Every action is a detached CLI child, so closing the UI never stops a run. Keys, screens, flags and
+accessibility: [docs/tui.md](docs/tui.md).
+
 ## Configuration reference
 
 `factory.config.jsonc` (JSONC, validated on every command; the editor schema is `.opencode/schemas/factory.config.schema.json`):

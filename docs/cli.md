@@ -243,6 +243,18 @@ Prints a change's stored event stream from `.factory/events/<id>.jsonl` as JSONL
 - `--from <n>` starts at sequence number `n` (inclusive, default 1).
 - Exit codes: 0 ok, 2 for a non-integer or non-positive `--from`, 4 for an unknown change (no run state and no event log). An empty stream prints nothing and exits 0. A landed change keeps its event log, so its stream stays replayable after `land`.
 
+## tui
+
+```
+loomwright tui [--replay <file>] [--once] [--ascii]
+```
+
+Opens the terminal UI: the run list, the run view with its task graph and detail, intake, the approval overlay and the questions pane. It reads the run state and the event stream and launches every action as a detached CLI child, so quitting it never stops a run. `-C` selects the workspace.
+
+`--replay <file>` renders a recorded JSONL event stream instead of a workspace and is read-only: no write action, no status poll, no child. `--once` renders exactly one frame, prints it without cursor control and exits; it requires `--replay` and is what CI smoke-tests. `--ascii` forces the ASCII glyph set. The command needs a terminal: without a TTY and without `--replay` it prints the `status --watch` / `events --follow` hint and exits 1. Exit codes: 0 ok, 1 no TTY, 2 invalid flags or an unreadable replay file.
+
+See [docs/tui.md](tui.md) for the keys and the screens.
+
 ## usage
 
 ```

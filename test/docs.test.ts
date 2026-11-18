@@ -376,3 +376,89 @@ describe("compatibility surface", () => {
     expect(config).toContain("ADR-0041");
   });
 });
+
+describe("terminal UI documentation", () => {
+  test("the docs cover the UI", () => {
+    const tui = read("docs/tui.md");
+    for (const heading of [
+      "# The terminal UI",
+      "## The run list",
+      "## The run view",
+      "## Layout",
+      "## Keys",
+      "## Starting a change",
+      "## Approving",
+      "## Questions and answers",
+      "## Flags",
+      "## Accessibility",
+      "## Replay",
+    ])
+      expect(tui).toContain(heading);
+    expect(tui).toContain("recorded — applies at the next step");
+
+    const readme = read("README.md");
+    expect(readme).toContain("## Watching and driving from the terminal");
+    expect(readme).toContain("loomwright tui");
+    expect(readme).toContain("recorded — applies at the next step");
+    expect(readme).toContain("docs/tui.md");
+
+    const cli = read("docs/cli.md");
+    expect(cli).toContain("## tui");
+    expect(cli).toContain("loomwright tui [--replay <file>] [--once] [--ascii]");
+    expect(cli).toContain("status --watch");
+    expect(cli).toContain("events --follow");
+    expect(cli).toContain("docs/tui.md");
+  });
+
+  test("the ADR is valid and indexed", () => {
+    const adr = read("docs/decisions/0047-tui.md");
+    expect(adr.startsWith("# 0047 — ")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).toContain("Ink **6.4.0**");
+    expect(adr).toContain("React **19.3.1**");
+    expect(adr).toContain("approval.pending");
+    expect(adr).toContain("--replay");
+    expect(adr).not.toContain("Loomwright");
+    expect(read("docs/decisions/README.md")).toContain("| [0047](0047-tui.md)");
+  });
+
+  test("the keys are documented", () => {
+    const tui = read("docs/tui.md");
+    const hints: ReadonlyArray<readonly [key: string, label: string]> = [
+      ["n", "new change"],
+      ["Tab", "file mode"],
+      ["Tab", "text mode"],
+      ["a", "approve and run"],
+      ["A", "approve only"],
+      ["w", "reword"],
+      ["R", "reapprove"],
+      ["r", "resume"],
+      ["x", "abort"],
+      ["t", "retry task"],
+      ["Q", "questions"],
+      ["?", "help"],
+      ["q", "quit"],
+    ];
+    for (const [key] of hints) expect(tui).toContain(`\`${key}\``);
+
+    // The footer is built from these pure hints, so checking them covers the rendered footer.
+    const sources = [
+      read("packages/tui/src/model/view-model.ts"),
+      read("packages/tui/src/intake/dialog.tsx"),
+      read("packages/tui/src/approval/overlay.ts"),
+    ].join("\n");
+    for (const [key, label] of hints) expect(sources).toContain(`keyHint("${key}", "${label}")`);
+
+    // The honest answer wording is shared with the questions pane.
+    expect(read("packages/tui/src/strings.ts")).toContain("recorded — applies at the next step");
+    expect(tui).toContain("never claims the answer was applied");
+  });
+
+  test("the report lists the follow-ups", () => {
+    const tui = read("docs/tui.md").toLowerCase();
+    for (const followUp of ["web ui", "daemon", "remote nodes", "mouse", "themes", "pause"])
+      expect(tui).toContain(followUp);
+  });
+});
