@@ -21,6 +21,9 @@ export async function approve(p: Pipeline, id: string): Promise<Approval> {
   let run = p.run(id);
   assertApprovable(id, run);
   p.bindRun(id);
+  // An adopted change has no log (approve is its first event): open the stream with the
+  // phase it starts approval from, like `drive` does for a logless run.
+  if (p.events.lastSeq === 0) p.emit("run.started", { phase: p.run(id).phase });
   // An adopted change has no branch yet: create it (or its draft worktree) before validating
   // and committing the spec, so the normal branch check below applies to it too (ADR-0038).
   if (run.branches["."] === undefined) {

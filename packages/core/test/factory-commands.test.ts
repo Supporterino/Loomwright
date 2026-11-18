@@ -14,6 +14,7 @@ import {
   createSingleRepoFixture,
   type Fixture,
   fixtureGit,
+  writeFiles,
 } from "../../../test/fixtures/workspaces.ts";
 import { cli } from "../../../test/helpers.ts";
 import { readApproval, specHash } from "../src/approval/approval.ts";
@@ -198,6 +199,36 @@ describe("Factory commands", () => {
       if (!(err instanceof PreconditionError)) throw err;
       expect(err.message).toBe(`the spec of ${ID} changed after approval`);
     }
+  });
+
+  test("an adopted change approved without a log starts at seq 1 with run.started", async () => {
+    const dir = `openspec/changes/${ID}`;
+    writeFiles(fx.root, {
+      [`${dir}/.openspec.yaml`]: "schema: spec-driven\n",
+      [`${dir}/proposal.md`]:
+        "## Why\nExisting teams already use OpenSpec and want the factory to finish their changes.\n\n## What Changes\n- Add the endpoint\n",
+      [`${dir}/design.md`]:
+        "## Context\nSmall change.\n\n## Decisions\n- Reuse the existing server.\n",
+      [`${dir}/specs/health/spec.md`]:
+        "## ADDED Requirements\n\n### Requirement: Health endpoint\nThe service SHALL expose GET /health.\n\n#### Scenario: Healthy\n- **WHEN** a client calls GET /health\n- **THEN** the response is 200\n",
+      [`${dir}/tasks.md`]:
+        "## 1. app\n\n- [ ] 1.1 Add the endpoint\n  - repo: app\n  - deps: none\n  - touches: src/**\n",
+    });
+    await fixtureGit(fx.root, "add", "-A");
+    await fixtureGit(fx.root, "commit", "-q", "-m", `docs(spec): ${ID}`);
+    expect((await cli(fx.root, "adopt", ID)).code).toBe(0);
+    expect(existsSync(join(fx.root, ".factory", "events", `${ID}.jsonl`))).toBe(false);
+
+    const h = await harness(script());
+    await h.factory.approve(ID, { continue: false });
+
+    const events = readEvents(fx.root, ID).events;
+    expect(events[0]?.type).toBe("run.started");
+    expect(events[0]?.seq).toBe(1);
+    expect(events[0]?.data).toMatchObject({ phase: "awaiting-approval" });
+    const snapshot = reduce(events);
+    expect(snapshot.phase).toBe("queued");
+    expect(snapshot.lastSeq).toBe(events.length);
   });
 
   test("a second driver is rejected", async () => {
