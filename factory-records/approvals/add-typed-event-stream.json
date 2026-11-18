@@ -1,0 +1,21 @@
+{
+  "changeId": "add-typed-event-stream",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "a46c2edb8f98edd88d0a2e02c23519f0ce45cc53",
+  "hash": "eb8e7999bdc3e26f2a6abe95915cba6b3dd0c09144e90bbda895b5e1abb0ac86",
+  "approvedAt": "2026-11-17T16:37:59.713Z",
+  "history": [
+    {
+      "hash": "6dc2aea652d8954d27e6f99a0279a7d3e80cff8ef0599df3119754d16a78d00a",
+      "specCommit": "e1a7d8ea926bc24f9913a13bf55113a8d2b5a412",
+      "at": "2026-11-17T09:22:31.037Z",
+      "reason": "manual re-approval"
+    },
+    {
+      "hash": "67ad97d7c79b268477f8712019bfb3d8feee2a901841957ddc7501b12d19dfe2",
+      "specCommit": "6cb116da85778fcedf0f85776cd83268dbb084c0",
+      "at": "2026-11-17T14:52:40.279Z",
+      "reason": "manual re-approval"
+    }
+  ]
+}
