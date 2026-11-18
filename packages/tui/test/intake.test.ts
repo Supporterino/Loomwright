@@ -92,7 +92,6 @@ function context(cwd: string, overrides: Partial<IntakeContext> = {}): IntakeCon
     cwd,
     workspace: cwd,
     status: status(),
-    openError: null,
     ...overrides,
   };
 }
@@ -297,22 +296,23 @@ describe("an active change is called out", () => {
 });
 
 describe("the workspace is not installed", () => {
-  test("the message and init hint stay inline and the dialog keeps running", () => {
+  test("the message and init hint stay inline, and a later Enter retries after init", () => {
     const ws = workspace();
-    const ctx = context(ws, { openError: "loomwright is not installed here" });
-    const outcome = intakeKeys(
-      typeText("add a health endpoint", ctx),
-      "",
-      key({ return: true }),
-      ctx,
-    );
+    const ctx = context(ws);
+    // entry.tsx writes Factory.open's rejection into the dialog state and leaves the dialog open.
+    const rejected: IntakeState = {
+      ...typeText("add a health endpoint", ctx),
+      error: "loomwright is not installed here — run `loomwright init`",
+    };
+    expect(panelText(rejected)).toContain("loomwright is not installed here");
+    expect(panelText(rejected)).toContain("loomwright init");
 
-    expect(outcome.submit).toBeUndefined();
-    expect(outcome.state.error).toContain("loomwright is not installed here");
-    expect(outcome.state.error).toContain("loomwright init");
-    expect(panelText(outcome.state)).toContain("loomwright is not installed here");
+    // Once init has run the same Enter reaches the launcher instead of repeating the stale message.
+    const retry = intakeKeys(rejected, "", key({ return: true }), ctx);
+    expect(retry.submit).toEqual({ kind: "run-text", text: "add a health endpoint" });
+    expect(retry.state.error).toBeNull();
 
-    const toggled = intakeKeys(outcome.state, "", key({ tab: true }), ctx);
+    const toggled = intakeKeys(rejected, "", key({ tab: true }), ctx);
     expect(toggled.state.mode).toBe("file");
   });
 });

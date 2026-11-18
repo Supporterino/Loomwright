@@ -370,7 +370,6 @@ function Interactive({
 }: InteractiveProps): ReactElement {
   const { exit } = useApp();
   const [data, setData] = useState<UiData>(initial);
-  const [openError, setOpenError] = useState<string | null>(null);
   const view = useMemo(() => viewOf(data, glyphs), [data, glyphs]);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -487,7 +486,6 @@ function Interactive({
           await open(workspace);
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
-          setOpenError(message);
           setData((current) =>
             current.intake === null
               ? current
@@ -785,7 +783,6 @@ function Interactive({
         cwd: workspace,
         workspace,
         status: state.status,
-        openError,
       });
       setData((current) => ({ ...current, intake: outcome.state }));
       if (outcome.submit !== undefined) submitAction(outcome.submit);

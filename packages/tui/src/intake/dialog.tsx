@@ -33,7 +33,6 @@ export interface IntakeContext {
   readonly cwd: string;
   readonly workspace: string;
   readonly status: StatusDocument;
-  readonly openError: string | null;
 }
 
 export const initialIntake: IntakeState = {
@@ -94,11 +93,8 @@ function removeLast(state: IntakeState, ctx: IntakeContext): IntakeState {
 
 function submit(state: IntakeState, ctx: IntakeContext): IntakeOutcome {
   if (state.submitting) return { state };
-  if (ctx.openError !== null) {
-    return {
-      state: { ...state, error: `${ctx.openError} — run \`loomwright init\`` },
-    };
-  }
+  // Factory.open is the only check; entry.tsx writes its rejection into the state, so a later
+  // Enter retries and succeeds once `loomwright init` has run.
   const queuedNote = ctx.status.active === null ? state.queuedNote : QUEUED_NOTE;
   if (state.mode === "text") {
     if (state.text.trim() === "") {
