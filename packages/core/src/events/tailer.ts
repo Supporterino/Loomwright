@@ -38,20 +38,17 @@ const NEWLINE = 0x0a;
 const DEFAULT_POLL_MS = 250;
 
 interface Cursor {
-  /** Bytes read from disk; the start of the next chunk. */
-  offset: number;
+  /** Bytes up to and including the last newline consumed; the start of the next chunk. */
+  completeOffset: number;
   ino: number | undefined;
-  /** Bytes after the last newline, never re-read from disk. */
-  remainder: Buffer;
 }
 
 const isMissingFile = (err: unknown): boolean =>
   typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT";
 
 const reset = (cursor: Cursor): void => {
-  cursor.offset = 0;
+  cursor.completeOffset = 0;
   cursor.ino = undefined;
-  cursor.remainder = Buffer.alloc(0);
 };
 
 function parseLine(line: string): StoredItem | undefined {
@@ -78,8 +75,12 @@ function parseLine(line: string): StoredItem | undefined {
 }
 
 /**
- * Reads only the bytes appended since the cursor, carrying the unfinished tail over. A smaller
- * file or a different inode means the log was rewritten, so the cursor restarts at byte 0.
+ * Reads the lines finished since the last newline the cursor consumed. A smaller file or a different
+ * inode means the log was rewritten, so the cursor restarts at byte 0. The unfinished tail is not
+ * carried across polls: every read starts at the line the cursor is still inside, so a tail a
+ * restart truncates and rewrites is parsed again instead of being glued to the bytes that follow it.
+ * shortcut: a rewrite that leaves the file longer than `completeOffset` while changing bytes already
+ * consumed is still read blindly, add a content or mtime check when writers can rewrite history.
  */
 function readAppended(path: string, cursor: Cursor): StoredItem[] {
   let fd: number;
@@ -93,32 +94,27 @@ function readAppended(path: string, cursor: Cursor): StoredItem[] {
   try {
     const stat = fstatSync(fd);
     if (cursor.ino !== undefined && cursor.ino !== stat.ino) reset(cursor);
-    if (stat.size < cursor.offset) reset(cursor);
+    if (stat.size < cursor.completeOffset) reset(cursor);
     cursor.ino = stat.ino;
-    const length = stat.size - cursor.offset;
+    const length = stat.size - cursor.completeOffset;
     if (length === 0) return [];
     chunk = Buffer.allocUnsafe(length);
     let read = 0;
     while (read < length) {
-      const bytes = readSync(fd, chunk, read, length - read, cursor.offset + read);
+      const bytes = readSync(fd, chunk, read, length - read, cursor.completeOffset + read);
       if (bytes === 0) break;
       read += bytes;
     }
     chunk = chunk.subarray(0, read);
-    cursor.offset += read;
   } finally {
     closeSync(fd);
   }
 
-  const buffer = Buffer.concat([cursor.remainder, chunk]);
-  const end = buffer.lastIndexOf(NEWLINE);
-  if (end === -1) {
-    cursor.remainder = buffer;
-    return [];
-  }
-  cursor.remainder = buffer.subarray(end + 1);
+  const end = chunk.lastIndexOf(NEWLINE);
+  if (end === -1) return [];
+  cursor.completeOffset += end + 1;
   const items: StoredItem[] = [];
-  for (const line of buffer.subarray(0, end).toString("utf8").split("\n")) {
+  for (const line of chunk.subarray(0, end).toString("utf8").split("\n")) {
     const parsed = parseLine(line);
     if (parsed !== undefined) items.push(parsed);
   }
@@ -144,7 +140,7 @@ export async function* tailEvents(
   // Abort can arrive between yields; a helper keeps TS from narrowing the property to false.
   const aborted = (): boolean => signal?.aborted === true;
   const path = eventLogPath(root, runId);
-  const cursor: Cursor = { offset: 0, ino: undefined, remainder: Buffer.alloc(0) };
+  const cursor: Cursor = { completeOffset: 0, ino: undefined };
   let lastSeq = fromSeq - 1;
 
   let dirty = false;

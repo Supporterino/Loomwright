@@ -6,6 +6,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  truncateSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -331,6 +332,48 @@ describe("events tailer", () => {
       appendFileSync(path, `${fourth.slice(-1)}\n`);
 
       expect(seqOf(await cursor.next())).toBe(4);
+    } finally {
+      controller.abort();
+      await close();
+    }
+  });
+
+  test("after a crash a truncated-and-rewritten tail is re-parsed, not merged into the next line", async () => {
+    const root = makeRoot();
+    const path = writeLog(root, [
+      line(1, "heartbeat", { text: "one" }),
+      line(2, "heartbeat", { text: "two" }),
+    ]);
+    const complete = statSync(path).size;
+    const controller = new AbortController();
+    const { cursor, close } = startTail(root, {
+      signal: controller.signal,
+      useWatch: false,
+      pollMs: 10,
+    });
+
+    try {
+      expect(seqOf(await cursor.next())).toBe(1);
+      expect(seqOf(await cursor.next())).toBe(2);
+
+      // A crash leaves half a line behind; the follower reads it but cannot parse it.
+      const partial = '{"v":1,"runId":"add-health","seq":3,"marker":"crash';
+      appendFileSync(path, partial);
+      // Hold a pending read open so the follower consumes the partial before the rewrite.
+      const pending = cursor.next();
+      await Bun.sleep(50);
+
+      // The next bind truncates that tail in place and writes a line at least as long as the
+      // discarded partial, so the file never shrinks below what the follower already read.
+      truncateSync(path, complete);
+      const third = line(3, "heartbeat", { text: "three" });
+      expect(third.length).toBeGreaterThanOrEqual(partial.length);
+      appendLine(path, third);
+
+      const item = await pending;
+      if (item.kind !== "event") throw new Error(`expected an event, got ${item.kind}`);
+      expect(item.text).toBe(third);
+      expect(item.event.seq).toBe(3);
     } finally {
       controller.abort();
       await close();
