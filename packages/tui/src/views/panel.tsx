@@ -16,6 +16,8 @@ export function PanelBox({ panel, glyphs, depth }: PanelBoxProps): ReactElement 
   // Coral belongs to the approval gate alone; every other panel is lilac.
   const token = panel.kind === "approval" ? "approval" : "focus";
   const borderColor = inkColor(token, depth);
+  // Lines repeat (blank preview rows, log tails), so a key pairs each line with its occurrence.
+  const occurrences = new Map<string, number>();
   return (
     <Box
       flexDirection="column"
@@ -26,11 +28,15 @@ export function PanelBox({ panel, glyphs, depth }: PanelBoxProps): ReactElement 
       <Text bold {...colorProps(token, depth)}>
         {panel.title}
       </Text>
-      {panel.lines.map((line) => (
-        <Text key={line} wrap="truncate">
-          {line}
-        </Text>
-      ))}
+      {panel.lines.map((line) => {
+        const count = (occurrences.get(line) ?? 0) + 1;
+        occurrences.set(line, count);
+        return (
+          <Text key={`${line}#${count}`} wrap="truncate">
+            {line}
+          </Text>
+        );
+      })}
       {panel.notice === null ? null : (
         <Text {...colorProps("muted", depth)} wrap="truncate">
           {panel.notice}

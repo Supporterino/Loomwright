@@ -373,6 +373,35 @@ describe("frame rendering", () => {
   });
 });
 
+describe("panel keys", () => {
+  test("repeated panel lines get unique keys and render without a React warning", async () => {
+    const view = buildViewModel(
+      vmInput({
+        panel: {
+          kind: "confirm",
+          title: "Confirm",
+          lines: ["", "", "same row", "same row"],
+          keys: [],
+          notice: null,
+        },
+      }),
+    );
+    const warnings: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      warnings.push(args.map((arg) => String(arg)).join(" "));
+    };
+    let text: string;
+    try {
+      text = await frame(view, 80, 24, true);
+    } finally {
+      console.error = original;
+    }
+    expect(text).toContain("same row");
+    expect(warnings.filter((warning) => warning.includes("same key"))).toEqual([]);
+  });
+});
+
 describe("the terminal session", () => {
   test("a crash restores the terminal", () => {
     const writes: string[] = [];
