@@ -158,8 +158,13 @@ turn's `usage`, so the heartbeat line keeps its token count and reaches the stre
 
 | Event                | Payload                              |
 | -------------------- | ------------------------------------ |
+| `approval.pending`   | `{ specHash, changeDir }`            |
 | `approval.requested` | `{ specHash, specCommit }`           |
 | `approval.granted`   | `{ approver, specHash, specCommit }` |
+
+`approval.pending` is emitted by design when it sets the phase to `awaiting-approval`; it carries
+no commit and no approver. `approval.requested` and `approval.granted` stay the only source for
+those.
 
 ### usage.delta
 
@@ -288,8 +293,10 @@ and continues with the rest rather than failing the stream.
 `RunSnapshot` (from `packages/protocol/src/snapshot.ts`) is a projection of the stream, not a
 mirror of `.factory/runs/<id>.json`. Replaying every event rebuilds exactly these fields:
 `phase`, `pausedReason`, `abortRequested`, `branches`, each task's `status` and `attempt`,
-`questions`, `approval`, and `usage` (which must equal the `.factory/usage/<id>.json` ledger,
-not the sum of `agent.finished.usage`). A parity check compares those fields at checkpoints.
+`questions`, `approval`, `pendingApproval` (cleared by `approval.granted`), and `usage` (which
+must equal the `.factory/usage/<id>.json` ledger, not the sum of `agent.finished.usage`). A
+parity check compares those fields at checkpoints, except `pendingApproval`: the run file has no
+equivalent for it.
 
 Handoffs, context-pack paths and review bookkeeping are not replayable: the run file also keeps
 `draft`, `serialOwner`, `graphSeq`, `reviewed`, `reReview`, `specFindings`, pointer and archive

@@ -27,6 +27,7 @@ test("the initial snapshot is empty", () => {
     tasks: {},
     questions: [],
     approval: null,
+    pendingApproval: null,
     usage: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
     gates: {},
   });
@@ -183,6 +184,48 @@ test("approval events record hash, commit and approver", () => {
     }),
   ]);
   expect(granted.approval).toEqual({ specHash: "hash", specCommit: "commit", approver: "lars" });
+});
+
+test("reduce exposes the pending gate: approval.pending sets it and approval.granted clears it", () => {
+  const pending = reduce([
+    started(),
+    transition(2, "approval.pending", {
+      specHash: "hash",
+      changeDir: "openspec/changes/add-health",
+    }),
+  ]);
+  expect(pending.pendingApproval).toEqual({
+    specHash: "hash",
+    changeDir: "openspec/changes/add-health",
+  });
+  expect(pending.approval).toBeNull();
+  const granted = reduce([
+    started(),
+    transition(2, "approval.pending", {
+      specHash: "hash",
+      changeDir: "openspec/changes/add-health",
+    }),
+    transition(3, "approval.granted", {
+      approver: "lars",
+      specHash: "hash",
+      specCommit: "commit",
+    }),
+  ]);
+  expect(granted.pendingApproval).toBeNull();
+  expect(granted.approval).toEqual({ specHash: "hash", specCommit: "commit", approver: "lars" });
+});
+
+test("the event is additive: a stream without approval.pending leaves pendingApproval null", () => {
+  const snapshot = reduce([
+    started(),
+    transition(2, "phase.changed", { from: "design", to: "awaiting-approval" }),
+    transition(3, "approval.granted", {
+      approver: "lars",
+      specHash: "hash",
+      specCommit: "commit",
+    }),
+  ]);
+  expect(snapshot.pendingApproval).toBeNull();
 });
 
 test("gate.finished upserts the last gate result", () => {

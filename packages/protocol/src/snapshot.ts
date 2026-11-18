@@ -24,6 +24,7 @@ export interface RunSnapshot {
     answer?: string;
   }[];
   approval: { specHash: string; specCommit: string; approver: string } | null;
+  pendingApproval: { specHash: string; changeDir: string } | null;
   usage: Usage;
   gates: Record<string, { status: string; durationMs: number }>;
 }
@@ -50,6 +51,7 @@ export function emptySnapshot(runId: string): RunSnapshot {
     tasks: {},
     questions: [],
     approval: null,
+    pendingApproval: null,
     usage: { ...ZERO_USAGE },
     gates: {},
   };
@@ -199,6 +201,9 @@ export function reduce(events: readonly RunEvent[]): RunSnapshot {
         else snapshot.questions[index] = record;
         break;
       }
+      case "approval.pending":
+        snapshot.pendingApproval = { ...event.data };
+        break;
       case "approval.requested":
         snapshot.approval = {
           specHash: event.data.specHash,
@@ -207,6 +212,7 @@ export function reduce(events: readonly RunEvent[]): RunSnapshot {
         };
         break;
       case "approval.granted":
+        snapshot.pendingApproval = null;
         snapshot.approval = {
           specHash: event.data.specHash,
           specCommit: event.data.specCommit,

@@ -39,6 +39,7 @@
     "specCommit": "<sha>",
     "approver": "fixture@example.com"
   },
+  "pendingApproval": null,
   "usage": {
     "input": 0,
     "output": 0,

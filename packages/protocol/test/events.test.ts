@@ -107,6 +107,7 @@ describe("event families", () => {
       "install.failed",
       "question.raised",
       "question.answered",
+      "approval.pending",
       "approval.requested",
       "approval.granted",
       "usage.delta",
@@ -134,6 +135,19 @@ describe("event families", () => {
       const event = { ...base(1), type: "progress.line", data: { level, text: "note" } };
       expect(RunEvent.safeParse(event).success).toBe(true);
     }
+  });
+
+  test("the event is additive: approval.pending validates with the hash and change dir", () => {
+    const event = {
+      ...base(1),
+      type: "approval.pending",
+      data: { specHash: "a".repeat(64), changeDir: "openspec/changes/add-health" },
+    };
+    const parsed = RunEvent.safeParse(event);
+    expect(parsed.success).toBe(true);
+    expect(RunEvent.safeParse({ ...event, v: PROTOCOL_VERSION }).success).toBe(true);
+    const { changeDir: _changeDir, ...missingChangeDir } = event.data;
+    expect(RunEvent.safeParse({ ...event, data: missingChangeDir }).success).toBe(false);
   });
 });
 

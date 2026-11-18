@@ -454,6 +454,8 @@ describe("reducer parity", () => {
           tasks: reduced.tasks,
           questions: reduced.questions,
           approval: reduced.approval,
+          // `pendingApproval` is not part of the projection, so the checkpoint cannot carry it.
+          pendingApproval: null,
           usage: ZERO_USAGE,
           gates: {},
         };
