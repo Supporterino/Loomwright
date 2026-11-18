@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   actionArgs,
   createLauncher,
@@ -218,5 +219,25 @@ describe("no signal is sent on exit", () => {
     expect(child.kills).toBe(0);
     expect(child.alive).toBe(true);
     expect("wait" in child).toBe(false);
+  });
+
+  test("no source file ever signals, kills or waits on a child", () => {
+    const packageSrc = fileURLToPath(new URL("../src", import.meta.url));
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) files.push(full);
+      }
+    };
+    walk(packageSrc);
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      expect(text, file).not.toMatch(/\.kill\s*\(/);
+      expect(text, file).not.toMatch(/process\.kill\s*\(/);
+      expect(text, file).not.toMatch(/\bchild\.wait\s*\(/);
+    }
   });
 });

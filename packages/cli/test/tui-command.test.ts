@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { chmodSync, copyFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { createSingleRepoFixture, type Fixture } from "../../../test/fixtures/workspaces.ts";
@@ -65,6 +66,38 @@ describe("tui command", () => {
     expect(run.code).toBe(ExitCode.Usage);
     expect(run.err).toContain(".");
     expect(run.err).not.toContain("internal error");
+  });
+
+  // Known gap: the command rejects a missing or non-regular --replay path with exit 2 but lets
+  // EACCES escape to the generic error path, which exits 1. The test documents the spec's
+  // "unreadable" case and fails until the command maps it to a UsageError.
+  test.failing("bad flags are usage errors: an unreadable --replay path", async () => {
+    const path = join(fx.root, "unreadable.jsonl");
+    writeFileSync(path, '{"v":1}\n');
+    chmodSync(path, 0o000);
+    try {
+      const run = await cli(fx.root, "tui", "--replay", path);
+      expect(run.code).toBe(ExitCode.Usage);
+      expect(run.err).toContain(path);
+      expect(run.err).not.toContain("internal error");
+    } finally {
+      chmodSync(path, 0o644);
+    }
+  });
+
+  test("a relative --replay path resolves from -C", async () => {
+    copyFileSync(REPLAY_FIXTURE, join(fx.root, "approval-gate.jsonl"));
+    const run = await cli(
+      process.cwd(),
+      "-C",
+      fx.root,
+      "tui",
+      "--replay",
+      "approval-gate.jsonl",
+      "--once",
+    );
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(run.out).toContain("add-health");
   });
 
   test("a recorded replay renders one frame and exits 0", async () => {

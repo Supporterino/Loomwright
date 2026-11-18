@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { StatusDocument } from "@loomwright/core/factory";
 import type { ActiveLock } from "@loomwright/core/state/active";
+import { RunState } from "@loomwright/core/state/run";
 import {
   type IntakeContext,
   type IntakeState,
@@ -12,6 +13,7 @@ import {
   intakePanel,
   QUEUED_NOTE,
 } from "../src/intake/dialog.tsx";
+import { watchSpawn } from "../src/intake/follow.ts";
 import { checkRequestFile, completePath } from "../src/intake/paths.ts";
 import type { KeyInput } from "../src/model/keys.ts";
 import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
@@ -40,6 +42,49 @@ function key(overrides: Partial<KeyInput> = {}): KeyInput {
 
 function status(active: ActiveLock | null = null): StatusDocument {
   return { active, driverAlive: active !== null, queue: [], corrupt: [], runs: [] };
+}
+
+const ZERO_USAGE = {
+  input: 0,
+  output: 0,
+  reasoning: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  cost: 0,
+};
+
+function statusWithRun(id: string): StatusDocument {
+  const run = RunState.parse({
+    version: 1,
+    id,
+    factoryVersion: "0.0.0",
+    request: "add a health endpoint",
+    createdAt: ISO,
+    updatedAt: ISO,
+    phase: "design",
+    summary: "add a health endpoint",
+  });
+  return {
+    active: null,
+    driverAlive: false,
+    queue: [],
+    corrupt: [],
+    runs: [
+      {
+        ...run,
+        usage: {
+          total: ZERO_USAGE,
+          sessions: 0,
+          byAgent: {},
+          byStep: {},
+          byModel: {},
+          retryOverhead: ZERO_USAGE,
+          top: [],
+          wastedReads: 0,
+        },
+      },
+    ],
+  };
 }
 
 function context(cwd: string, overrides: Partial<IntakeContext> = {}): IntakeContext {
@@ -269,6 +314,36 @@ describe("the workspace is not installed", () => {
 
     const toggled = intakeKeys(outcome.state, "", key({ tab: true }), ctx);
     expect(toggled.state.mode).toBe("file");
+  });
+});
+
+describe("the spawn watch opens the run view", () => {
+  test("shows the spawn log tail until run.started appears, then reports the new run", () => {
+    const logPath = join("/ws", ".factory", "logs", "tui-spawn-x.log");
+    let reads = 0;
+    const readTail = (path: string): readonly string[] => {
+      reads += 1;
+      expect(path).toBe(logPath);
+      return ["run submitted", "waiting for the driver"];
+    };
+
+    const before = watchSpawn(new Set<string>(), status(), logPath, readTail);
+    expect(before.started).toBeNull();
+    expect(before.tail).toEqual(["run submitted", "waiting for the driver"]);
+    expect(reads).toBe(1);
+
+    const after = watchSpawn(new Set<string>(), statusWithRun("add-health-2"), logPath, readTail);
+    expect(after.started).toBe("add-health-2");
+    expect(after.tail).toEqual([]);
+    // Once the run exists the dialog is about to close, so the log is no longer read.
+    expect(reads).toBe(1);
+  });
+
+  test("a run that was already listed is not mistaken for the spawn", () => {
+    const existing = statusWithRun("add-health");
+    const watch = watchSpawn(new Set(["add-health"]), existing, "/spawn.log", () => ["tail"]);
+    expect(watch.started).toBeNull();
+    expect(watch.tail).toEqual(["tail"]);
   });
 });
 

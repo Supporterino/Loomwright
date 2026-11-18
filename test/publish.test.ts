@@ -6,13 +6,14 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   readlinkSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { FACTORY_VERSION } from "@loomwright/core/version";
 import { bundlePlugin } from "../scripts/build-plugin.ts";
 import { buildTui } from "../scripts/build-tui.ts";
@@ -327,6 +328,31 @@ describe("published package", () => {
     const cliText = readFileSync(join(dir, "cli.js"), "utf8");
     expect(cliText).not.toContain("react-reconciler");
     expect(cliText).not.toContain("yoga-layout");
+  });
+
+  test("no command other than tui imports the TUI entry", () => {
+    const sourceRoot = join(CLI, "src");
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) files.push(full);
+      }
+    };
+    walk(sourceRoot);
+
+    const referencing = files
+      .filter((file) => readFileSync(file, "utf8").includes("@loomwright/tui/entry"))
+      .map((file) => relative(sourceRoot, file).split("\\").join("/"));
+    expect(referencing).toEqual(["commands/tui.ts"]);
+
+    // The entry is reached with a dynamic import only, so no other command pays its startup cost.
+    for (const file of files) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(
+        /from\s+["']@loomwright\/tui\/entry["']/,
+      );
+    }
   });
 
   test("the build's second entry runs without the source tree", async () => {

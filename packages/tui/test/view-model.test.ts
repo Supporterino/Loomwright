@@ -408,6 +408,23 @@ describe("buildViewModel", () => {
     expect(view.run?.replayed).toBe(false);
   });
 
+  test("no run is invented for an event log without run state", () => {
+    resetSeq();
+    const events: RunEvent[] = [event("run.started", { phase: "design" })];
+    const view = buildViewModel(
+      vmInput({
+        screen: "list",
+        snapshot: reduce(events),
+        facts: collectFacts(events),
+        status: statusDoc([]),
+        runs: [],
+      }),
+    );
+    expect(view.list).toEqual([]);
+    expect(view.run).toBeNull();
+    expect(view.notice).toBe(emptyWorkspace);
+  });
+
   test("live detail arrives from the tail: task row and gate update, header totals wait", () => {
     const run = runState({ tasks: [taskState({ id: "first", status: "running" })] });
     resetSeq();
@@ -578,5 +595,50 @@ describe("no engine imports", () => {
       }
     }
     expect(violations).toEqual([]);
+  });
+});
+
+describe("only the short commands run in-process", () => {
+  const packageSrc = fileURLToPath(new URL("../src", import.meta.url));
+
+  function sourceFiles(dir: string): string[] {
+    const files: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) files.push(...sourceFiles(full));
+      else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) files.push(full);
+    }
+    return files;
+  }
+
+  function factoryCalls(): Set<string> {
+    const calls = new Set<string>();
+    for (const file of sourceFiles(packageSrc)) {
+      const text = readFileSync(file, "utf8");
+      for (const match of text.matchAll(/\bfactory\.(\w+)\s*\(/g)) {
+        const method = match[1];
+        if (method !== undefined) calls.add(method);
+      }
+    }
+    return calls;
+  }
+
+  test("Factory.run, approve and resume are never driven from the UI", () => {
+    const calls = factoryCalls();
+    for (const forbidden of ["run", "approve", "resume", "pause"]) {
+      expect(calls.has(forbidden), `factory.${forbidden} must not be called in-process`).toBe(
+        false,
+      );
+    }
+  });
+
+  test("the only write methods called are answer, abort and retry", () => {
+    const calls = factoryCalls();
+    const reads = new Set(["status", "listRuns", "events"]);
+    expect([...calls].filter((method) => !reads.has(method)).sort()).toEqual([
+      "abort",
+      "answer",
+      "retry",
+    ]);
   });
 });
