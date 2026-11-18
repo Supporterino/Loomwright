@@ -49,9 +49,11 @@ unconditionally), and shipping `node_modules` (breaks the self-contained tarball
 The view-model is a pure function of `(RunSnapshot, StatusDocument slice, RunState summary)`. It is
 rebuilt from `readEvents` on open and then from `tailEvents` from `lastSeq + 1`. Run existence,
 phase, summary, draft, lock, queue position and usage come from `status()`/`listRuns()`; gates,
-agent roles, retries and activity come from events. Nothing under `.factory/` is read and no
-pipeline, scheduler, gate or state module is value-imported (type-only imports from `core` are
-fine), so the UI cannot drift from the engine's own rules.
+agent roles, retries and activity come from events. No run-state or event file under `.factory/` is
+read — the sole exception is the launcher's own `.factory/logs/tui-spawn-<ts>.log`, tailed only to
+show a failed child's last lines — and no pipeline, scheduler, gate or state module is
+value-imported (type-only imports from `core` are fine), so the UI cannot drift from the engine's
+own rules.
 
 `approval.pending` is projected into `RunSnapshot.pendingApproval` rather than scanned in the UI, so
 the overlay reads one object and older streams simply have `null`. Parity is unaffected: the parity

@@ -44,9 +44,12 @@ open the run list.
 The TUI SHALL build a run's state from `reduce` over `readEvents` followed by `tailEvents` from
 the last complete sequence number, and SHALL take run existence, phase, summary, draft, active
 lock, driver liveness, queue position and usage from `Factory.status()` and
-`Factory.listRuns()`. It MUST NOT read files under `.factory/`, MUST NOT import `@loomwright/cli`,
-and MUST NOT value-import a pipeline, scheduler, gate, lock or state module; type-only imports from
-`@loomwright/core` are allowed. It MUST NOT infer that a run exists because an event log exists. A
+`Factory.listRuns()`. It MUST NOT read run-state or event files under `.factory/` (the event log,
+run state, the lock and the driver files), MUST NOT import `@loomwright/cli`, and MUST NOT
+value-import a pipeline, scheduler, gate, lock or state module; type-only imports from
+`@loomwright/core` are allowed. The one read it MAY make under `.factory/` is its own spawn log,
+`.factory/logs/tui-spawn-<timestamp>.log`, which the launcher tails so a failed child's last lines
+can be shown. It MUST NOT infer that a run exists because an event log exists. A
 run without an event log SHALL still appear in the list from run state. Gate results, agent roles,
 retries and the activity tail SHALL come from events; token and cost totals SHALL come from the
 status document.
@@ -56,7 +59,7 @@ status document.
 - **WHEN** every file under `packages/tui/src` is scanned for imports
 - **THEN** none imports `@loomwright/cli` or a relative path outside the package
 - **AND** none value-imports a pipeline, scheduler, gate, lock or state module
-- **AND** none references a path under `.factory/` for reading
+- **AND** none references a run-state or event path under `.factory/` for reading, the only permitted exception being the launcher's own `.factory/logs/tui-spawn-<timestamp>.log`
 
 #### Scenario: a run exists because run state says so
 
