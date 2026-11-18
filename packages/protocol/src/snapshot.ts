@@ -133,6 +133,8 @@ export function reduce(events: readonly RunEvent[]): RunSnapshot {
         break;
       case "phase.changed":
         snapshot.phase = event.data.to;
+        // Leaving `paused` drops the reason in the run file, so the replay must drop it too.
+        if (event.data.to !== "paused") snapshot.pausedReason = null;
         break;
       case "task.queued":
         upsertTask(event.data.task, "pending", event.data.attempt);

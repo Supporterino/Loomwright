@@ -319,6 +319,10 @@ describe("Factory commands", () => {
     const outcome = await h.factory.resume(ID);
     expect(outcome.phase).toBe("done");
     expect(loadRun(fx.root, ID)?.pausedReason).toBeUndefined();
+    // The replay matches the run file: resuming drops the reason the pause recorded.
+    const snapshot = reduce(readEvents(fx.root, ID).events);
+    expect(snapshot.phase).toBe("done");
+    expect(snapshot.pausedReason).toBeNull();
     const starts = readEvents(fx.root, ID).events.filter((event) => event.type === "run.started");
     expect(starts).toHaveLength(1);
   });

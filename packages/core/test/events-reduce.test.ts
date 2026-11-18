@@ -353,6 +353,27 @@ describe("reducer guarantees", () => {
     expect(paused.pausedReason).toBe("pause requested");
   });
 
+  test("a pause-then-resume replay clears pausedReason like the run file", () => {
+    const pauseReason = "pause requested";
+    const events = [
+      started(1, "implementing"),
+      event(2, "run.pause-requested", { reason: pauseReason }),
+      event(3, "phase.changed", { from: "implementing", to: "paused", reason: pauseReason }),
+      event(4, "run.paused", { reason: pauseReason }),
+      event(5, "phase.changed", { from: "paused", to: "implementing" }),
+    ];
+    const checkpoints: ParityCheckpoint[] = [
+      {
+        name: "paused",
+        run: baseRun({ phase: "paused", pausedReason: pauseReason }),
+        uptoSeq: 4,
+      },
+      { name: "after resume", run: baseRun({ phase: "implementing" }), uptoSeq: 5 },
+    ];
+    expect(compareSnapshots(events, checkpoints)).toEqual([]);
+    expect(reduce(events).pausedReason).toBeNull();
+  });
+
   test("the reducer is pure", () => {
     const root = makeRoot();
     const factory = join(root, ".factory");

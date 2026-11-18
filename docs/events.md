@@ -77,6 +77,9 @@ grow also accept the cap marker `truncated?` and `ref?` described below.
 `Phase` is one of `intake`, `design`, `awaiting-approval`, `queued`, `implementing`,
 `reviewing`, `contracts`, `full-suite`, `closing`, `done`, `paused`, `aborted`.
 
+A `phase.changed` away from `paused` also clears `pausedReason`, because the run file drops it
+when the phase moves on; `run.paused` remains the event that sets it.
+
 ### task
 
 | Event              | Payload                               |
