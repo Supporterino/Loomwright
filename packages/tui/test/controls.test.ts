@@ -464,6 +464,17 @@ describe("resume is a child, not a call", () => {
     expect(queued.footer.some((hint) => hint.key === "r")).toBe(true);
     expect(resumeFor(buildViewModel(viewInput(runState())))).toBeNull();
   });
+
+  test("the footer lists r resume for an aborted run too, the same predicate as resumeFor", () => {
+    const aborted = buildViewModel(viewInput(runState({ phase: "aborted" })));
+    expect(aborted.footer).toContainEqual({ key: "r", label: "resume", enabled: true });
+
+    // The footer hint and `r` share one predicate: neither appears for an implementing or done run.
+    for (const phase of ["paused", "aborted", "queued", "implementing", "done"] as const) {
+      const view = buildViewModel(viewInput(runState({ phase })));
+      expect(view.footer.some((hint) => hint.key === "r")).toBe(resumeFor(view) !== null);
+    }
+  });
 });
 
 describe("quit restores the terminal", () => {

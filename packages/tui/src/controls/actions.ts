@@ -3,7 +3,7 @@
  * functions here are pure, and `entry.tsx` performs the effect the confirmation emits.
  */
 import type { KeyInput } from "../model/keys.ts";
-import type { PanelView, ViewModel } from "../model/view-model.ts";
+import { canResume, type PanelView, type ViewModel } from "../model/view-model.ts";
 import { keyHint } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 
@@ -33,9 +33,7 @@ export function retryFor(viewModel: ViewModel): ControlAction | null {
 export function resumeFor(viewModel: ViewModel): ControlAction | null {
   const run = viewModel.run;
   if (run === null) return null;
-  return run.phase === "paused" || run.phase === "aborted" || run.phase === "queued"
-    ? { kind: "resume", id: run.id }
-    : null;
+  return canResume(run.phase) ? { kind: "resume", id: run.id } : null;
 }
 
 function dash(glyphs: GlyphSet): string {

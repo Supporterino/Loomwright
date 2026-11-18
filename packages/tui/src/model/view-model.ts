@@ -275,6 +275,11 @@ function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
   };
 }
 
+/** Paused, aborted and queued runs resume; the footer and `resumeFor` share this predicate. */
+export function canResume(phase: Phase): boolean {
+  return phase === "paused" || phase === "aborted" || phase === "queued";
+}
+
 function listFooter(input: ViewModelInput): KeyHint[] {
   return [
     keyHint("n", "new change"),
@@ -292,7 +297,7 @@ function runFooter(run: RunDetail | null, state: RunState | undefined): KeyHint[
   }
   if (state !== undefined && state.specFindings.length > 0) hints.push(keyHint("w", "reword"));
   if (run.approval?.specCommit != null) hints.push(keyHint("R", "reapprove"));
-  if (run.phase === "paused" || run.phase === "queued") hints.push(keyHint("r", "resume"));
+  if (canResume(run.phase)) hints.push(keyHint("r", "resume"));
   if (run.phase !== "done" && run.phase !== "aborted") hints.push(keyHint("x", "abort"));
   if (run.detail?.task.status === "failed") hints.push(keyHint("t", "retry task"));
   if (run.questions.length > 0) hints.push(keyHint("Q", "questions"));
