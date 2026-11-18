@@ -145,6 +145,7 @@ export const EVENT_TYPES = [
   "task.transient",
   "task.interrupted",
   "task.waiting",
+  "task.removed",
   "gate.planned",
   "gate.started",
   "gate.finished",
@@ -227,6 +228,8 @@ export const RunEvent = z.discriminatedUnion("type", [
       ...Bounded,
     }),
   ),
+  /** Drops a task the run file no longer keeps, e.g. a review fix routed to `specFindings`. */
+  event("task.removed", z.object({ task: TaskRef, reason: z.string().optional(), ...Bounded })),
   event(
     "gate.planned",
     z.object({

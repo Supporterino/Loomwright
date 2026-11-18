@@ -93,6 +93,7 @@ describe("event families", () => {
       "task.transient",
       "task.interrupted",
       "task.waiting",
+      "task.removed",
       "gate.planned",
       "gate.started",
       "gate.finished",

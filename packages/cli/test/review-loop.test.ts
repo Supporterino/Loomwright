@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { eventLogPath } from "@loomwright/core/events/jsonl";
+import { RunEvent, reduce } from "@loomwright/core/events/protocol";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import type { Finding } from "@loomwright/core/handoff/schema";
 import { loadRun } from "@loomwright/core/state/run";
@@ -217,6 +219,17 @@ describe("review loop: single repo", () => {
     expect(paused?.pausedReason).toContain(`loomwright reword ${ID}`);
     expect(paused?.tasks.some((t) => t.id === "fix-app-1-1")).toBe(false);
     expect(paused?.tasks.some((t) => t.status === "failed")).toBe(false);
+
+    // The removal is streamed too, so a replay has no phantom failed task for the routed fix.
+    const events = readFileSync(eventLogPath(fx.root, ID), "utf8")
+      .split("\n")
+      .filter((line) => line !== "")
+      .map((line) => RunEvent.parse(JSON.parse(line)));
+    const removed = events.flatMap((event) =>
+      event.type === "task.removed" ? [event.data.task.id] : [],
+    );
+    expect(removed).toEqual(["fix-app-1-1"]);
+    expect(reduce(events).tasks["fix-app-1-1"]).toBeUndefined();
 
     expect((await cliWith(runtime, fx.root, "reword", ID)).code).toBe(ExitCode.Ok);
     expect(loadRun(fx.root, ID)?.specFindings).toHaveLength(0);

@@ -284,6 +284,7 @@ export class TerminalSink implements EventSink {
       case "task.passed":
       case "task.blocked":
       case "task.skipped":
+      case "task.removed":
         return;
       case "heartbeat":
         this.#progress.line(event.data.text);

@@ -98,6 +98,11 @@ when the phase moves on; `run.paused` remains the event that sets it.
 | `task.transient`   | `{ task: TaskRef, reason }`           |
 | `task.interrupted` | `{ task: TaskRef }`                   |
 | `task.waiting`     | `{ tasks: [{ id, reason }] }`         |
+| `task.removed`     | `{ task: TaskRef, reason? }`          |
+
+`task.removed` drops the task from the replay: the run file deletes a review-fix task whose
+finding routes to `specFindings`, so a stream without the removal would replay a phantom
+failed task.
 
 ### gate
 

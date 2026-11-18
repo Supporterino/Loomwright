@@ -177,6 +177,9 @@ export function reduce(events: readonly RunEvent[]): RunSnapshot {
         break;
       case "task.waiting":
         break;
+      case "task.removed":
+        delete snapshot.tasks[event.data.task.id];
+        break;
       case "gate.finished":
         snapshot.gates[event.data.name] = {
           status: event.data.status,

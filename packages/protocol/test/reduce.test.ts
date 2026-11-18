@@ -122,6 +122,28 @@ test("terminal task transitions map to task statuses", () => {
   expect(statuses([transition(1, "task.interrupted", { task })])).toBe("pending");
 });
 
+test("task.removed drops the task from the snapshot", () => {
+  const task = { id: "fix-app-1-1", repo: "app" };
+  const snapshot = reduce([
+    transition(1, "task.started", { task, attempt: 1 }),
+    transition(2, "task.failed", { task, reason: "openspec needs a reword" }),
+    transition(3, "task.removed", { task, reason: "routed to spec findings" }),
+  ]);
+  expect(snapshot.tasks["fix-app-1-1"]).toBeUndefined();
+  expect(snapshot.lastSeq).toBe(3);
+});
+
+test("task.removed for an unknown task changes nothing", () => {
+  const before = reduce([
+    transition(1, "task.merged", { task: { id: "1.1", repo: "app" }, commit: "abcdef" }),
+  ]);
+  const after = reduce([
+    transition(1, "task.merged", { task: { id: "1.1", repo: "app" }, commit: "abcdef" }),
+    transition(2, "task.removed", { task: { id: "nope", repo: "app" } }),
+  ]);
+  expect(after.tasks).toEqual(before.tasks);
+});
+
 test("question events append and answer by step and question", () => {
   const snapshot = reduce([
     transition(1, "question.raised", {

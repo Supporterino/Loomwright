@@ -886,6 +886,10 @@ async function routeBlockedSpecFixes(
     }
     d.tasks = d.tasks.filter((t) => !ids.has(t.id));
   });
+  // After the run file drops them, so replay never removes a task the file still keeps.
+  for (const task of routed) {
+    p.emit("task.removed", { task: taskRef(task), reason: "routed to spec findings" });
+  }
   return ids;
 }
 
