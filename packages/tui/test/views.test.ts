@@ -541,6 +541,72 @@ async function pressUntil(
   }, what);
 }
 
+/** Past Ink's 33 ms frame throttle, so the frame a key produced has been written. */
+function pause(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 50));
+}
+
+interface DrivenRun {
+  readonly code: number;
+  readonly writes: readonly string[];
+}
+
+/**
+ * Runs the interactive UI with fake stdio, drives keys until it quits and returns what Ink
+ * wrote. With `CI` set Ink only writes the final frame, so a run asserts on that frame.
+ */
+async function driveTui(
+  factory: Factory,
+  drive: (input: FakeInput, output: FakeOutput) => Promise<void>,
+): Promise<DrivenRun> {
+  const input = new FakeInput();
+  const output = new FakeOutput();
+  const realStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+  const realStdout = Object.getOwnPropertyDescriptor(process, "stdout");
+  const session: TerminalSession = {
+    enter: () => {},
+    leave: () => {},
+    get columns(): number {
+      return 80;
+    },
+    get rows(): number {
+      return 24;
+    },
+    onKey: () => () => {},
+    onResize: () => () => {},
+    onSignal: () => () => {},
+  };
+  try {
+    Object.defineProperty(process, "stdin", { value: input, configurable: true });
+    Object.defineProperty(process, "stdout", { value: output, configurable: true });
+    const code = runTui({
+      workspace: "/workspace",
+      once: false,
+      ascii: true,
+      columns: 80,
+      rows: 24,
+      out: () => {},
+      env: {},
+      isTTY: false,
+      factory,
+      launcher: {
+        launch: async () => {
+          throw new Error("the help panel must not launch");
+        },
+      },
+      session,
+    });
+    // A failed drive must not also surface as an unhandled rejection from the TUI.
+    void code.catch(() => {});
+    await until(() => input.isRaw);
+    await drive(input, output);
+    return { code: await code, writes: [...output.writes] };
+  } finally {
+    if (realStdin !== undefined) Object.defineProperty(process, "stdin", realStdin);
+    if (realStdout !== undefined) Object.defineProperty(process, "stdout", realStdout);
+  }
+}
+
 describe("the interactive entry", () => {
   test("a terminal opens the run list: newest selected, no exit until quit", async () => {
     const oldest = runState({ id: "oldest", createdAt: "2026-11-17T09:00:00.000Z" });
@@ -771,4 +837,31 @@ describe("the interactive entry", () => {
       if (realStdout !== undefined) Object.defineProperty(process, "stdout", realStdout);
     }
   }, 60_000);
+
+  test("help opens on ? and closes on Esc; q still quits", async () => {
+    const run = runState();
+    const factory = listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]);
+
+    const opened = await driveTui(factory, async (input) => {
+      input.press("?");
+      await pause();
+      input.press("q");
+    });
+    expect(opened.code).toBe(0);
+    expect(opened.writes.join("")).toContain("Esc close");
+
+    let mark = 0;
+    const closed = await driveTui(factory, async (input, output) => {
+      input.press("?");
+      await pause();
+      input.press("\u001b");
+      mark = output.writes.length;
+      await pause();
+      input.press("q");
+    });
+    expect(closed.code).toBe(0);
+    const afterEscape = closed.writes.slice(mark).join("");
+    expect(afterEscape).not.toContain("Help");
+    expect(afterEscape).toContain("new change");
+  });
 });

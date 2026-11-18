@@ -494,7 +494,8 @@ describe("applyKey", () => {
     );
     expect(applyKey(list, "q")).toEqual({ kind: "quit" });
     expect(applyKey(list, "?")).toEqual({ kind: "help" });
-    expect(applyKey(list, "n")).toEqual({ kind: "open-intake" });
+    // `n` opens intake in entry.tsx before `applyKey` is reached; it is not an intent.
+    expect(applyKey(list, "n")).toEqual({ kind: "none" });
     expect(applyKey(list, "Enter")).toEqual({ kind: "open-run", runId: RUN });
     expect(applyKey(list, "Down")).toEqual({ kind: "next-run" });
     expect(applyKey(list, "j")).toEqual({ kind: "next-run" });

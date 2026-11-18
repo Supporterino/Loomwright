@@ -110,9 +110,9 @@ export interface RunDetail {
   readonly replayed: boolean;
 }
 
-/** A panel is built by its owning module (intake, approval, questions, confirm). */
+/** A panel is built by its owning module (intake, approval, questions, confirm, help). */
 export interface PanelView {
-  readonly kind: "intake" | "approval" | "questions" | "confirm";
+  readonly kind: "intake" | "approval" | "questions" | "confirm" | "help";
   readonly title: string;
   readonly lines: readonly string[];
   readonly keys: readonly KeyHint[];

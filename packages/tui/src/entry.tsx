@@ -38,6 +38,7 @@ import {
   questionsKeys,
   questionsPanel,
 } from "./controls/questions.tsx";
+import { helpKeys, helpPanel } from "./help.ts";
 import { type IntakeState, initialIntake, intakeKeys, intakePanel } from "./intake/dialog.tsx";
 import { watchSpawn } from "./intake/follow.ts";
 import {
@@ -176,6 +177,8 @@ interface UiData {
   readonly questions: QuestionsState | null;
   /** The abort confirmation, or null when no confirmation is open. */
   readonly confirmation: ControlAction | null;
+  /** The help panel is open; `?` sets it and Esc clears it. */
+  readonly help: boolean;
   /** `git config user.email`; null until the overlay has read it once. */
   readonly identity: string | null;
 }
@@ -235,6 +238,9 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
     notice: data.notice,
   };
   const base = buildViewModel(baseInput);
+  if (data.help) {
+    return buildViewModel({ ...baseInput, panel: helpPanel() });
+  }
   if (data.approval !== null && data.screen === "run") {
     if (base.run === null) return base;
     const run = selectedRunState(data);
@@ -283,6 +289,7 @@ function initialData(
     approval: null,
     questions: null,
     confirmation: null,
+    help: false,
     identity: null,
   };
   // The list is newest first, so the first item is the run the list opens on.
@@ -451,6 +458,7 @@ function Interactive({
         approval: null,
         questions: null,
         confirmation: null,
+        help: false,
         identity: null,
       }));
       const load = async (): Promise<void> => {
@@ -758,7 +766,11 @@ function Interactive({
     };
   }, [approvalOpen, data.identity, workspace]);
 
-  useInput((input, key) => {
+  // This handler closes over the current render, so it is new every time; Ink re-runs its
+  // `useInput` effect for a new function and can drop a key pressed inside that window. Keep the
+  // subscription on one stable function and route it to the latest handler through a ref.
+  const keyHandler = useRef<(input: string, key: KeyInput) => void>(() => {});
+  keyHandler.current = (input, key) => {
     const state = dataRef.current;
     // `q` quits everywhere, including over the approval overlay the gate otherwise traps you in.
     if ((key.ctrl && input === "c") || (state.approval !== null && !key.ctrl && input === "q")) {
@@ -827,6 +839,15 @@ function Interactive({
       }
       return;
     }
+    if (state.help) {
+      const outcome = helpKeys(input, key);
+      if (outcome === "close") {
+        setData((current) => ({ ...current, help: false }));
+        return;
+      }
+      if (outcome === "quit") exit();
+      return;
+    }
     if (!key.ctrl && input === "n") {
       setData((current) => ({ ...current, intake: initialIntake }));
       return;
@@ -844,6 +865,9 @@ function Interactive({
     switch (intent.kind) {
       case "quit":
         exit();
+        return;
+      case "help":
+        setData((state) => ({ ...state, help: true }));
         return;
       case "open-run":
         openRun(intent.runId);
@@ -893,6 +917,7 @@ function Interactive({
           approval: null,
           questions: null,
           confirmation: null,
+          help: false,
           identity: null,
         }));
         return;
@@ -924,7 +949,8 @@ function Interactive({
       default:
         return;
     }
-  });
+  };
+  useInput(useCallback((input: string, key: KeyInput): void => keyHandler.current(input, key), []));
 
   return <Frame viewModel={view} glyphs={glyphs} depth={depth} />;
 }

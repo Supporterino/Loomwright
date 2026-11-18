@@ -33,7 +33,6 @@ export type Intent =
   | { kind: "prev-run" }
   | { kind: "next-task" }
   | { kind: "prev-task" }
-  | { kind: "open-intake" }
   | { kind: "approve" }
   | { kind: "approve-only" }
   | { kind: "reword" }
@@ -45,8 +44,6 @@ export type Intent =
 
 function listIntent(viewModel: ViewModel, key: string): Intent {
   switch (key) {
-    case "n":
-      return { kind: "open-intake" };
     case "Enter":
     case "\r":
       return viewModel.selectedRunId === null
