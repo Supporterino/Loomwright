@@ -3,12 +3,26 @@
  * run view, and restores the terminal from a `finally`. `--once` still uses the 1.2 placeholder
  * path; 1.8 wires the real screens into it.
  */
+import { execFile } from "node:child_process";
 import process from "node:process";
 import { type Factory, open, openReadOnly, type StatusDocument } from "@loomwright/core/factory";
 import type { RunState } from "@loomwright/core/state/run";
 import { type RunEvent, type RunSnapshot, reduce } from "@loomwright/protocol";
 import { render, Text, useApp, useInput } from "ink";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ExecResult, readApprover } from "./approval/identity.ts";
+import {
+  type ApprovalActionKind,
+  type ApprovalEvidence,
+  type ApprovalState,
+  approvalAvailable,
+  approvalExited,
+  approvalForPhase,
+  approvalKeys,
+  approvalPanel,
+  approvalProgress,
+  approvalStarted,
+} from "./approval/overlay.ts";
 import { type IntakeState, initialIntake, intakeKeys, intakePanel } from "./intake/dialog.tsx";
 import {
   createLauncher,
@@ -76,6 +90,48 @@ interface UiData {
   readonly notice: string | null;
   /** The new-run dialog, or null when no panel is open. */
   readonly intake: IntakeState | null;
+  /** The approval overlay, or null when the selected run is not at the gate. */
+  readonly approval: ApprovalState | null;
+  /** `git config user.email`; null until the overlay has read it once. */
+  readonly identity: string | null;
+}
+
+function selectedRunState(data: UiData): RunState | undefined {
+  const id = data.selectedRunId;
+  if (id === null) return undefined;
+  return data.status.runs.find((run) => run.id === id) ?? data.runs.find((run) => run.id === id);
+}
+
+function grantedCommit(snapshot: RunSnapshot | null): string | null {
+  const approval = snapshot?.approval ?? null;
+  return approval === null || approval.approver === "" ? null : approval.specCommit;
+}
+
+function evidenceOf(data: UiData): ApprovalEvidence {
+  return {
+    identity: data.identity ?? "",
+    findings: selectedRunState(data)?.specFindings.length ?? 0,
+    specCommit: grantedCommit(data.snapshot),
+  };
+}
+
+/** Opens on the phase and advances a launch from the facts the stream now carries. */
+function syncApproval(data: UiData): UiData {
+  if (data.screen !== "run" || data.selectedRunId === null) return data;
+  const run = selectedRunState(data);
+  const phase = data.snapshot?.phase ?? run?.phase ?? null;
+  if (data.approval === null) {
+    if (phase === null) return data;
+    const opened = approvalForPhase(phase, null);
+    return opened === null ? data : { ...data, approval: opened, identity: null };
+  }
+  if (data.approval.kind !== "waiting") return data;
+  const next = approvalProgress(data.approval, {
+    phase,
+    granted: grantedCommit(data.snapshot) !== null,
+  });
+  if (next === data.approval) return data;
+  return { ...data, approval: next.kind === "done" ? null : next };
 }
 
 function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
@@ -94,7 +150,18 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
     panel: data.intake === null ? null : intakePanel(data.intake, glyphs),
     notice: data.notice,
   };
-  return buildViewModel(input);
+  if (data.approval === null || data.screen !== "run") return buildViewModel(input);
+  const base = buildViewModel({ ...input, panel: null });
+  if (base.run === null) return base;
+  const run = selectedRunState(data);
+  const panel = approvalPanel({
+    run: base.run,
+    evidence: evidenceOf(data),
+    state: data.approval,
+    glyphs,
+    ...(run?.draft === undefined ? {} : { draft: run.draft }),
+  });
+  return buildViewModel({ ...input, panel });
 }
 
 function initialData(
@@ -114,10 +181,25 @@ function initialData(
     facts: collectFacts([]),
     notice: null,
     intake: null,
+    approval: null,
+    identity: null,
   };
   // The list is newest first, so the first item is the run the list opens on.
   const view = viewOf(base, glyphsFor(options.ascii));
   return { ...base, selectedRunId: view.list[0]?.id ?? null };
+}
+
+/** The identity check's only process call; tests inject their own executor. */
+function gitExec(args: readonly string[], cwd: string): Promise<ExecResult> {
+  return new Promise((resolve) => {
+    execFile("git", [...args], { cwd, encoding: "utf8" }, (error, stdout) => {
+      if (error === null) {
+        resolve({ code: 0, stdout });
+        return;
+      }
+      resolve({ code: typeof error.code === "number" ? error.code : 1, stdout });
+    });
+  });
 }
 
 interface InteractiveProps {
@@ -165,7 +247,11 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
         const events = eventsRef.current;
         setData((current) =>
           current.screen === "run" && current.selectedRunId === id
-            ? { ...current, snapshot: reduce(events), facts: collectFacts(events) }
+            ? syncApproval({
+                ...current,
+                snapshot: reduce(events),
+                facts: collectFacts(events),
+              })
             : current,
         );
       }
@@ -186,6 +272,8 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
         facts: collectFacts([]),
         notice: null,
         intake: null,
+        approval: null,
+        identity: null,
       }));
       const load = async (): Promise<void> => {
         const controller = new AbortController();
@@ -200,7 +288,7 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
         const snapshot = reduce(events);
         setData((current) =>
           current.screen === "run" && current.selectedRunId === id
-            ? { ...current, snapshot, facts: collectFacts(events) }
+            ? syncApproval({ ...current, snapshot, facts: collectFacts(events) })
             : current,
         );
         await appendTail(id, snapshot.lastSeq + 1, controller.signal);
@@ -330,12 +418,68 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
     [factory, launcher, openRun, stopIntakePoll, workspace],
   );
 
+  const launchApproval = useCallback(
+    (id: string, kind: ApprovalActionKind): void => {
+      let action: LaunchAction;
+      switch (kind) {
+        case "approve":
+          action = { kind, id };
+          break;
+        case "approve-only":
+          action = { kind, id };
+          break;
+        case "reword":
+          action = { kind, id };
+          break;
+        case "reapprove":
+          action = { kind, id };
+          break;
+        default: {
+          const unhandled: never = kind;
+          throw new Error(`unknown approval action: ${String(unhandled)}`);
+        }
+      }
+      void (async () => {
+        let result: LaunchResult;
+        try {
+          result = await launcher.launch(action);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          setData((current) =>
+            current.approval === null
+              ? current
+              : {
+                  ...current,
+                  approval: { kind: "failed", action: kind, code: 1, tail: [message] },
+                },
+          );
+          return;
+        }
+        setData((current) =>
+          current.approval === null
+            ? current
+            : { ...current, approval: approvalStarted(current.approval) },
+        );
+        void result.exited.then(({ code }) => {
+          if (code === null || code === 0) return;
+          const tail = tailLog(result.logPath, 10);
+          setData((current) =>
+            current.approval === null
+              ? current
+              : { ...current, approval: approvalExited(current.approval, code, tail) },
+          );
+        });
+      })();
+    },
+    [launcher],
+  );
+
   useEffect(() => {
     const timer = setInterval(() => {
       void (async () => {
         try {
           const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
-          setData((current) => ({ ...current, status, runs }));
+          setData((current) => syncApproval({ ...current, status, runs }));
         } catch {
           // A poll failure keeps the last good status; the next tick retries.
         }
@@ -362,12 +506,42 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
   useEffect(() => () => stopTail(), [stopTail]);
   useEffect(() => () => stopIntakePoll(), [stopIntakePoll]);
 
+  // Read the identity once per overlay opening; a missing email disables the approval actions.
+  const approvalOpen = data.approval !== null;
+  useEffect(() => {
+    if (!approvalOpen || data.identity !== null) return;
+    let cancelled = false;
+    void readApprover(workspace, gitExec).then((identity) => {
+      if (cancelled) return;
+      setData((current) => (current.identity === null ? { ...current, identity } : current));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [approvalOpen, data.identity, workspace]);
+
   useInput((input, key) => {
     if (key.ctrl && input === "c") {
       exit();
       return;
     }
     const state = dataRef.current;
+    if (state.approval !== null) {
+      const run = selectedRunState(state);
+      if (run !== undefined) {
+        const outcome = approvalKeys(
+          state.approval,
+          input,
+          key,
+          approvalAvailable(evidenceOf(state)),
+        );
+        if (outcome.state !== state.approval) {
+          setData((current) => ({ ...current, approval: outcome.state }));
+        }
+        if (outcome.launch !== undefined) launchApproval(run.id, outcome.launch);
+      }
+      return;
+    }
     if (state.intake !== null) {
       if (key.escape) {
         setData((current) => ({ ...current, intake: null }));
@@ -413,6 +587,8 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
           snapshot: null,
           facts: collectFacts([]),
           notice: null,
+          approval: null,
+          identity: null,
         }));
         return;
       case "next-run":

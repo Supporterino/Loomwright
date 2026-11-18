@@ -13,6 +13,7 @@ import {
   RunEvent as RunEventSchema,
   reduce,
 } from "@loomwright/protocol";
+import { type ApprovalState, approvalPanel } from "../src/approval/overlay.ts";
 import {
   type IntakeState,
   initialIntake,
@@ -304,6 +305,44 @@ function queuedAfterApproval(): ViewModel {
   );
 }
 
+const APPROVAL_HASH = "0123456789abcdef0123456789abcdef";
+
+function approvalFrame(state: ApprovalState): ViewModel {
+  const run = runState({
+    phase: "awaiting-approval",
+    draft: ".factory/drafts/add-health",
+  });
+  resetSeq();
+  const events = [
+    event("approval.pending", {
+      specHash: APPROVAL_HASH,
+      changeDir: `${run.draft ?? ""}/openspec/changes/${RUN}`,
+    }),
+  ];
+  const base = buildViewModel(runInput(run, events, 0, 0));
+  if (base.run === null) throw new Error("the approval frame has no run");
+  const panel = approvalPanel({
+    run: base.run,
+    evidence: { identity: "dev@example.com", findings: 0, specCommit: null },
+    state,
+    glyphs: ASCII_GLYPHS,
+    ...(run.draft === undefined ? {} : { draft: run.draft }),
+  });
+  return buildViewModel(runInput(run, events, 0, 0, { panel }));
+}
+
+function awaitingApproval(): ViewModel {
+  return approvalFrame({ kind: "idle" });
+}
+
+function approveAndRunConfirm(): ViewModel {
+  return approvalFrame({ kind: "confirming", action: "approve" });
+}
+
+function approveOnlyConfirm(): ViewModel {
+  return approvalFrame({ kind: "confirming", action: "approve-only" });
+}
+
 const STATES = {
   "no-runs": noRuns,
   "running-graph": runningGraph,
@@ -312,6 +351,9 @@ const STATES = {
   "new-run-text": newRunText,
   "new-run-file": newRunFile,
   "queued-after-approval": queuedAfterApproval,
+  "awaiting-approval": awaitingApproval,
+  "approve-and-run-confirm": approveAndRunConfirm,
+  "approve-only-confirm": approveOnlyConfirm,
 } satisfies Record<string, () => ViewModel>;
 
 const SIZES = [
