@@ -23,7 +23,7 @@ export interface Violation {
   message: string;
 }
 
-type PackageName = "cli" | "core" | "protocol";
+type PackageName = "cli" | "core" | "protocol" | "tui";
 
 const repoRoot = join(import.meta.dir, "..");
 const skippedDirectories = new Set(["node_modules", "dist", "graphify-out"]);
@@ -98,14 +98,14 @@ function toRepoPath(absolute: string): string {
 function packageOf(file: string): PackageName | undefined {
   const match = /^packages\/([^/]+)\//.exec(file);
   const name = match?.[1];
-  if (name === "cli" || name === "core" || name === "protocol") return name;
+  if (name === "cli" || name === "core" || name === "protocol" || name === "tui") return name;
   return undefined;
 }
 
 function ownedPackage(specifier: string): PackageName | undefined {
-  const match = /^@loomwright\/(cli|core|protocol)(?:\/|$)/.exec(specifier);
+  const match = /^@loomwright\/(cli|core|protocol|tui)(?:\/|$)/.exec(specifier);
   const name = match?.[1];
-  if (name === "cli" || name === "core" || name === "protocol") return name;
+  if (name === "cli" || name === "core" || name === "protocol" || name === "tui") return name;
   return undefined;
 }
 
@@ -137,9 +137,12 @@ function forbiddenRule(from: PackageName, to: PackageName): string | undefined {
     case "cli":
       return to === "protocol" ? "cli-to-protocol" : undefined;
     case "core":
-      return to === "cli" ? "core-to-cli" : undefined;
+      if (to === "cli") return "core-to-cli";
+      return to === "tui" ? "core-to-tui" : undefined;
     case "protocol":
       return `protocol-to-${to}`;
+    case "tui":
+      return to === "cli" ? "tui-to-cli" : undefined;
     default: {
       const unhandled: never = from;
       throw new Error(`unhandled package: ${String(unhandled)}`);
@@ -208,7 +211,7 @@ function typescriptFiles(directory: string, found: string[] = []): string[] {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
       typescriptFiles(path, found);
-    } else if (entry.name.endsWith(".ts")) {
+    } else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) {
       found.push(path);
     }
   }
@@ -228,6 +231,9 @@ describe("dependency rule", () => {
     const edges: ImportEdge[] = [
       { file: "packages/cli/src/main.ts", specifier: "@loomwright/core/policy" },
       { file: "packages/core/src/runtime/opencode.ts", specifier: "@loomwright/protocol" },
+      { file: "packages/tui/src/entry.tsx", specifier: "@loomwright/core/factory" },
+      { file: "packages/tui/src/entry.tsx", specifier: "@loomwright/protocol" },
+      { file: "packages/cli/src/commands/tui.ts", specifier: "@loomwright/tui/strings" },
     ];
     expect(checkImports(edges)).toEqual([]);
   });
@@ -237,6 +243,24 @@ describe("dependency rule", () => {
       { file: "packages/core/src/x.ts", specifier: "@loomwright/cli/main" },
     ]);
     expect(violations.map((violation) => violation.rule)).toEqual(["core-to-cli"]);
+  });
+
+  test("the TUI may not reach the CLI or the engine", () => {
+    expect(
+      checkImports([{ file: "packages/tui/src/entry.tsx", specifier: "@loomwright/cli/main" }]).map(
+        (violation) => violation.rule,
+      ),
+    ).toEqual(["tui-to-cli"]);
+    expect(
+      checkImports([{ file: "packages/core/src/x.ts", specifier: "@loomwright/tui/entry" }]).map(
+        (violation) => violation.rule,
+      ),
+    ).toEqual(["core-to-tui"]);
+    expect(
+      checkImports([
+        { file: "packages/protocol/src/index.ts", specifier: "@loomwright/tui/entry" },
+      ]).map((violation) => violation.rule),
+    ).toEqual(["protocol-to-tui"]);
   });
 
   test("protocol importing core is rejected", () => {
@@ -415,5 +439,48 @@ describe("monorepo layout", () => {
     for (const edge of edges.filter((edge) => !edge.specifier.startsWith("."))) {
       expect(edge.specifier).toBe("zod");
     }
+  });
+
+  test("the TUI package is a private workspace with subpath exports", () => {
+    const tui = readManifest("packages/tui/package.json");
+    expect(tui.name).toBe("@loomwright/tui");
+    expect(tui.private).toBe(true);
+    expect(tui.type).toBe("module");
+
+    if (!isRecord(tui.exports)) throw new Error("packages/tui/package.json has no exports map");
+    expect(tui.exports["./entry"]).toBe("./src/entry.tsx");
+    const pattern = tui.exports["./*"];
+    expect(pattern).toBe("./src/*.ts");
+    if (typeof pattern !== "string") throw new Error("tui exports lacks the ./* pattern");
+    const strings = pattern.replace("*", "strings");
+    expect(existsSync(join(repoRoot, "packages/tui", strings))).toBe(true);
+
+    if (!isRecord(tui.dependencies)) throw new Error("packages/tui/package.json has no deps");
+    expect(tui.dependencies).toMatchObject({
+      "@loomwright/core": "workspace:*",
+      "@loomwright/protocol": "workspace:*",
+      ink: "6.4.0",
+      react: "19.3.1",
+    });
+
+    for (const manifest of ["packages/core/package.json", "packages/protocol/package.json"]) {
+      const dependencies = readManifest(manifest).dependencies;
+      expect(isRecord(dependencies) ? dependencies["@loomwright/tui"] : undefined).toBeUndefined();
+    }
+  });
+
+  test("ADR-0047 records the terminal UI", () => {
+    const adr = readFileSync(join(repoRoot, "docs/decisions/0047-tui.md"), "utf8");
+    expect(adr.startsWith("# 0047 — ")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).toContain("Ink");
+    expect(adr).toContain("6.4.0");
+    expect(adr).toContain("19.3.1");
+    expect(adr).not.toContain("Loomwright");
+    expect(readFileSync(join(repoRoot, "docs/decisions/README.md"), "utf8")).toContain(
+      "| [0047](0047-tui.md)",
+    );
   });
 });

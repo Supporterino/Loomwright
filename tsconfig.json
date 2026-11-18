@@ -3,6 +3,7 @@
     "target": "ES2023",
     "module": "Preserve",
     "moduleResolution": "bundler",
+    "jsx": "react-jsx",
     "lib": ["ES2023"],
     "types": ["bun", "node"],
     "strict": true,
@@ -19,7 +20,8 @@
     "allowImportingTsExtensions": true,
     "paths": {
       "@loomwright/core/*": ["./packages/core/src/*"],
-      "@loomwright/protocol": ["./packages/protocol/src/index.ts"]
+      "@loomwright/protocol": ["./packages/protocol/src/index.ts"],
+      "@loomwright/tui/*": ["./packages/tui/src/*"]
     }
   },
   "include": ["test", "scripts", "packages"]
