@@ -167,10 +167,19 @@ async function consumeCommands(p: Pipeline, id: string): Promise<boolean> {
   return false;
 }
 
+/**
+ * Binds a run's stream. A run with no log yet (created before the stream existed, or killed
+ * before `run.started`) still opens with the phase it resumes at instead of a bare phase gap.
+ */
+function bindStream(p: Pipeline, id: string): void {
+  p.bindRun(id);
+  if (p.events.lastSeq === 0) p.emit("run.started", { phase: p.run(id).phase });
+}
+
 /** Drives one change as far as it can go; continues with the next queued change on close. */
 export async function drive(p: Pipeline, firstId: string): Promise<DriveOutcome> {
   let id = firstId;
-  p.bindRun(id);
+  bindStream(p, id);
   // `resume` of an aborted change is the decision to continue it.
   if (p.run(id).phase === "aborted") {
     await p.update(id, (d) => {
@@ -360,7 +369,7 @@ async function step(p: Pipeline, id: string): Promise<Step> {
       const next = await nextQueued(p);
       p.emit("run.finished", { outcome: "done" });
       if (next === undefined) return stop({ id, phase: "done" });
-      p.bindRun(next);
+      bindStream(p, next);
       p.out(`▶ starting queued change ${next}`);
       return go(next);
     }

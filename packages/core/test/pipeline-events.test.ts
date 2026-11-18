@@ -16,16 +16,17 @@ import { FactoryConfig } from "../src/config/schema.ts";
 import { eventLogPath } from "../src/events/jsonl.ts";
 import { MemorySink } from "../src/events/memory.ts";
 import { compareSnapshots } from "../src/events/parity.ts";
-import { RunEvent } from "../src/events/protocol.ts";
+import { RunEvent, reduce } from "../src/events/protocol.ts";
 import { readEventLines } from "../src/events/reader.ts";
 import { TerminalSink } from "../src/events/terminal.ts";
 import { ExitCode } from "../src/exit-codes.ts";
 import { approve } from "../src/pipeline/approve.ts";
 import { Pipeline } from "../src/pipeline/context.ts";
 import { design, intake } from "../src/pipeline/design.ts";
+import { drive } from "../src/pipeline/drive.ts";
 import { Progress } from "../src/pipeline/progress.ts";
 import type { AgentRuntime, Usage } from "../src/runtime/types.ts";
-import { loadRun } from "../src/state/run.ts";
+import { loadRun, newRun, saveRun } from "../src/state/run.ts";
 
 const ID = "add-health";
 
@@ -153,6 +154,36 @@ describe("intake clarifications", () => {
       ]);
       const uptoSeq = sink.events.at(-1)?.seq ?? 0;
       expect(compareSnapshots(sink.events, [{ name: "after intake", run, uptoSeq }])).toEqual([]);
+    } finally {
+      fx.cleanup();
+    }
+  });
+});
+
+describe("logless runs", () => {
+  test("a run with no event log resumes at seq 1 with run.started carrying its phase", async () => {
+    const fx = await createSingleRepoFixture();
+    try {
+      expect((await cli(fx.root, "init")).code).toBe(ExitCode.Ok);
+      // A run created before the event stream existed (or killed before `run.started`).
+      saveRun(fx.root, newRun(ID, "Add math helpers", "awaiting-approval"));
+      const sink = new MemorySink();
+      const p = new Pipeline(fx.root, loadConfig(fx.root).config, {
+        runtime: new ScriptedRuntime(() => ({})),
+        out: () => {},
+        signal: new AbortController().signal,
+        events: { sink },
+        heartbeatMs: 0,
+      });
+      const outcome = await drive(p, ID);
+      p.progress.stop();
+
+      expect(outcome).toMatchObject({ id: ID, phase: "awaiting-approval" });
+      expect(sink.events[0]?.type).toBe("run.started");
+      expect(sink.events[0]?.seq).toBe(1);
+      expect(sink.events[0]?.data).toMatchObject({ phase: "awaiting-approval" });
+      expect(reduce(sink.events).phase).toBe("awaiting-approval");
+      expect(readEventLines(fx.root, ID).lines[0]?.event?.type).toBe("run.started");
     } finally {
       fx.cleanup();
     }
