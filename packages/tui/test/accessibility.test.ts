@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, realpathSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { StatusDocument } from "@loomwright/core/factory";
 import { RunState, TaskState } from "@loomwright/core/state/run";
@@ -15,7 +15,7 @@ import { SIZES, STATES } from "./frame-states.ts";
 
 // Ink's chalk decides its colour level once, at import, and another suite may have loaded it first.
 // Force the shared instance to truecolor so the raw frames keep the token SGR these tests assert.
-const inkDir = `${realpathSync(fileURLToPath(new URL("../node_modules/ink", import.meta.url)))}/`;
+const inkDir = `${dirname(Bun.resolveSync("ink/package.json", import.meta.dir))}${sep}`;
 const chalkModule: unknown = await import(Bun.resolveSync("chalk", inkDir));
 if (typeof chalkModule === "object" && chalkModule !== null && "default" in chalkModule) {
   const chalk = chalkModule.default;
