@@ -1,6 +1,6 @@
 ===== init (exit 0) =====
 loomwright <version> in <root>
-tools: git 2.56.1, opencode 2.2.0, openspec 1.14.3, graphify 0.9.93
+tools: git <tool-version>, opencode <tool-version>, openspec <tool-version>, graphify <tool-version>
 wrote factory.config.jsonc (review "models" and "contracts")
 created: .gitignore
 created: .graphifyignore

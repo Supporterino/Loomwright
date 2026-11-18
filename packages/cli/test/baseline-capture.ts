@@ -238,6 +238,11 @@ function normaliseText(text: string, ctx: NormaliseContext): string {
   // The banner, the install commit, the lock and every run carry the factory version; a release
   // bump must not invalidate a golden captured before it.
   out = out.replace(new RegExp(`\\bv?${escapeRegExp(FACTORY_VERSION)}\\b`, "g"), "<version>");
+  // `init` prints the tool versions it found. Only opencode, openspec and graphify are stubbed,
+  // so the runner's git patch level reaches the banner; it is environment data, not output.
+  out = out.replace(/^tools: .*$/gm, (line) =>
+    line.replace(/\b([a-z][a-z-]*) (\d+\.\d+\.\d+|\?)\b/g, "$1 <tool-version>"),
+  );
   // Usage objects in `status --json`: token counts and cost are display data, not state.
   out = out.replace(/"(input|output|reasoning|cacheRead|cacheWrite)": -?\d+/g, '"$1": "<tokens>"');
   out = out.replace(/"cost": -?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, '"cost": "<cost>"');
