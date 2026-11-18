@@ -39,6 +39,7 @@ import {
   questionsPanel,
 } from "./controls/questions.tsx";
 import { type IntakeState, initialIntake, intakeKeys, intakePanel } from "./intake/dialog.tsx";
+import { watchSpawn } from "./intake/follow.ts";
 import {
   createLauncher,
   type LaunchAction,
@@ -379,16 +380,13 @@ function Interactive({
   /** The running projection; the events that built it are drained on every frame. */
   const foldRef = useRef<FoldedRun | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const intakeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** The run ids seen before a spawn; the shared status poll compares each result against them. */
+  const spawnBaseline = useRef<{
+    readonly ids: ReadonlySet<string>;
+    readonly logPath: string;
+  } | null>(null);
   const schedulerRef = useRef<FrameScheduler | null>(null);
   const pollerRef = useRef<StatusPoller | null>(null);
-
-  const stopIntakePoll = useCallback((): void => {
-    if (intakeTimer.current !== null) {
-      clearInterval(intakeTimer.current);
-      intakeTimer.current = null;
-    }
-  }, []);
 
   const stopTail = useCallback((): void => {
     abortRef.current?.abort();
@@ -518,10 +516,13 @@ function Interactive({
           return;
         }
 
-        // A spawn is the one extra poll that does not wait for the next second.
+        // The run ids seen before the spawn let the shared poll find the new run; the spawn is the
+        // one extra poll that does not wait for the next second.
+        spawnBaseline.current = {
+          ids: new Set(dataRef.current.status.runs.map((run) => run.id)),
+          logPath: result.logPath,
+        };
         pollerRef.current?.kick();
-        const previous = new Set(dataRef.current.status.runs.map((run) => run.id));
-        stopIntakePoll();
         setData((current) =>
           current.intake === null
             ? current
@@ -538,43 +539,11 @@ function Interactive({
               },
         );
 
-        const tick = async (): Promise<void> => {
-          try {
-            const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
-            const started = status.runs.find((run) => !previous.has(run.id));
-            setData((current) => {
-              const intake = current.intake;
-              return {
-                ...current,
-                status,
-                runs,
-                intake:
-                  intake === null || intake.spawned === null
-                    ? intake
-                    : {
-                        ...intake,
-                        spawned: { ...intake.spawned, tail: tailLog(result.logPath) },
-                      },
-              };
-            });
-            if (started !== undefined) {
-              stopIntakePoll();
-              openRun(started.id);
-            }
-          } catch {
-            // The next tick retries; the dialog keeps showing the log path meanwhile.
-          }
-        };
-        const timer = setInterval(() => {
-          void tick();
-        }, 500);
-        timer.unref();
-        intakeTimer.current = timer;
-        void tick();
+        // The dialog follows the spawn from the shared 1 s poll; it schedules nothing of its own.
 
         void result.exited.then(({ code }) => {
           if (code === null || code === 0) return;
-          stopIntakePoll();
+          spawnBaseline.current = null;
           setData((current) =>
             current.intake === null
               ? current
@@ -594,7 +563,7 @@ function Interactive({
         });
       })();
     },
-    [factory, launcher, openRun, stopIntakePoll, workspace],
+    [launcher, workspace],
   );
 
   const launchApproval = useCallback(
@@ -658,11 +627,34 @@ function Interactive({
   const refreshStatus = useCallback(async (): Promise<void> => {
     try {
       const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
-      setData((current) => syncApproval({ ...current, status, runs }));
+      const pending = spawnBaseline.current;
+      if (pending === null) {
+        setData((current) => syncApproval({ ...current, status, runs }));
+        return;
+      }
+      const watch = watchSpawn(pending.ids, status, pending.logPath, tailLog);
+      if (watch.started !== null) {
+        spawnBaseline.current = null;
+        setData((current) => syncApproval({ ...current, status, runs }));
+        openRun(watch.started);
+        return;
+      }
+      setData((current) => {
+        const intake = current.intake;
+        return syncApproval({
+          ...current,
+          status,
+          runs,
+          intake:
+            intake === null || intake.spawned === null
+              ? intake
+              : { ...intake, spawned: { ...intake.spawned, tail: watch.tail } },
+        });
+      });
     } catch {
       // A refresh failure keeps the last good status; the next poll retries.
     }
-  }, [factory]);
+  }, [factory, openRun]);
 
   const answering = useRef(false);
 
@@ -745,7 +737,6 @@ function Interactive({
   }, []);
 
   useEffect(() => () => stopTail(), [stopTail]);
-  useEffect(() => () => stopIntakePoll(), [stopIntakePoll]);
 
   // Read the identity once per overlay opening; a missing email disables the approval actions.
   const approvalOpen = data.approval !== null;
@@ -786,6 +777,7 @@ function Interactive({
     }
     if (state.intake !== null) {
       if (key.escape) {
+        spawnBaseline.current = null;
         setData((current) => ({ ...current, intake: null }));
         return;
       }

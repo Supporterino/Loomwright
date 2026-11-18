@@ -3,6 +3,7 @@ import type { StatusDocument } from "@loomwright/core/factory";
 import { RunState } from "@loomwright/core/state/run";
 import type { UsageSummary } from "@loomwright/core/usage/usage";
 import { PROTOCOL_VERSION, type RunEvent } from "@loomwright/protocol";
+import { watchSpawn } from "../src/intake/follow.ts";
 import { ACTIVITY_LIMIT, collectFacts, type EventFacts } from "../src/model/facts.ts";
 import { createStatusPoller } from "../src/model/poll.ts";
 import { createFrameScheduler } from "../src/model/render-loop.ts";
@@ -132,6 +133,13 @@ function statusDoc(): StatusDocument {
   };
 }
 
+function statusWith(ids: readonly string[]): StatusDocument {
+  const template = statusDoc();
+  const run = template.runs[0];
+  if (run === undefined) throw new Error("statusDoc has no run");
+  return { ...template, runs: ids.map((id) => ({ ...run, id })) };
+}
+
 function frameOf(facts: EventFacts): ReturnType<typeof buildViewModel> {
   const status = statusDoc();
   return buildViewModel({
@@ -244,6 +252,44 @@ describe("rendering and polling stay bounded", () => {
     expect(calls).toBe(11);
     await clock.advance(1);
     expect(calls).toBe(12);
+
+    poller.stop();
+    expect(clock.pending).toBe(0);
+  });
+
+  test("status is polled once a second: the intake spawn watch adds no poll or timer of its own", async () => {
+    const clock = fakeClock();
+    let polls = 0;
+    let started: string | null = null;
+    let status = statusWith([RUN]);
+    const baseline = new Set(status.runs.map((run) => run.id));
+    const poller = createStatusPoller({
+      poll: async () => {
+        polls += 1;
+        started = watchSpawn(baseline, status, "/spawn.log", (path) => {
+          expect(path).toBe("/spawn.log");
+          return ["spawn line"];
+        }).started;
+      },
+      schedule: clock.schedule,
+      cancel: clock.cancel,
+    });
+
+    poller.start();
+    await clock.advance(10_000);
+    expect(polls).toBeLessThanOrEqual(10);
+    // Only the poller's own timer is pending; the spawn watch schedules nothing.
+    expect(clock.pending).toBe(1);
+
+    // A spawn kicks one poll and keeps the same single cadence.
+    poller.kick();
+    await Promise.resolve();
+    expect(polls).toBeLessThanOrEqual(11);
+    expect(clock.pending).toBe(1);
+
+    status = statusWith([RUN, "add-health-2"]);
+    await clock.advance(1_000);
+    expect<string | null>(started).toBe("add-health-2");
 
     poller.stop();
     expect(clock.pending).toBe(0);
