@@ -23,10 +23,25 @@ import {
   approvalProgress,
   approvalStarted,
 } from "./approval/overlay.ts";
+import {
+  type ControlAction,
+  confirmFor,
+  confirmKeys,
+  confirmPanel,
+  resumeFor,
+  retryFor,
+} from "./controls/actions.ts";
+import {
+  openQuestions,
+  type QuestionsState,
+  questionsKeys,
+  questionsPanel,
+} from "./controls/questions.tsx";
 import { type IntakeState, initialIntake, intakeKeys, intakePanel } from "./intake/dialog.tsx";
 import {
   createLauncher,
   type LaunchAction,
+  type Launcher,
   type LaunchResult,
   tailLog,
 } from "./launch/launcher.ts";
@@ -38,7 +53,7 @@ import {
   type ViewModel,
   type ViewModelInput,
 } from "./model/view-model.ts";
-import { createTerminalSession } from "./session.ts";
+import { createTerminalSession, type TerminalSession } from "./session.ts";
 import { type GlyphSet, glyphsFor } from "./theme/glyphs.ts";
 import type { ColorDepth } from "./theme/tokens.ts";
 import { Frame } from "./views/frame.tsx";
@@ -92,6 +107,10 @@ interface UiData {
   readonly intake: IntakeState | null;
   /** The approval overlay, or null when the selected run is not at the gate. */
   readonly approval: ApprovalState | null;
+  /** The questions pane, or null when it is closed. */
+  readonly questions: QuestionsState | null;
+  /** The abort confirmation, or null when no confirmation is open. */
+  readonly confirmation: ControlAction | null;
   /** `git config user.email`; null until the overlay has read it once. */
   readonly identity: string | null;
 }
@@ -135,7 +154,7 @@ function syncApproval(data: UiData): UiData {
 }
 
 function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
-  const input: ViewModelInput = {
+  const baseInput: ViewModelInput = {
     source: "live",
     screen: data.screen,
     columns: data.columns,
@@ -147,21 +166,35 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
     runs: data.runs,
     selectedRunId: data.selectedRunId,
     selectedTaskId: data.selectedTaskId,
-    panel: data.intake === null ? null : intakePanel(data.intake, glyphs),
+    panel: null,
     notice: data.notice,
   };
-  if (data.approval === null || data.screen !== "run") return buildViewModel(input);
-  const base = buildViewModel({ ...input, panel: null });
-  if (base.run === null) return base;
-  const run = selectedRunState(data);
-  const panel = approvalPanel({
-    run: base.run,
-    evidence: evidenceOf(data),
-    state: data.approval,
-    glyphs,
-    ...(run?.draft === undefined ? {} : { draft: run.draft }),
-  });
-  return buildViewModel({ ...input, panel });
+  const base = buildViewModel(baseInput);
+  if (data.approval !== null && data.screen === "run") {
+    if (base.run === null) return base;
+    const run = selectedRunState(data);
+    const panel = approvalPanel({
+      run: base.run,
+      evidence: evidenceOf(data),
+      state: data.approval,
+      glyphs,
+      ...(run?.draft === undefined ? {} : { draft: run.draft }),
+    });
+    return buildViewModel({ ...baseInput, panel });
+  }
+  if (data.intake !== null) {
+    return buildViewModel({ ...baseInput, panel: intakePanel(data.intake, glyphs) });
+  }
+  if (data.questions !== null && base.run !== null) {
+    return buildViewModel({
+      ...baseInput,
+      panel: questionsPanel({ run: base.run, state: data.questions, glyphs }),
+    });
+  }
+  if (data.confirmation !== null) {
+    return buildViewModel({ ...baseInput, panel: confirmPanel(data.confirmation, glyphs) });
+  }
+  return base;
 }
 
 function initialData(
@@ -182,6 +215,8 @@ function initialData(
     notice: null,
     intake: null,
     approval: null,
+    questions: null,
+    confirmation: null,
     identity: null,
   };
   // The list is newest first, so the first item is the run the list opens on.
@@ -200,6 +235,59 @@ function gitExec(args: readonly string[], cwd: string): Promise<ExecResult> {
       resolve({ code: typeof error.code === "number" ? error.code : 1, stdout });
     });
   });
+}
+
+export interface ControlDeps {
+  readonly factory: Pick<Factory, "abort" | "retry">;
+  readonly launcher: Pick<Launcher, "launch">;
+}
+
+/**
+ * The only in-process control effects: abort and retry return after writing run state, and
+ * resume is a detached child. Nothing here waits for a pipeline phase.
+ */
+export async function performControl(deps: ControlDeps, action: ControlAction): Promise<void> {
+  switch (action.kind) {
+    case "abort":
+      await deps.factory.abort(action.id);
+      return;
+    case "retry":
+      await deps.factory.retry(action.id, action.taskId);
+      return;
+    case "resume":
+      await deps.launcher.launch({ kind: "resume", id: action.id });
+      return;
+    default: {
+      const unhandled: never = action;
+      throw new Error(`unknown control action: ${String(unhandled)}`);
+    }
+  }
+}
+
+/** `Factory.answer` writes the command inbox and returns; the run is not waited for. */
+export async function recordAnswer(
+  factory: Pick<Factory, "answer">,
+  changeId: string,
+  answer: string,
+  question: string,
+): Promise<void> {
+  await factory.answer(changeId, answer, question);
+}
+
+export interface SessionRun {
+  readonly session: TerminalSession;
+  /** Resolves when the UI quits and rejects when rendering throws. */
+  readonly render: () => Promise<void>;
+}
+
+/** The one place the alternate screen and raw mode are entered and restored. */
+export async function runInSession(input: SessionRun): Promise<void> {
+  input.session.enter();
+  try {
+    await input.render();
+  } finally {
+    input.session.leave();
+  }
 }
 
 interface InteractiveProps {
@@ -273,6 +361,8 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
         notice: null,
         intake: null,
         approval: null,
+        questions: null,
+        confirmation: null,
         identity: null,
       }));
       const load = async (): Promise<void> => {
@@ -474,20 +564,76 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
     [launcher],
   );
 
-  useEffect(() => {
-    const timer = setInterval(() => {
+  const refreshStatus = useCallback(async (): Promise<void> => {
+    try {
+      const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
+      setData((current) => syncApproval({ ...current, status, runs }));
+    } catch {
+      // A refresh failure keeps the last good status; the next poll retries.
+    }
+  }, [factory]);
+
+  const answering = useRef(false);
+
+  /** Records the answer, then waits only for the short command write, never for the run. */
+  const submitAnswer = useCallback(
+    (id: string, question: string, answer: string): void => {
+      if (answering.current) return;
+      answering.current = true;
       void (async () => {
         try {
-          const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
-          setData((current) => syncApproval({ ...current, status, runs }));
-        } catch {
-          // A poll failure keeps the last good status; the next tick retries.
+          await recordAnswer(factory, id, answer, question);
+          setData((current) => {
+            const questions = current.questions;
+            if (questions === null || questions.draft === null) return current;
+            return {
+              ...current,
+              questions: {
+                ...questions,
+                draft: { ...questions.draft, recorded: true },
+                notice: null,
+              },
+            };
+          });
+          await refreshStatus();
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          setData((current) =>
+            current.questions === null
+              ? current
+              : { ...current, questions: { ...current.questions, notice: message } },
+          );
+        } finally {
+          answering.current = false;
         }
       })();
+    },
+    [factory, refreshStatus],
+  );
+
+  /** Abort and retry return immediately; resume is a detached child. Never a whole phase. */
+  const applyControl = useCallback(
+    (action: ControlAction): void => {
+      void (async () => {
+        try {
+          await performControl({ factory, launcher }, action);
+          await refreshStatus();
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          setData((current) => ({ ...current, notice: message }));
+        }
+      })();
+    },
+    [factory, launcher, refreshStatus],
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void refreshStatus();
     }, 1000);
     timer.unref();
     return () => clearInterval(timer);
-  }, [factory]);
+  }, [refreshStatus]);
 
   useEffect(() => {
     const onResize = (): void => {
@@ -557,6 +703,36 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
       if (outcome.submit !== undefined) submitAction(outcome.submit);
       return;
     }
+    if (state.questions !== null) {
+      const run = viewRef.current.run;
+      if (run !== null) {
+        if (key.escape && state.questions.draft === null) {
+          setData((current) => ({ ...current, questions: null }));
+          return;
+        }
+        const outcome = questionsKeys(run, state.questions, input, key);
+        if (outcome.state !== state.questions) {
+          setData((current) => ({ ...current, questions: outcome.state }));
+        }
+        if (outcome.answer !== undefined) {
+          submitAnswer(run.id, outcome.answer.question, outcome.answer.answer);
+        }
+      }
+      return;
+    }
+    if (state.confirmation !== null) {
+      const result = confirmKeys(input, key);
+      if (result === "cancel") {
+        setData((current) => ({ ...current, confirmation: null }));
+        return;
+      }
+      if (result === "confirm") {
+        const action = state.confirmation;
+        setData((current) => ({ ...current, confirmation: null }));
+        applyControl(action);
+      }
+      return;
+    }
     if (!key.ctrl && input === "n") {
       setData((current) => ({ ...current, intake: initialIntake }));
       return;
@@ -578,6 +754,37 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
       case "open-run":
         openRun(intent.runId);
         return;
+      case "open-questions": {
+        const run = current.run;
+        const questions = run === null ? null : openQuestions(run);
+        if (questions !== null) {
+          setData((state) => ({ ...state, questions, confirmation: null }));
+        }
+        return;
+      }
+      case "abort": {
+        const action = confirmFor(current);
+        if (action !== null) {
+          setData((state) => ({ ...state, confirmation: action, questions: null }));
+        }
+        return;
+      }
+      case "retry": {
+        const action = retryFor(current);
+        if (action !== null) {
+          setData((state) => ({ ...state, confirmation: null }));
+          applyControl(action);
+        }
+        return;
+      }
+      case "resume": {
+        const action = resumeFor(current);
+        if (action !== null) {
+          setData((state) => ({ ...state, confirmation: null }));
+          applyControl(action);
+        }
+        return;
+      }
       case "back":
         stopTail();
         setData((state) => ({
@@ -588,6 +795,8 @@ function Interactive({ options, workspace, factory, initial }: InteractiveProps)
           facts: collectFacts([]),
           notice: null,
           approval: null,
+          questions: null,
+          confirmation: null,
           identity: null,
         }));
         return;
@@ -679,16 +888,20 @@ async function renderOnce(options: TuiOptions): Promise<string> {
 
 async function runPlaceholder(options: TuiOptions): Promise<number> {
   const session = createTerminalSession(process.stdin, process.stdout);
-  session.enter();
-  try {
-    const instance = render(
-      <PlaceholderInteractive workspace={options.workspace} replay={options.replay} once={false} />,
-      { stdout: process.stdout, stdin: process.stdin, patchConsole: false, exitOnCtrlC: false },
-    );
-    await instance.waitUntilExit();
-  } finally {
-    session.leave();
-  }
+  await runInSession({
+    session,
+    render: async () => {
+      const instance = render(
+        <PlaceholderInteractive
+          workspace={options.workspace}
+          replay={options.replay}
+          once={false}
+        />,
+        { stdout: process.stdout, stdin: process.stdin, patchConsole: false, exitOnCtrlC: false },
+      );
+      await instance.waitUntilExit();
+    },
+  });
   return 0;
 }
 
@@ -706,25 +919,33 @@ export async function runTui(options: TuiOptions): Promise<number> {
   const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
   const initial = initialData(options, status, runs);
   const session = createTerminalSession(process.stdin, process.stdout);
-  session.enter();
   const offSignal = session.onSignal(() => {
     session.leave();
     process.exit(0);
   });
   try {
-    const instance = render(
-      <Interactive options={options} workspace={workspace} factory={factory} initial={initial} />,
-      {
-        stdout: process.stdout,
-        stdin: process.stdin,
-        patchConsole: false,
-        exitOnCtrlC: false,
+    await runInSession({
+      session,
+      render: async () => {
+        const instance = render(
+          <Interactive
+            options={options}
+            workspace={workspace}
+            factory={factory}
+            initial={initial}
+          />,
+          {
+            stdout: process.stdout,
+            stdin: process.stdin,
+            patchConsole: false,
+            exitOnCtrlC: false,
+          },
+        );
+        await instance.waitUntilExit();
       },
-    );
-    await instance.waitUntilExit();
+    });
   } finally {
     offSignal();
-    session.leave();
   }
   return 0;
 }

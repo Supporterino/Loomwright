@@ -14,6 +14,7 @@ import {
   reduce,
 } from "@loomwright/protocol";
 import { type ApprovalState, approvalPanel } from "../src/approval/overlay.ts";
+import { openQuestions, questionsPanel } from "../src/controls/questions.tsx";
 import {
   type IntakeState,
   initialIntake,
@@ -343,6 +344,32 @@ function approveOnlyConfirm(): ViewModel {
   return approvalFrame({ kind: "confirming", action: "approve-only" });
 }
 
+function questionOpen(): ViewModel {
+  const run = runState({
+    clarifications: [
+      {
+        step: "design",
+        question: "Which endpoints should be public?",
+        status: "unanswered",
+        at: ISO,
+      },
+      {
+        step: "design",
+        question: "Do health checks need auth?",
+        status: "skipped",
+        at: ISO,
+      },
+    ],
+  });
+  const input = runInput(run, [], 0, 0);
+  const base = buildViewModel(input);
+  if (base.run === null) throw new Error("the question frame has no run");
+  const state = openQuestions(base.run);
+  if (state === null) throw new Error("the question frame has no questions");
+  const panel = questionsPanel({ run: base.run, state, glyphs: ASCII_GLYPHS });
+  return buildViewModel({ ...input, panel });
+}
+
 const STATES = {
   "no-runs": noRuns,
   "running-graph": runningGraph,
@@ -354,6 +381,7 @@ const STATES = {
   "awaiting-approval": awaitingApproval,
   "approve-and-run-confirm": approveAndRunConfirm,
   "approve-only-confirm": approveOnlyConfirm,
+  "question-open": questionOpen,
 } satisfies Record<string, () => ViewModel>;
 
 const SIZES = [
