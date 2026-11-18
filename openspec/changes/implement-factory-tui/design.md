@@ -50,8 +50,9 @@ The view-model is a pure function of `(RunSnapshot, StatusDocument slice, RunSta
 rebuilt from `readEvents` on open and then from `tailEvents` from `lastSeq + 1`. Run existence,
 phase, summary, draft, lock, queue position and usage come from `status()`/`listRuns()`; gates,
 agent roles, retries and activity come from events. No run-state or event file under `.factory/` is
-read — the sole exception is the launcher's own `.factory/logs/tui-spawn-<ts>.log`, tailed only to
-show a failed child's last lines — and no pipeline, scheduler, gate or state module is
+read — the exceptions are the launcher's own `.factory/logs/tui-spawn-<ts>.log`, tailed only to
+show a failed child's last lines, and the intake dialog's `.factory/requests/*.md` files, read only
+to rank, validate and preview a request — and no pipeline, scheduler, gate or state module is
 value-imported (type-only imports from `core` are fine), so the UI cannot drift from the engine's
 own rules.
 
