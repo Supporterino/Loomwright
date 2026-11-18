@@ -86,13 +86,33 @@ function toQuestion(data: {
   };
 }
 
+function copySnapshot(snapshot: RunSnapshot): RunSnapshot {
+  const branches: RunSnapshot["branches"] = {};
+  for (const [repo, info] of Object.entries(snapshot.branches)) branches[repo] = { ...info };
+  const tasks: RunSnapshot["tasks"] = {};
+  for (const [id, task] of Object.entries(snapshot.tasks)) tasks[id] = { ...task };
+  const gates: RunSnapshot["gates"] = {};
+  for (const [name, gate] of Object.entries(snapshot.gates)) gates[name] = { ...gate };
+  return {
+    ...snapshot,
+    branches,
+    tasks,
+    questions: snapshot.questions.map((question) => ({ ...question })),
+    approval: snapshot.approval === null ? null : { ...snapshot.approval },
+    pendingApproval: snapshot.pendingApproval === null ? null : { ...snapshot.pendingApproval },
+    usage: { ...snapshot.usage },
+    gates,
+  };
+}
+
 /**
  * Replays a run's events into a snapshot. Pure and deterministic: it reads only the events,
- * never the filesystem, and copies every map it keeps so the input stays untouched.
+ * never the filesystem, and copies every map it keeps so the input stays untouched. Passing
+ * `from` folds a stream in batches: the result is the same as one pass, and `from` is untouched.
  */
-export function reduce(events: readonly RunEvent[]): RunSnapshot {
+export function reduce(events: readonly RunEvent[], from?: RunSnapshot): RunSnapshot {
   const first = events[0];
-  const snapshot = emptySnapshot(first?.runId ?? "");
+  const snapshot = from === undefined ? emptySnapshot(first?.runId ?? "") : copySnapshot(from);
 
   const upsertTask = (task: { id: string }, status: TaskStatus, attempt?: number): void => {
     const previous = snapshot.tasks[task.id];

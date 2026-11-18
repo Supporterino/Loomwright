@@ -307,6 +307,42 @@ test("the reducer is pure", () => {
   expect(events).toEqual(before);
 });
 
+test("reduce resumes from a prior snapshot without touching it", () => {
+  const task = { id: "2.1", repo: "loomwright" };
+  const first = reduce([
+    started(),
+    transition(2, "task.started", { task, attempt: 1 }),
+    transition(3, "usage.delta", {
+      step: "implement",
+      usage: { input: 1, output: 2, reasoning: 3, cacheRead: 4, cacheWrite: 5, cost: 6 },
+    }),
+  ]);
+  const before = structuredClone(first);
+  const rest = [
+    transition(4, "task.failed", { task, reason: "gate" }),
+    transition(5, "usage.delta", {
+      step: "implement",
+      usage: { input: 10, output: 20, reasoning: 30, cacheRead: 40, cacheWrite: 50, cost: 60 },
+    }),
+  ];
+  const resumed = reduce(rest, first);
+
+  expect(first).toEqual(before);
+  expect(resumed).toEqual(
+    reduce([
+      started(),
+      transition(2, "task.started", { task, attempt: 1 }),
+      transition(3, "usage.delta", {
+        step: "implement",
+        usage: { input: 1, output: 2, reasoning: 3, cacheRead: 4, cacheWrite: 5, cost: 6 },
+      }),
+      ...rest,
+    ]),
+  );
+  expect(resumed.lastSeq).toBe(5);
+  expect(resumed.runId).toBe("add-health");
+});
+
 test("an unknown event type is skipped by reduce", () => {
   // A reader hands reduce only known events; the test casts to prove the runtime guard.
   const unknown = {

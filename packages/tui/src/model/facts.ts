@@ -17,10 +17,19 @@ export interface EventFacts {
 
 /** One left-to-right pass over the events; no filesystem and no clock. */
 export function collectFacts(events: readonly RunEvent[]): EventFacts {
+  return appendFacts({ gates: {}, agents: {}, retries: {}, activity: [] }, events);
+}
+
+/**
+ * Folds new events into facts an earlier frame already collected, so the live tail keeps only the
+ * projection and never the events. Copies every map it keeps: `prior` stays untouched.
+ */
+export function appendFacts(prior: EventFacts, events: readonly RunEvent[]): EventFacts {
   const gates: Record<string, GateRow[]> = {};
-  const agents: Record<string, AgentFact> = {};
-  const retries: Record<string, number> = {};
-  const activity = new ActivityRing();
+  for (const [step, rows] of Object.entries(prior.gates)) gates[step] = [...rows];
+  const agents: Record<string, AgentFact> = { ...prior.agents };
+  const retries: Record<string, number> = { ...prior.retries };
+  const activity = new ActivityRing(prior.activity);
 
   const bump = (key: string): void => {
     retries[key] = (retries[key] ?? 0) + 1;
@@ -51,10 +60,10 @@ export function collectFacts(events: readonly RunEvent[]): EventFacts {
         break;
       case "agent.finished": {
         const step = event.data.step;
-        const prior = agents[step];
+        const priorAgent = agents[step];
         agents[step] = {
           role: event.data.role,
-          model: prior?.model ?? "",
+          model: priorAgent?.model ?? "",
           durationMs: event.data.durationMs,
         };
         break;

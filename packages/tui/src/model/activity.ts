@@ -12,6 +12,11 @@ export class ActivityRing {
   private start = 0;
   private count = 0;
 
+  /** Seeding from an older ring keeps the cap: only the newest `ACTIVITY_LIMIT` lines survive. */
+  constructor(initial: readonly ActivityLine[] = []) {
+    for (const line of initial) this.push(line);
+  }
+
   push(line: ActivityLine): void {
     if (this.count < ACTIVITY_LIMIT) {
       this.slots[(this.start + this.count) % ACTIVITY_LIMIT] = line;

@@ -8,7 +8,7 @@ import process from "node:process";
 import { type Factory, open, openReadOnly, type StatusDocument } from "@loomwright/core/factory";
 import type { Io } from "@loomwright/core/io";
 import type { RunState } from "@loomwright/core/state/run";
-import { type RunEvent, type RunSnapshot, reduce } from "@loomwright/protocol";
+import type { RunEvent, RunSnapshot } from "@loomwright/protocol";
 import { render, useApp, useInput } from "ink";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ExecResult, readApprover } from "./approval/identity.ts";
@@ -47,6 +47,7 @@ import {
   tailLog,
 } from "./launch/launcher.ts";
 import { collectFacts, type EventFacts } from "./model/facts.ts";
+import { type FoldedRun, foldRun } from "./model/fold.ts";
 import { applyKey, type KeyInput } from "./model/keys.ts";
 import { createStatusPoller, type StatusPoller } from "./model/poll.ts";
 import { createFrameScheduler, type FrameScheduler } from "./model/render-loop.ts";
@@ -375,6 +376,8 @@ function Interactive({
   const dataRef = useRef(data);
   dataRef.current = data;
   const eventsRef = useRef<RunEvent[]>([]);
+  /** The running projection; the events that built it are drained on every frame. */
+  const foldRef = useRef<FoldedRun | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const intakeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const schedulerRef = useRef<FrameScheduler | null>(null);
@@ -392,17 +395,16 @@ function Interactive({
     abortRef.current = null;
   }, []);
 
-  /** The frame's only state write: whatever events arrived since the last flush are all here. */
+  /** The frame's only state write: it folds the events arrived since the last flush and drops them. */
   const flushFrame = useCallback((): void => {
     const events = eventsRef.current;
     if (events.length === 0) return;
+    eventsRef.current = [];
+    const folded = foldRun(foldRef.current, events);
+    foldRef.current = folded;
     setData((current) =>
       current.screen === "run" && current.selectedRunId !== null
-        ? syncApproval({
-            ...current,
-            snapshot: reduce(events),
-            facts: collectFacts(events),
-          })
+        ? syncApproval({ ...current, snapshot: folded.snapshot, facts: folded.facts })
         : current,
     );
   }, []);
@@ -434,6 +436,7 @@ function Interactive({
     (id: string): void => {
       stopTail();
       eventsRef.current = [];
+      foldRef.current = null;
       setData((current) => ({
         ...current,
         screen: "run",
@@ -456,15 +459,15 @@ function Interactive({
           if (controller.signal.aborted) return;
           if (item.event !== undefined) events.push(item.event);
         }
-        eventsRef.current = events;
         if (events.length === 0 || controller.signal.aborted) return;
-        const snapshot = reduce(events);
+        const folded = foldRun(null, events);
+        foldRef.current = folded;
         setData((current) =>
           current.screen === "run" && current.selectedRunId === id
-            ? syncApproval({ ...current, snapshot, facts: collectFacts(events) })
+            ? syncApproval({ ...current, snapshot: folded.snapshot, facts: folded.facts })
             : current,
         );
-        await appendTail(id, snapshot.lastSeq + 1, controller.signal);
+        await appendTail(id, folded.snapshot.lastSeq + 1, controller.signal);
       };
       void load().catch((err: unknown) => {
         // An abort ends a tail normally; anything else is shown without breaking the frame.
@@ -879,6 +882,8 @@ function Interactive({
       }
       case "back":
         stopTail();
+        eventsRef.current = [];
+        foldRef.current = null;
         setData((state) => ({
           ...state,
           screen: "list",
