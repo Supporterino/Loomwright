@@ -515,12 +515,30 @@ function listFactory(status: StatusDocument, runs: readonly RunState[]): Factory
   };
 }
 
-async function until(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+async function until(
+  predicate: () => boolean,
+  what = "the run list",
+  timeoutMs = 15_000,
+): Promise<void> {
   const started = Date.now();
   while (!predicate()) {
-    if (Date.now() - started > timeoutMs) throw new Error("timed out waiting for the run list");
+    if (Date.now() - started > timeoutMs) throw new Error(`timed out waiting for ${what}`);
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+}
+
+/** Ink subscribes to stdin after paint, so a single press can race the mount and vanish. */
+async function pressUntil(
+  input: FakeInput,
+  text: string,
+  what: string,
+  ready: () => boolean,
+): Promise<void> {
+  await until(() => {
+    if (ready()) return true;
+    input.press(text);
+    return false;
+  }, what);
 }
 
 describe("the interactive entry", () => {
@@ -579,7 +597,7 @@ describe("the interactive entry", () => {
 
       await until(() => input.isRaw);
       expect(settled).toBe(false);
-      input.press("q");
+      await pressUntil(input, "q", "the exit on q", () => settled);
       expect(await code).toBe(0);
     } finally {
       if (realStdin !== undefined) Object.defineProperty(process, "stdin", realStdin);
@@ -676,4 +694,81 @@ describe("the interactive entry", () => {
       if (realStdout !== undefined) Object.defineProperty(process, "stdout", realStdout);
     }
   });
+
+  test("q quits from the approval overlay instead of trapping the user at the gate", async () => {
+    const run = runState({ phase: "awaiting-approval" });
+    const status = statusDoc([{ run, tokens: 0, cost: 0 }]);
+    resetSeq();
+    const pending = [
+      event("approval.pending", {
+        specHash: "0123456789abcdef0123456789abcdef",
+        changeDir: "openspec/changes/add-health",
+      }),
+    ];
+    const factory: Factory = {
+      ...listFactory(status, [run]),
+      // The gate's overlay opens from the phase; the stream carries the pending approval.
+      events: async function* () {
+        for (const item of pending) yield { line: JSON.stringify(item), event: item };
+      },
+    };
+    const input = new FakeInput();
+    const output = new FakeOutput();
+    const realStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+    const realStdout = Object.getOwnPropertyDescriptor(process, "stdout");
+    const session: TerminalSession = {
+      enter: () => {},
+      leave: () => {},
+      get columns(): number {
+        return 80;
+      },
+      get rows(): number {
+        return 24;
+      },
+      onKey: () => () => {},
+      onResize: () => () => {},
+      onSignal: () => () => {},
+    };
+
+    try {
+      Object.defineProperty(process, "stdin", { value: input, configurable: true });
+      Object.defineProperty(process, "stdout", { value: output, configurable: true });
+      let settled = false;
+      const code = runTui({
+        workspace: "/workspace",
+        once: false,
+        ascii: true,
+        columns: 80,
+        rows: 24,
+        out: () => {},
+        env: {},
+        isTTY: false,
+        // Ink writes only the last frame when CI is set; this test reads the live screen.
+        frames: true,
+        factory,
+        launcher: {
+          launch: async () => {
+            throw new Error("the approval gate must not launch on q");
+          },
+        },
+        session,
+      }).then((value) => {
+        settled = true;
+        return value;
+      });
+      await until(() => input.isRaw);
+      // Open only once the list is on screen; otherwise Enter could race the first paint.
+      await until(() => output.text().includes(`> ${run.id}`), "the run row");
+      // One Enter only: a repeat would call openRun again and abort the load that opens the gate.
+      input.press("\r");
+      await until(() => output.text().includes("Approval - add-health"), "the approval overlay");
+      expect(output.text()).toContain("q quit");
+      input.press("q");
+      await until(() => settled, "the exit on q");
+      expect(await code).toBe(0);
+    } finally {
+      if (realStdin !== undefined) Object.defineProperty(process, "stdin", realStdin);
+      if (realStdout !== undefined) Object.defineProperty(process, "stdout", realStdout);
+    }
+  }, 60_000);
 });

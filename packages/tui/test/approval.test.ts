@@ -348,6 +348,7 @@ describe("the actions are gated by their evidence", () => {
     expect(text).toContain("A approve only");
     expect(text).not.toContain("w reword");
     expect(text).not.toContain("R reapprove");
+    expect(text).toContain("q quit");
   });
 
   test("a grant in the stream offers reapprove and a commit names it in the confirmation", () => {
@@ -359,6 +360,24 @@ describe("the actions are gated by their evidence", () => {
     expect(confirming.state).toEqual({ kind: "confirming", action: "reapprove" });
     const text = panelText(run, confirming.state, given);
     expect(text).toContain(shortCommit(SPEC_COMMIT));
+  });
+});
+
+describe("q quits from the gate", () => {
+  test("every overlay state offers q quit in the footer", () => {
+    const run = detail(runState(), pendingEvents());
+    const states: readonly ApprovalState[] = [
+      { kind: "idle" },
+      { kind: "confirming", action: "approve" },
+      { kind: "launching", action: "approve" },
+      approvalStarted({ kind: "launching", action: "approve-only" }),
+      { kind: "failed", action: "approve", code: 1, tail: [] },
+      { kind: "done" },
+    ];
+    for (const state of states) {
+      const panel = approvalPanel({ run, evidence: evidence(), state, glyphs: ASCII_GLYPHS });
+      expect(panel.keys.map((hint) => `${hint.key} ${hint.label}`)).toContain("q quit");
+    }
   });
 });
 

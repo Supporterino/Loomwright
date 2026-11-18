@@ -288,20 +288,20 @@ function stateLines(input: ApprovalInput, glyphs: GlyphSet): string[] {
 
 function panelKeys(input: ApprovalInput): PanelView["keys"] {
   const { state, evidence } = input;
-  if (state.kind === "confirming") {
-    return [keyHint("Enter", "confirm"), keyHint("Esc", "cancel")];
-  }
-  if (state.kind === "waiting") {
-    return state.action === "approve-only" ? [keyHint("r", "resume")] : [];
-  }
-  if (state.kind === "launching") return [];
-  if (state.kind === "done") return [];
-  const available = approvalAvailable(evidence);
   const keys: PanelView["keys"][number][] = [];
-  if (available.approve) keys.push(keyHint("a", "approve and run"));
-  if (available["approve-only"]) keys.push(keyHint("A", "approve only"));
-  if (available.reword) keys.push(keyHint("w", "reword"));
-  if (available.reapprove) keys.push(keyHint("R", "reapprove"));
+  if (state.kind === "confirming") {
+    keys.push(keyHint("Enter", "confirm"), keyHint("Esc", "cancel"));
+  } else if (state.kind === "waiting") {
+    if (state.action === "approve-only") keys.push(keyHint("r", "resume"));
+  } else if (state.kind === "idle") {
+    const available = approvalAvailable(evidence);
+    if (available.approve) keys.push(keyHint("a", "approve and run"));
+    if (available["approve-only"]) keys.push(keyHint("A", "approve only"));
+    if (available.reword) keys.push(keyHint("w", "reword"));
+    if (available.reapprove) keys.push(keyHint("R", "reapprove"));
+  }
+  // `q` quits from every state, so the footer names it wherever the overlay is open.
+  keys.push(keyHint("q", "quit"));
   return keys;
 }
 

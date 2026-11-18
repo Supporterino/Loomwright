@@ -6,7 +6,7 @@
 | spec commit: - until approval.granted                                        |
 | approver: - until approval.granted                                           |
 | identity: dev@example.com                                                    |
-| a approve and run - A approve only                                           |
+| a approve and run - A approve only - q quit                                  |
 +------------------------------------------------------------------------------+
 
 
@@ -21,4 +21,4 @@
 
 
 
-a approve and run - A approve only
+a approve and run - A approve only - q quit

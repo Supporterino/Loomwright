@@ -83,6 +83,11 @@ export interface TuiOptions {
   readonly factory?: Factory;
   readonly launcher?: Launcher;
   readonly session?: TerminalSession;
+  /**
+   * Print every frame instead of rewriting the previous one. Ink only writes the last frame
+   * when CI is set (the gates and GitHub Actions do), so tests that read a live screen need it.
+   */
+  readonly frames?: boolean;
 }
 
 /** The entry normalises the terminal size once; every rendered component gets both numbers. */
@@ -754,11 +759,12 @@ function Interactive({
   }, [approvalOpen, data.identity, workspace]);
 
   useInput((input, key) => {
-    if (key.ctrl && input === "c") {
+    const state = dataRef.current;
+    // `q` quits everywhere, including over the approval overlay the gate otherwise traps you in.
+    if ((key.ctrl && input === "c") || (state.approval !== null && !key.ctrl && input === "q")) {
       exit();
       return;
     }
-    const state = dataRef.current;
     if (state.approval !== null) {
       const run = selectedRunState(state);
       if (run !== undefined) {
@@ -1079,6 +1085,7 @@ export async function runTui(options: TuiOptions): Promise<number> {
             stdin: process.stdin,
             patchConsole: false,
             exitOnCtrlC: false,
+            debug: options.frames === true,
           },
         );
         await instance.waitUntilExit();
