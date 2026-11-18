@@ -376,13 +376,18 @@ export class Progress {
     }
   }
 
-  implementSummary(counts: TaskCounts, elapsedMs: number): void {
-    if (counts.total === 0) return;
+  /** The final summary line; the caller streams it so a replay prints it too. */
+  implementSummaryText(counts: TaskCounts, elapsedMs: number): string {
     const parts = [`${counts.merged}/${counts.total} merged`];
     if (counts.failed > 0) parts.push(`${counts.failed} failed`);
     if (counts.cancelled > 0) parts.push(`${counts.cancelled} cancelled`);
     if (counts.pending > 0) parts.push(`${counts.pending} pending`);
-    this.line(`implement: ${parts.join(", ")} in ${formatDuration(elapsedMs)}`);
+    return `implement: ${parts.join(", ")} in ${formatDuration(elapsedMs)}`;
+  }
+
+  implementSummary(counts: TaskCounts, elapsedMs: number): void {
+    if (counts.total === 0) return;
+    this.line(this.implementSummaryText(counts, elapsedMs));
   }
 
   /** One heartbeat line for every session, gate and install that is still running. */

@@ -51,6 +51,7 @@ import { capText } from "../util/cap.ts";
 import { fence } from "../util/fence.ts";
 import { verifyApproval } from "./approve.ts";
 import type { Pipeline } from "./context.ts";
+import type { TaskCounts } from "./progress.ts";
 import { conflictPrompt, packsPrompt, taskPrompt, testerPrompt } from "./prompts.ts";
 
 const taskRef = (task: TaskState): { id: string; repo: string; title: string } => ({
@@ -153,13 +154,22 @@ const gateRef = (gate: GateInfo): { name: string; type: GateInfo["type"]; comman
 });
 
 /** The `gate.*` event family for one live gate transition. */
-export function gateEventPayload(event: GateEvent): {
+export function gateEventPayload(
+  event: GateEvent,
+  stage?: string,
+): {
   readonly type: EventType;
   readonly data: Record<string, unknown>;
 } {
   switch (event.phase) {
     case "plan":
-      return { type: "gate.planned", data: { gates: event.gates.map(gateRef) } };
+      return {
+        type: "gate.planned",
+        data: {
+          gates: event.gates.map(gateRef),
+          ...(stage === undefined ? {} : { stage }),
+        },
+      };
     case "start":
       return { type: "gate.started", data: gateRef(event.gate) };
     case "end":
@@ -217,9 +227,10 @@ export function emitGateEvent(
   step: string,
   event: GateEvent,
   entry: { readonly task?: string; readonly repo?: string },
+  stage?: string,
 ): void {
   markStep(p, step);
-  const mapped = gateEventPayload(event);
+  const mapped = gateEventPayload(event, stage);
   if (event.phase === "end") {
     const outputRef = gateOutputRef(p, id, event, entry);
     p.events.emit(mapped.type, { ...mapped.data, outputRef });
@@ -234,6 +245,7 @@ export function emitGateReport(
   step: string,
   report: GateReport,
   durationMs: number,
+  stage?: string,
 ): void {
   markStep(p, step);
   p.events.emit("gate.report", {
@@ -245,6 +257,7 @@ export function emitGateReport(
       durationMs: result.durationMs,
     })),
     durationMs,
+    ...(stage === undefined ? {} : { stage }),
   });
 }
 
@@ -489,8 +502,9 @@ export class PipelineTaskRunner implements TaskRunner {
   async #gates(task: TaskState, dir: string, stage = "gates"): Promise<GateReport> {
     const repo = this.p.repo(task.repo);
     const base = await this.#base(dir);
-    // The event schema has no stage: only the plain gate run can replay through the sink.
-    const streamed = stage === "gates" && this.p.bound;
+    const streamed = this.p.bound;
+    // The default stage is implied; only a named run carries it into the event payload.
+    const eventStage = stage === "gates" ? undefined : stage;
     const report = await this.p.gates.run(async () => {
       const started = this.p.progress.now();
       const report = await runGates({
@@ -507,10 +521,11 @@ export class PipelineTaskRunner implements TaskRunner {
             this.p.progress.gate(task.id, event, stage);
             return;
           }
-          emitGateEvent(this.p, this.id, task.id, event, { task: task.id });
+          emitGateEvent(this.p, this.id, task.id, event, { task: task.id }, eventStage);
         },
       });
-      if (streamed) emitGateReport(this.p, task.id, report, this.p.progress.now() - started);
+      if (streamed)
+        emitGateReport(this.p, task.id, report, this.p.progress.now() - started, eventStage);
       else this.p.progress.gatesDone(task.id, report, this.p.progress.now() - started, stage);
       return report;
     });
@@ -955,15 +970,14 @@ export async function implement(p: Pipeline, id: string): Promise<RunSummary> {
         };
   // Documented rule for the usage ledger: `usage.delta` is emitted exactly once per recorded
   // entry, at the single session choke point (`Pipeline.#call`); implementation emits none.
-  p.progress.implementSummary(
-    {
-      merged: adjusted.merged.length,
-      failed: adjusted.failed.length,
-      cancelled: adjusted.cancelled.length,
-      pending: adjusted.pending.length,
-      total: remaining.length,
-    },
-    p.progress.now() - started,
-  );
+  const elapsed = p.progress.now() - started;
+  const counts: TaskCounts = {
+    merged: adjusted.merged.length,
+    failed: adjusted.failed.length,
+    cancelled: adjusted.cancelled.length,
+    pending: adjusted.pending.length,
+    total: remaining.length,
+  };
+  if (counts.total > 0) progressLine(p, "always", p.progress.implementSummaryText(counts, elapsed));
   return adjusted;
 }

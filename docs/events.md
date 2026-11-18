@@ -101,18 +101,20 @@ when the phase moves on; `run.paused` remains the event that sets it.
 
 ### gate
 
-| Event           | Payload                                                                  |
-| --------------- | ------------------------------------------------------------------------ |
-| `gate.planned`  | `{ gates: GateRef[] }`                                                   |
-| `gate.started`  | `GateRef`                                                                |
-| `gate.finished` | `{ name, type, status, durationMs, outputRef? }`                         |
-| `gate.report`   | `{ passed, results: [{ name, type, status, durationMs }], durationMs? }` |
+| Event           | Payload                                                                          |
+| --------------- | -------------------------------------------------------------------------------- |
+| `gate.planned`  | `{ gates: GateRef[], stage? }`                                                   |
+| `gate.started`  | `GateRef`                                                                        |
+| `gate.finished` | `{ name, type, status, durationMs, outputRef? }`                                 |
+| `gate.report`   | `{ passed, results: [{ name, type, status, durationMs }], durationMs?, stage? }` |
 
 `type` is `format`, `lint`, `types`, `test` or `testAffected`; `status` is `pass`, `fail`,
 `missing`, `skipped`, `not-check-only` or `timeout`. `gate.finished` never carries the gate
 output: `outputRef` points at it in `.factory/logs/`. `gate.report.durationMs` is the elapsed
 wall clock of the whole gate run (`results[].durationMs` is one gate's own runtime); it is
-absent in streams written before it existed, and the terminal falls back to the sum.
+absent in streams written before it existed, and the terminal falls back to the sum. `stage`
+names the run (`gates`, `gates after rebase`) when it is not the default, so the terminal
+replays the same line it printed.
 
 ### agent
 
@@ -168,7 +170,8 @@ turn's `usage`, so the heartbeat line keeps its token count and reaches the stre
 (shown only with `--verbose`). The event exists so the terminal rendering survives a move to
 event sinks: the same text a command printed before is now one event, and the terminal sink
 replays it through the existing renderer. It is also why the event stream is the single source
-for progress, not a second log.
+for progress, not a second log. The `implement: N/N merged` summary is one `progress.line` at
+`always`.
 
 ### heartbeat
 

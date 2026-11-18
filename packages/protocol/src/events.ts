@@ -227,7 +227,15 @@ export const RunEvent = z.discriminatedUnion("type", [
       ...Bounded,
     }),
   ),
-  event("gate.planned", z.object({ gates: z.array(GateRef), ...Bounded })),
+  event(
+    "gate.planned",
+    z.object({
+      gates: z.array(GateRef),
+      /** Which gate run this is, e.g. `gates after rebase`; absent in older streams. */
+      stage: z.string().optional(),
+      ...Bounded,
+    }),
+  ),
   event("gate.started", GateRef),
   event(
     "gate.finished",
@@ -254,6 +262,8 @@ export const RunEvent = z.discriminatedUnion("type", [
       ),
       /** Elapsed wall clock of the gate run; absent in streams written before it was added. */
       durationMs: Duration.optional(),
+      /** Which gate run this is, e.g. `gates after rebase`; absent in older streams. */
+      stage: z.string().optional(),
       ...Bounded,
     }),
   ),

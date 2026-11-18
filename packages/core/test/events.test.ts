@@ -449,6 +449,25 @@ describe("events", () => {
     compare(legacy, (p) => p.gatesDone("1.1", report(true), 13_600), { step: "1.1" });
   });
 
+  test("the re-gate stage replays from gate.planned and gate.report", () => {
+    const gates = [gate("format", "fmt"), gate("test", "test")];
+    compare(
+      event("gate.planned", { gates, stage: "gates after rebase" }),
+      (p) => p.gate("1.1", { phase: "plan", gates }, "gates after rebase"),
+      { step: "1.1" },
+    );
+    compare(
+      event("gate.report", {
+        passed: true,
+        results: [{ name: "test", type: "test", status: "pass", durationMs: 1200 }],
+        durationMs: 1200,
+        stage: "gates after rebase",
+      }),
+      (p) => p.gatesDone("1.1", report(true), 1200, "gates after rebase"),
+      { step: "1.1" },
+    );
+  });
+
   test("quiet and verbose remain unchanged", () => {
     compare(event("progress.line", { level: "normal", text: "hidden" }), () => {}, {
       verbosity: "quiet",

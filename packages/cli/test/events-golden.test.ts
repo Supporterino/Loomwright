@@ -8,11 +8,13 @@ import { usageFromLedger } from "@loomwright/core/events/parity";
 import { projectRunState } from "@loomwright/core/events/project";
 import { RunEvent, type RunSnapshot, reduce } from "@loomwright/core/events/protocol";
 import type { EventSink } from "@loomwright/core/events/sink";
+import { TerminalSink } from "@loomwright/core/events/terminal";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { approve } from "@loomwright/core/pipeline/approve";
 import { Pipeline } from "@loomwright/core/pipeline/context";
 import { design, intake } from "@loomwright/core/pipeline/design";
 import { drive } from "@loomwright/core/pipeline/drive";
+import { Progress } from "@loomwright/core/pipeline/progress";
 import { readActive, releaseDriver } from "@loomwright/core/state/active";
 import { loadRun } from "@loomwright/core/state/run";
 import { factoryScript, type ScriptedTask } from "../../../test/fixtures/factory-script.ts";
@@ -191,6 +193,8 @@ function normaliseValue(value: unknown, ctx: NormaliseContext): unknown {
       Object.entries(value).map(([key, entry]) => {
         if (key === "ts") return [key, FIXED_TS];
         if (key === "durationMs") return [key, 0];
+        // Log offsets depend on how many digits a duration took in an earlier log line.
+        if (key === "offset" || key === "bytes") return [key, 0];
         if (key === "sessionId") return [key, "<session>"];
         return [key, normaliseValue(entry, ctx)];
       }),
@@ -356,6 +360,27 @@ function parseGolden(text: string): RunEvent[] {
   });
 }
 
+/** Replays the stored stream through the terminal sink; baseline and replay share one normaliser. */
+function replayGolden(kind: ScenarioKind): string[] {
+  const lines: string[] = [];
+  const progress = new Progress({ out: (line) => lines.push(line), heartbeatMs: 0, changeId: ID });
+  const sink = new TerminalSink(progress);
+  for (const event of parseGolden(fixtureText(kind, "jsonl"))) sink.write(event);
+  progress.stop();
+  // The golden normalised event text already; only rendered durations and tokens still vary.
+  const ctx: NormaliseContext = { root: "", base: "", repoRoot: "" };
+  return lines.map((line) => normalise(line, ctx));
+}
+
+/** One command's stdout from a baseline fixture, without its banner and the next one. */
+function baselineSection(kind: ScenarioKind, label: string): string[] {
+  const lines = readFileSync(join(BASELINE_DIR, `${kind}.stdout.txt`), "utf8").split("\n");
+  const start = lines.findIndex((line) => line.startsWith(`===== ${label} `));
+  if (start === -1) throw new Error(`baseline ${kind} has no ${label} section`);
+  const end = lines.findIndex((line, index) => index > start && line.startsWith("===== "));
+  return lines.slice(start + 1, end === -1 ? undefined : end);
+}
+
 beforeAll(async () => {
   for (const kind of ["single", "submodules"] as const) {
     const golden = await captureGolden(kind);
@@ -480,6 +505,24 @@ describe("reducer parity", () => {
 });
 
 describe("baseline parity", () => {
+  test("replaying the whole stream through TerminalSink reproduces the baseline resume output", () => {
+    for (const kind of ["single", "submodules"] as const) {
+      const rendered = replayGolden(kind);
+      const start = rendered.findIndex((line) => line.startsWith("▶ context packs"));
+      expect({ kind, start: start >= 0 }).toEqual({ kind, start: true });
+      // `resume` ends with two CLI report lines, the only output that never was an event.
+      const resume = baselineSection(kind, "resume").slice(0, -2);
+      expect(rendered.slice(start), kind).toEqual(resume);
+      expect(rendered, kind).toContain(
+        "  ⚙ [1.1] gates after rebase: format, lint, types, testAffected",
+      );
+      expect(rendered, kind).toContain("  ✓ [1.1] gates after rebase passed in <duration>");
+      expect(rendered, kind).toContain(
+        `implement: ${kind === "single" ? "2/2" : "3/3"} merged in <duration>`,
+      );
+    }
+  });
+
   test("the baseline output is unchanged", async () => {
     const { captureScenario } = await import("./baseline-capture.ts");
     const goldens = {

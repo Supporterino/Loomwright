@@ -164,10 +164,14 @@ export class TerminalSink implements EventSink {
         });
         return;
       case "gate.planned":
-        this.#progress.gate(this.#step, {
-          phase: "plan",
-          gates: event.data.gates.map(gateInfo),
-        });
+        this.#progress.gate(
+          this.#step,
+          {
+            phase: "plan",
+            gates: event.data.gates.map(gateInfo),
+          },
+          event.data.stage,
+        );
         return;
       case "gate.started":
         this.#progress.gate(this.#step, { phase: "start", gate: gateInfo(event.data) });
@@ -187,6 +191,7 @@ export class TerminalSink implements EventSink {
           // Old streams predate the elapsed duration; the sum is the closest reconstruction.
           event.data.durationMs ??
             event.data.results.reduce((total, result) => total + result.durationMs, 0),
+          event.data.stage,
         );
         return;
       case "install.started":
