@@ -210,7 +210,10 @@ async function withPipeline<T>(
     }
     await runtime.close();
     const active = readOrCorrupt(() => readActive(root)).value;
-    if (active?.pid === process.pid) await releaseDriver(root, active.changeId);
+    // A second command in this process must not release a change it did not drive.
+    const driven = p.runId ?? changeId;
+    if (active?.pid === process.pid && active.changeId === driven)
+      await releaseDriver(root, driven);
   }
 }
 

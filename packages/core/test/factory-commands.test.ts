@@ -23,7 +23,7 @@ import { readEvents } from "../src/events/reader.ts";
 import { git } from "../src/exec.ts";
 import { type Factory, open, type RunOutcome } from "../src/factory.ts";
 import type { AgentRuntime } from "../src/runtime/types.ts";
-import { claimActive, readActive } from "../src/state/active.ts";
+import { claimActive, readActive, readQueue } from "../src/state/active.ts";
 import { factoryDir } from "../src/state/files.ts";
 import { loadRun, newRun, saveRun, TaskState, updateRun } from "../src/state/run.ts";
 
@@ -226,6 +226,29 @@ describe("Factory commands", () => {
     }
     expect(readActive(fx.root)).toEqual(before);
     expect(h.runtime.calls).toHaveLength(0);
+  });
+
+  test("a command for a second change keeps the active change's driver claimed", async () => {
+    const h = await readyToApprove(script());
+    saveRun(fx.root, newRun("other-change", "Someone else's change", "implementing"));
+    await claimActive(fx.root, "other-change");
+    const before = readActive(fx.root);
+
+    await h.factory.approve(ID);
+
+    expect(readActive(fx.root)).toEqual(before);
+    expect(readQueue(fx.root).entries.map((entry) => entry.changeId)).toEqual([ID]);
+  });
+
+  test("the driver of the change a command drove is released when it fails", async () => {
+    const h = await readyToApprove(script());
+    await h.factory.approve(ID, { continue: false });
+    const file = join(fx.root, "openspec", "changes", ID, "proposal.md");
+    writeFileSync(file, `${readFileSync(file, "utf8")}\nA late edit.\n`);
+
+    await expect(h.factory.resume(ID)).rejects.toThrow(/changed after approval/);
+
+    expect(readActive(fx.root)).toMatchObject({ changeId: ID, pid: null });
   });
 
   test("an answer is delivered and consumed", async () => {

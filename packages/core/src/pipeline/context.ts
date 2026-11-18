@@ -122,6 +122,11 @@ export class Pipeline {
     return this.#bound !== undefined;
   }
 
+  /** The run this pipeline reached, once a step bound its stream. */
+  get runId(): string | undefined {
+    return this.#bound;
+  }
+
   /** Binds to a run's stream, continuing its sequence; a different run gets a fresh emitter. */
   bindRun(id: string): void {
     if (this.#bound === id) return;
