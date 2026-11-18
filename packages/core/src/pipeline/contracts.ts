@@ -44,7 +44,10 @@ function addFixTask(
   });
   recordTask(state, "added", "contract-fix");
   draft.tasks.push(state);
-  p.emit("task.queued", { task: { id: state.id, repo: state.repo, title: state.title } });
+  p.emit("task.queued", {
+    task: { id: state.id, repo: state.repo, title: state.title },
+    attempt: state.failures + 1,
+  });
   mkdirSync(join(p.root, ".factory", "context", id), { recursive: true });
   writeFileSync(packPath(p.root, id, task.id), task.pack);
 }
