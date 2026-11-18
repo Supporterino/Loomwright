@@ -404,6 +404,57 @@ describe("approval events", () => {
   });
 });
 
+describe("failed-task pauses", () => {
+  test("a failed-task pause keeps reduce(events) equal to projectRunState(run)", async () => {
+    const fx = await createSingleRepoFixture();
+    try {
+      expect((await cli(fx.root, "init")).code).toBe(ExitCode.Ok);
+      const runtime = new ScriptedRuntime(
+        factoryScript({
+          changeId: ID,
+          summary: "Math helpers",
+          repos: ["app"],
+          tasks: TASKS,
+          implement: () => ({
+            handoff: {
+              status: "blocked",
+              task: "1.1",
+              risks: ["needs a decision only a human can make"],
+            },
+          }),
+        }),
+      );
+      expect((await cliWith(runtime, fx.root, "run", "Add math helpers")).code).toBe(ExitCode.Ok);
+
+      const sink = new MemorySink();
+      const p = new Pipeline(fx.root, loadConfig(fx.root).config, {
+        runtime,
+        out: () => {},
+        signal: new AbortController().signal,
+        events: { sink },
+        heartbeatMs: 0,
+      });
+      await approve(p, ID);
+      await drive(p, ID);
+      p.progress.stop();
+
+      const run = loadRun(fx.root, ID);
+      if (run === undefined) throw new Error("the failed task left no run state");
+      expect(run.phase).toBe("paused");
+      expect(run.pausedReason).toContain("failed: 1.1");
+      const approval = readApproval(fx.root, ID);
+      const uptoSeq = sink.events.at(-1)?.seq ?? 0;
+      expect(
+        compareSnapshots(sink.events, [{ name: "after the failed task", run, uptoSeq }], {
+          approvalOf: () => approval,
+        }),
+      ).toEqual([]);
+    } finally {
+      fx.cleanup();
+    }
+  }, 120_000);
+});
+
 describe("gate events", () => {
   test("gate.finished carries an output reference, never the output text", async () => {
     const fx = await createSingleRepoFixture();

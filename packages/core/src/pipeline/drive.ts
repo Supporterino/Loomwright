@@ -310,7 +310,10 @@ async function step(p: Pipeline, id: string): Promise<Step> {
       if (summary.status === "paused") {
         const report = writePauseReport(p, id, summary);
         const failed = summary.failed.length > 0 ? `failed: ${summary.failed.join(", ")}; ` : "";
-        return stop({ id, phase: "paused", detail: `${failed}report: ${report}` });
+        const detail = `${failed}report: ${report}`;
+        // The scheduler wrote the pause without an event: emit it so a replay matches the run.
+        await setPhase(p, id, "paused", p.run(id).pausedReason ?? detail);
+        return stop({ id, phase: "paused", detail });
       }
       await setPhase(p, id, "reviewing");
       return go(id);
