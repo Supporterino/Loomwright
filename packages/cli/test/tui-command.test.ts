@@ -68,10 +68,7 @@ describe("tui command", () => {
     expect(run.err).not.toContain("internal error");
   });
 
-  // Known gap: the command rejects a missing or non-regular --replay path with exit 2 but lets
-  // EACCES escape to the generic error path, which exits 1. The test documents the spec's
-  // "unreadable" case and fails until the command maps it to a UsageError.
-  test.failing("bad flags are usage errors: an unreadable --replay path", async () => {
+  test("bad flags are usage errors: an unreadable --replay path", async () => {
     const path = join(fx.root, "unreadable.jsonl");
     writeFileSync(path, '{"v":1}\n');
     chmodSync(path, 0o000);
