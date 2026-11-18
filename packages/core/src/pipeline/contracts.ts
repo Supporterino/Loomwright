@@ -11,7 +11,7 @@ import type { Finding } from "../handoff/schema.ts";
 import { appendLog } from "../logs/log.ts";
 import { type RunState, recordTask, TaskState } from "../state/run.ts";
 import type { Pipeline } from "./context.ts";
-import { packPath } from "./implement.ts";
+import { packPath, progressLine } from "./implement.ts";
 import { contractReviewPrompt, findingPack, findingTaskTitle } from "./prompts.ts";
 
 /** Contract fix rounds before the change pauses (a breaking change may be intended). */
@@ -44,6 +44,10 @@ function addFixTask(
   });
   recordTask(state, "added", "contract-fix");
   draft.tasks.push(state);
+  p.emit("task.queued", {
+    task: { id: state.id, repo: state.repo, title: state.title },
+    attempt: state.failures + 1,
+  });
   mkdirSync(join(p.root, ".factory", "context", id), { recursive: true });
   writeFileSync(packPath(p.root, id, task.id), task.pack);
 }
@@ -66,8 +70,7 @@ export async function contractPhase(p: Pipeline, id: string): Promise<ContractOu
   const bases = Object.fromEntries(Object.entries(run.branches).map(([repo, b]) => [repo, b.base]));
   const results: ContractResult[] = [];
   for (const contract of contracts) {
-    if (p.progress.verbosity === "verbose")
-      p.progress.line(`  ⚙ [contracts] checking ${contract.kind} ${contract.path}`);
+    progressLine(p, "verbose", `  ⚙ [contracts] checking ${contract.kind} ${contract.path}`);
     results.push(
       await checkContract(
         {

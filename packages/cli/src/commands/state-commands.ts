@@ -2,25 +2,12 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { findWorkspaceRoot } from "@loomwright/core/config/load";
 import { PreconditionError, UsageError } from "@loomwright/core/errors";
+import { eventLogPath, lastCompleteSeq } from "@loomwright/core/events/jsonl";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { CHANGE_ID } from "@loomwright/core/git/repo";
-import { retryTask } from "@loomwright/core/scheduler/scheduler";
-import {
-  type ActiveLock,
-  driverAlive,
-  readActive,
-  readQueue,
-  releaseActive,
-  removeFromQueue,
-} from "@loomwright/core/state/active";
+import { type ActiveLock, driverAlive, readActive, readQueue } from "@loomwright/core/state/active";
 import { factoryDir, readOrCorrupt } from "@loomwright/core/state/files";
-import {
-  loadRun,
-  type RunState,
-  scanRuns,
-  type TaskState,
-  updateRun,
-} from "@loomwright/core/state/run";
+import { loadRun, type RunState, scanRuns, type TaskState } from "@loomwright/core/state/run";
 import {
   formatTokens,
   summarizeUsage,
@@ -29,6 +16,7 @@ import {
   usageLine,
 } from "@loomwright/core/usage/usage";
 import { type Command, type CommandOptions, type Io, parseCommandArgs } from "../command.ts";
+import { openReadOnlyFactory } from "./pipeline-commands.ts";
 
 async function workspace(io: Io): Promise<string> {
   const root = await findWorkspaceRoot(io.cwd);
@@ -213,7 +201,7 @@ function printRun(
 const STATUS_OPTIONS = {
   json: { type: "boolean", default: false, description: "Print the state as JSON" },
   watch: { type: "boolean", default: false, description: "Reprint the view until Ctrl-C" },
-  interval: { type: "string", description: "Seconds between --watch frames (default 2)" },
+  interval: { type: "string", description: "Heartbeat seconds with --watch (default 2)" },
 } satisfies CommandOptions;
 
 export const statusCommand: Command = {
@@ -226,15 +214,16 @@ export const statusCommand: Command = {
 Without an id: the active change (if any), the queue and every known change.
 With an id: that change's phase, branches, task DAG with states, retries and worktrees.
 
-  --watch            Reprint the same view every few seconds until Ctrl-C (a second
-                     terminal is the easiest way to watch a long run)
-  --interval <s>     Seconds between frames with --watch (default 2)`,
+  --watch            Reprint the same view after each event, at least once per interval,
+                     until Ctrl-C (a second terminal is the easiest way to watch a long run)
+  --interval <s>     Heartbeat seconds with --watch (default 2) and the fallback poll period;
+                     it never delays a frame that an event triggers`,
   async run(args, io) {
     const { values, positionals } = parseCommandArgs("status", args, STATUS_OPTIONS, true);
     if (values.watch && values.json)
       throw new UsageError("status: --watch and --json exclude each other");
     const root = await workspace(io);
-    if (positionals.length > 0) changeId("status", positionals);
+    const id = positionals.length > 0 ? changeId("status", positionals) : undefined;
     if (values.watch) {
       const seconds = values.interval === undefined ? 2 : Number(values.interval);
       if (!Number.isFinite(seconds) || seconds <= 0)
@@ -246,34 +235,10 @@ With an id: that change's phase, branches, task DAG with states, retries and wor
       renderStatus(io, root, positionals);
       return ExitCode.Ok;
     }
-    // Corrupt state files are shown, not fatal: status is how they are found (audit P15).
-    const lock = readOrCorrupt(() => readActive(root));
-    const active = lock.value;
-    const queued = readOrCorrupt(() => readQueue(root));
-    const queue = queued.value?.entries.map((e) => e.changeId) ?? [];
-    const { runs, corrupt } =
-      positionals.length > 0
-        ? { runs: [requireRun(root, changeId("status", positionals))], corrupt: [] }
-        : scanRuns(root);
-    io.out(
-      JSON.stringify(
-        {
-          active: active ?? null,
-          driverAlive: active ? driverAlive(active) : false,
-          queue,
-          ...(positionals.length === 0 ? { workspaceUsage: summarizeWorkspaceUsage(root) } : {}),
-          runs: runs.map((r) => ({ ...r, usage: summarizeUsage(root, r.id) })),
-          corrupt: [
-            ...[lock.corrupt, queued.corrupt]
-              .filter((e) => e !== undefined)
-              .map((e) => ({ file: e.file, error: e.message })),
-            ...corrupt.map((c) => ({ id: c.id, file: c.error.file, error: c.error.message })),
-          ],
-        },
-        null,
-        2,
-      ),
-    );
+    // One document, one implementation: `Factory.status` serialises exactly what `--json` prints.
+    const factory = await openReadOnlyFactory(io);
+    const doc = id === undefined ? await factory.status() : await factory.status(id);
+    io.out(JSON.stringify(doc, null, 2));
     return ExitCode.Ok;
   },
 };
@@ -295,8 +260,21 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-/** `status --watch`: one frame per interval, cleared on a terminal, separated when piped. */
-async function watchStatus(
+/** The shortest gap between frames, so an event burst cannot flood the terminal. */
+const MIN_FRAME_MS = 10;
+
+/** One watch frame: clear on a terminal, separate when piped, then the unchanged view. */
+function watchFrame(io: Io, root: string, positionals: readonly string[], first: boolean): void {
+  const lines: string[] = [];
+  renderStatus({ ...io, out: (line) => lines.push(line) }, root, positionals);
+  if (io.tty === true) io.out("\x1b[2J\x1b[H");
+  else if (!first) io.out("");
+  io.out(`updated ${new Date().toLocaleTimeString()} · Ctrl-C to stop`);
+  for (const line of lines) io.out(line);
+}
+
+/** The fallback (and no-id) driver: one frame per interval, exactly as before the event log. */
+async function pollStatus(
   io: Io,
   root: string,
   positionals: readonly string[],
@@ -304,15 +282,89 @@ async function watchStatus(
 ): Promise<void> {
   let first = true;
   while (io.signal?.aborted !== true) {
-    const lines: string[] = [];
-    renderStatus({ ...io, out: (line) => lines.push(line) }, root, positionals);
-    if (io.tty === true) io.out("\x1b[2J\x1b[H");
-    else if (!first) io.out("");
-    io.out(`updated ${new Date().toLocaleTimeString()} · Ctrl-C to stop`);
-    for (const line of lines) io.out(line);
+    watchFrame(io, root, positionals, first);
     first = false;
     await sleep(intervalMs, io.signal);
   }
+}
+
+/**
+ * `status --watch`: follows the change's event stream and re-renders after each event, with a
+ * heartbeat at least once per interval. A change with no event log keeps the interval poll.
+ */
+async function watchStatus(
+  io: Io,
+  root: string,
+  positionals: readonly string[],
+  intervalMs: number,
+): Promise<void> {
+  const id = positionals[0];
+  if (id === undefined) {
+    await pollStatus(io, root, positionals, intervalMs);
+    return;
+  }
+  const log = eventLogPath(root, id);
+  if (!existsSync(log)) {
+    await pollStatus(io, root, positionals, intervalMs);
+    return;
+  }
+
+  const controller = new AbortController();
+  const onAbort = (): void => controller.abort();
+  io.signal?.addEventListener("abort", onAbort, { once: true });
+  if (io.signal?.aborted === true) controller.abort();
+  let first = true;
+  let last = 0;
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  let failure: unknown;
+  const frame = (): void => {
+    if (pending !== undefined) {
+      clearTimeout(pending);
+      pending = undefined;
+    }
+    last = Date.now();
+    try {
+      watchFrame(io, root, positionals, first);
+      first = false;
+    } catch (err: unknown) {
+      // A timer-driven frame has no awaiting caller (a landed change removes the run file), so
+      // stop the watch here and rethrow from the awaited scope for the usual clean report.
+      failure = err;
+      controller.abort();
+    }
+  };
+  // Bursts are coalesced, but the trailing event still gets a frame instead of waiting for the
+  // heartbeat: that is what makes a new event render "without waiting for the interval".
+  const scheduleFrame = (): void => {
+    const delay = MIN_FRAME_MS - (Date.now() - last);
+    if (delay <= 0) {
+      frame();
+      return;
+    }
+    pending ??= setTimeout(() => {
+      pending = undefined;
+      frame();
+    }, delay);
+  };
+  frame();
+  const timer = setInterval(frame, intervalMs);
+  try {
+    const factory = await openReadOnlyFactory(io);
+    for await (const item of factory.events(id, {
+      fromSeq: lastCompleteSeq(log) + 1,
+      follow: true,
+      signal: controller.signal,
+    })) {
+      // Any yielded line means the view may have changed.
+      if (item.line !== "") scheduleFrame();
+    }
+  } finally {
+    if (pending !== undefined) clearTimeout(pending);
+    clearInterval(timer);
+    controller.abort();
+    io.signal?.removeEventListener("abort", onAbort);
+  }
+  if (failure !== undefined) throw failure;
 }
 
 export const abortCommand: Command = {
@@ -330,35 +382,8 @@ the aborted change (or another one) when you are ready.`,
   async run(args, io) {
     const { positionals } = parseCommandArgs("abort", args, {}, true);
     const id = changeId("abort", positionals);
-    const root = await workspace(io);
-    const run = requireRun(root, id);
-    if (run.phase === "done") throw new PreconditionError(`${id} is already closed`);
-    // Read first: a corrupt lock refuses the abort before anything changed.
-    const active = readActive(root);
-    await updateRun(root, id, (draft) => {
-      draft.abortRequested = true;
-      draft.phase = "aborted";
-    });
-    await removeFromQueue(root, id);
-    // A live driver in another process stops at its next safe point and frees the
-    // workspace itself; otherwise nothing is running and the lock goes now.
-    const driver =
-      active?.changeId === id &&
-      active.pid !== null &&
-      active.pid !== process.pid &&
-      driverAlive(active)
-        ? active.pid
-        : undefined;
-    if (driver === undefined) await releaseActive(root, id);
-    io.out(
-      driver === undefined
-        ? `aborted ${id}`
-        : `aborted ${id}; pid ${driver} stops at its next safe point and frees the workspace`,
-    );
-    const branches = Object.entries(run.branches).map(([repo, b]) => `${repo}: ${b.branch}`);
-    if (branches.length > 0) io.out(`kept branches: ${branches.join(", ")}`);
-    const worktrees = worktreesOf(root, id);
-    if (worktrees.length > 0) io.out(`kept worktrees: ${worktrees.join(", ")}`);
+    const factory = await openReadOnlyFactory(io);
+    await factory.abort(id);
     return ExitCode.Ok;
   },
 };
@@ -380,15 +405,8 @@ that were cancelled because of it. Continue the change with \`loomwright resume 
     const { values, positionals } = parseCommandArgs("retry", args, RETRY_OPTIONS, true);
     const id = changeId("retry", positionals);
     if (values.task === undefined) throw new UsageError("retry: --task <id> is required");
-    const root = await workspace(io);
-    const task = requireRun(root, id).tasks.find((t) => t.id === values.task);
-    if (task === undefined) throw new UsageError(`retry: ${id} has no task ${values.task}`);
-    if (task.status !== "failed")
-      throw new PreconditionError(`task ${task.id} is ${task.status}, not failed`);
-    const next = await updateRun(root, id, (draft) => retryTask(draft, task.id));
-    const revived = next.tasks.filter((t) => t.status === "pending").map((t) => t.id);
-    io.out(`requeued ${task.id} with a fresh retry budget (pending: ${revived.join(", ")})`);
-    io.out(`continue with \`loomwright resume ${id}\``);
+    const factory = await openReadOnlyFactory(io);
+    await factory.retry(id, values.task);
     return ExitCode.Ok;
   },
 };

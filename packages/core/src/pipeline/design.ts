@@ -8,6 +8,7 @@ import { graphStatus, updateGraph } from "../graph/graph.ts";
 import { checkDesign, newChange } from "../openspec/cli.ts";
 import { decisionValues } from "../runtime/handoff.ts";
 import { readActive } from "../state/active.ts";
+import { factoryDir } from "../state/files.ts";
 import { type Clarification, loadRun, newRun, saveRun } from "../state/run.ts";
 import { recordUsage } from "../usage/usage.ts";
 import {
@@ -40,6 +41,16 @@ function asker(p: Pipeline): Ask | undefined {
 
 const questionsLabel = (count: number): string => `${count} question${count === 1 ? "" : "s"}`;
 
+/** Emits one clarification as its event; intake replays its records once the stream is bound. */
+function emitQuestion(p: Pipeline, record: Clarification): void {
+  p.emit("question.raised", {
+    step: record.step,
+    question: record.question,
+    status: record.status,
+    ...(record.answer === undefined ? {} : { answer: record.answer }),
+  });
+}
+
 function slug(text: string): string {
   const words = text
     .toLowerCase()
@@ -51,8 +62,11 @@ function slug(text: string): string {
 }
 
 function uniqueId(p: Pipeline, wanted: string): string {
+  // A landed change keeps its event log after its run state and spec are gone; reusing its id
+  // would make the new run append to that stream instead of starting at seq 1 with run.started.
   const taken = (id: string): boolean =>
     loadRun(p.root, id) !== undefined ||
+    existsSync(factoryDir(p.root, "events", `${id}.jsonl`)) ||
     existsSync(join(p.root, "openspec", "changes", id)) ||
     existsSync(join(p.root, ".factory", "drafts", id));
   let id = wanted;
@@ -133,6 +147,13 @@ export async function intake(p: Pipeline, request: string): Promise<string> {
   run.clarifications = upsertClarifications([], asked);
   if (result.handoff) run.handoffs.intake = result.handoff;
   saveRun(p.root, run);
+  // The run file now exists: this is where the stream starts. Everything before (the intake
+  // banner, its questions and the orchestrator session) stays terminal-only.
+  p.bindRun(id);
+  if (p.events.lastSeq === 0) p.events.emit("run.started", { phase: "design" });
+  // Intake asked before the run file (and its stream) existed: replay its questions the way
+  // `backfillIntakeUsage` replays the intake usage entry, so `reduce` sees them.
+  for (const record of run.clarifications) emitQuestion(p, record);
   if (run.clarifications.length > 0) {
     writeClarifications({ root: p.root, id, records: run.clarifications });
   }
@@ -159,15 +180,17 @@ export async function ensureDesignBranch(p: Pipeline, id: string): Promise<strin
   const run = p.run(id);
   if (run.branches["."] !== undefined) return run.draft;
   const { base, draft } = await branchForDesign(p, id);
-  await p.update(id, (d) => {
+  const updated = await p.update(id, (d) => {
     d.branches["."] = { branch: changeBranch(id), base };
     if (draft !== undefined) d.draft = draft;
   });
+  p.emit("run.branches", { branches: updated.branches });
   return draft;
 }
 
 /** §7 step 2: explorers in parallel, then the architect, then validation with repair rounds. */
 export async function design(p: Pipeline, id: string): Promise<{ ok: boolean; issues: string[] }> {
+  p.bindRun(id);
   await ensureDesignBranch(p, id);
   const run = p.run(id);
   const adopting = run.origin === "openspec" && run.tasks.length === 0;
@@ -270,6 +293,7 @@ export async function design(p: Pipeline, id: string): Promise<{ ok: boolean; is
       const updated = await p.update(id, (d) => {
         d.clarifications = upsertClarifications(d.clarifications, records);
       });
+      for (const record of records) emitQuestion(p, record);
       writeClarifications({
         root: p.root,
         id,
@@ -288,7 +312,8 @@ export async function design(p: Pipeline, id: string): Promise<{ ok: boolean; is
   });
 
   const { issues } = await checkDesign(p.root, dir, id, names, p.config.contracts);
-  await p.update(id, (d) => {
+  const from = p.run(id).phase;
+  const updated = await p.update(id, (d) => {
     if (result.handoff) d.handoffs.design = result.handoff;
     if (issues.length === 0) {
       d.phase = "awaiting-approval";
@@ -298,5 +323,14 @@ export async function design(p: Pipeline, id: string): Promise<{ ok: boolean; is
       d.pausedReason = `the spec does not validate (${issues.length} issue${issues.length === 1 ? "" : "s"}); fix it and run approve, or resume`;
     }
   });
+  p.emit("phase.changed", {
+    from,
+    to: updated.phase,
+    ...(updated.phase === "paused" && updated.pausedReason !== undefined
+      ? { reason: updated.pausedReason }
+      : {}),
+  });
+  if (updated.phase === "paused" && updated.pausedReason !== undefined)
+    p.emit("run.paused", { reason: updated.pausedReason });
   return { ok: issues.length === 0, issues };
 }

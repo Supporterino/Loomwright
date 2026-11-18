@@ -62,6 +62,8 @@ export type GateEvent =
       readonly gate: GateInfo;
       readonly status: GateStatus;
       readonly durationMs: number;
+      /** Compacted output; the event stream logs it and carries only the reference. */
+      readonly output?: string;
     };
 
 export interface RunGatesInput {
@@ -306,7 +308,13 @@ export async function runGates(input: RunGatesInput): Promise<GateReport> {
         durationMs: 0,
         output: "skip: format, lint or types failed",
       });
-      emit({ phase: "end", gate: info(gate), status: "skipped", durationMs: 0 });
+      emit({
+        phase: "end",
+        gate: info(gate),
+        status: "skipped",
+        durationMs: 0,
+        output: "skip: format, lint or types failed",
+      });
       continue;
     }
     emit({ phase: "start", gate: info(gate) });
@@ -317,6 +325,7 @@ export async function runGates(input: RunGatesInput): Promise<GateReport> {
       gate: info(gate),
       status: result.status,
       durationMs: result.durationMs,
+      output: result.output,
     });
     if (!TEST_GATES.has(gate.type) && FAILING.has(result.status)) failedBeforeTests = true;
   }

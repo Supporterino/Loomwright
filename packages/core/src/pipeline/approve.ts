@@ -20,6 +20,10 @@ import { ensureDesignBranch, specDir } from "./design.ts";
 export async function approve(p: Pipeline, id: string): Promise<Approval> {
   let run = p.run(id);
   assertApprovable(id, run);
+  p.bindRun(id);
+  // An adopted change has no log (approve is its first event): open the stream with the
+  // phase it starts approval from, like `drive` does for a logless run.
+  if (p.events.lastSeq === 0) p.emit("run.started", { phase: p.run(id).phase });
   // An adopted change has no branch yet: create it (or its draft worktree) before validating
   // and committing the spec, so the normal branch check below applies to it too (ADR-0038).
   if (run.branches["."] === undefined) {
@@ -61,8 +65,9 @@ export async function approve(p: Pipeline, id: string): Promise<Approval> {
     hash: specHash(dir, id),
     approvedAt: now(),
   };
+  p.events.emit("approval.requested", { specHash: approval.hash, specCommit });
   const checked = run.preserveProgress ? checkedTaskIds(dir, id) : new Set<string>();
-  await p.update(id, (d) => {
+  const updated = await p.update(id, (d) => {
     // Checked again under the run lock: another approve or resume may have moved on (P14).
     assertApprovable(id, d);
     writeApproval(p.root, approval);
@@ -79,6 +84,25 @@ export async function approve(p: Pipeline, id: string): Promise<Approval> {
       recordTask(task, merged ? "adopted: already checked in OpenSpec" : "approved");
       return task;
     });
+  });
+  // Loading the task DAG is a state change the stream must carry: `queued` and one
+  // `task.queued` per task, so a replay equals the run file from here on.
+  p.emit("phase.changed", { from: run.phase, to: updated.phase });
+  for (const task of updated.tasks) {
+    p.emit("task.queued", {
+      task: { id: task.id, repo: task.repo, title: task.title },
+      attempt: task.failures + 1,
+    });
+    if (task.status === "merged")
+      p.emit("task.merged", {
+        task: { id: task.id, repo: task.repo, title: task.title },
+        commit: task.commit ?? specCommit,
+      });
+  }
+  p.events.emit("approval.granted", {
+    approver,
+    specHash: approval.hash,
+    specCommit,
   });
   snapshotDefinitions(p.root, id, p.config, p.run(id).factoryVersion, true);
   p.out(

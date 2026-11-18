@@ -1,0 +1,1125 @@
+===== init (exit 0) =====
+loomwright <version> in <root>
+tools: git <tool-version>, opencode <tool-version>, openspec <tool-version>, graphify <tool-version>
+wrote factory.config.jsonc (review "models" and "contracts")
+created: .gitignore
+created: .graphifyignore
+created: .opencode/addons/ponytail/.opencode/command/ponytail-review.md
+created: .opencode/addons/ponytail/AGENTS.md
+created: .opencode/addons/ponytail/LICENSE
+created: .opencode/addons/ponytail/PRECEDENCE.md
+created: .opencode/addons/ponytail/skills/ponytail-review/SKILL.md
+created: .opencode/addons/ponytail/skills/ponytail/SKILL.md
+created: .opencode/agents/architect.md
+created: .opencode/agents/contract-reviewer.md
+created: .opencode/agents/explorer.md
+created: .opencode/agents/implementer-app.md
+created: .opencode/agents/orchestrator.md
+created: .opencode/agents/reviewer.md
+created: .opencode/agents/tester.md
+created: .opencode/commands/opsx-apply.md
+created: .opencode/commands/opsx-archive.md
+created: .opencode/commands/opsx-explore.md
+created: .opencode/commands/opsx-propose.md
+created: .opencode/commands/opsx-sync.md
+created: .opencode/commands/opsx-update.md
+created: .opencode/opencode.jsonc
+created: .opencode/plugins/factory.js
+created: .opencode/schemas/factory.config.schema.json
+created: .opencode/schemas/handoff.schema.json
+created: .opencode/skills/openspec-apply-change/SKILL.md
+created: .opencode/skills/openspec-archive-change/SKILL.md
+created: .opencode/skills/openspec-explore/SKILL.md
+created: .opencode/skills/openspec-propose/SKILL.md
+created: .opencode/skills/openspec-sync-specs/SKILL.md
+created: .opencode/skills/openspec-update-change/SKILL.md
+created: .opencode/standards/go.md
+created: .opencode/standards/helm.md
+created: .opencode/standards/python.md
+created: .opencode/standards/react.md
+created: .opencode/standards/rust.md
+created: .opencode/standards/swift.md
+created: .opencode/standards/tauri.md
+created: .opencode/standards/typescript.md
+created: AGENTS.md
+created: openspec/config.yaml
+hook app: installed
+graph: built (9 nodes, <duration>)
+committed <sha12> chore(factory): init <version>
+===== run (exit 0) =====
+▶ intake
+  ▶ [intake] orchestrator (anthropic/claude-sonnet-5-5)
+  ✓ [intake] session done in <duration> · <tokens>
+  change add-health
+▶ explore: app
+  ▶ [explore:app] explorer (anthropic/claude-haiku-5-5)
+  ✓ [explore:app] session done in <duration> · <tokens>
+▶ design: openspec/changes/add-health
+  ▶ [design] architect (anthropic/claude-opus-5-5)
+  ✓ [design] session done in <duration> · <tokens>
+add-health: awaiting approval — review openspec/changes/add-health/ then run `loomwright approve add-health`
+===== approve --no-continue (exit 0) =====
+✓ approved add-health by fixture@example.com (spec <sha12>, 2 tasks)
+===== resume (exit 0) =====
+▶ context packs (2)
+  ▶ [context-packs] architect (anthropic/claude-opus-5-5)
+  ✓ [context-packs] session done in <duration> · <tokens>
+▶ implement: 2 tasks (max 1 agents)
+  ⚙ [1.1] installing dependencies in app
+  ▶ [1.1] Add a multiply helper · implementer-app (anthropic/claude-sonnet-5-5) · attempt 1/4
+  ✓ [1.1] session done in <duration> · <tokens>
+  ⚙ [1.1] gates: format, lint, types, testAffected
+  ✓ [1.1] gates passed in <duration>
+  ⇢ [1.1] merging into change/add-health
+  ⚙ [1.1] gates after rebase: format, lint, types, testAffected
+  ✓ [1.1] gates after rebase passed in <duration>
+  ✓ 1.1 merged (app)
+  ⚙ [1.2] installing dependencies in app
+  ▶ [1.2] Add a divide helper · implementer-app (anthropic/claude-sonnet-5-5) · attempt 1/4
+  ✓ [1.2] session done in <duration> · <tokens>
+  ⚙ [1.2] gates: format, lint, types, testAffected
+  ✓ [1.2] gates passed in <duration>
+  ⇢ [1.2] merging into change/add-health
+  ⚙ [1.2] gates after rebase: format, lint, types, testAffected
+  ✓ [1.2] gates after rebase passed in <duration>
+  ✓ 1.2 merged (app)
+implement: 2/2 merged in <duration>
+▶ review + tests: app
+  ▶ [review:app] reviewer (anthropic/claude-opus-5-5)
+  ✓ [review:app] session done in <duration> · <tokens>
+▶ implement: 1 task (max 1 agents)
+  ⚙ [test-app] installing dependencies in app
+  ▶ [test-app] Ensure every scenario of app has a test · tester (anthropic/claude-sonnet-5-5) · attempt 1/4
+  ✓ [test-app] session done in <duration> · <tokens>
+  ⚙ [test-app] gates: format, lint, types, testAffected
+  ✓ [test-app] gates passed in <duration>
+  ⇢ [test-app] merging into change/add-health
+  ⚙ [test-app] gates after rebase: format, lint, types, testAffected
+  ✓ [test-app] gates after rebase passed in <duration>
+  ✓ test-app merged (app)
+implement: 3/3 merged in <duration>
+▶ contracts: none touched
+▶ full suite: app
+  ⚙ [app] gates: format, lint, types, test
+  ✓ [app] gates passed in <duration>
+▶ close
+  ⚙ archiving the spec
+✓ add-health done — report: <root>/.factory/reports/add-health.md
+add-health: done
+next: `loomwright land add-health` merges the finished change into its base branches
+===== status <id> --json (exit 0) =====
+{
+  "active": null,
+  "corrupt": [],
+  "driverAlive": false,
+  "queue": [],
+  "runs": [
+    {
+      "abortRequested": false,
+      "archiveCommit": "<sha>",
+      "archivedAs": "<date>-add-health",
+      "branches": {
+        ".": {
+          "base": "<sha>",
+          "branch": "change/add-health"
+        },
+        "app": {
+          "base": "<sha>",
+          "branch": "change/add-health"
+        }
+      },
+      "clarifications": [],
+      "contractResults": {},
+      "contractReviewed": false,
+      "contractRounds": 0,
+      "createdAt": "<ts>",
+      "factoryVersion": "<version>",
+      "fullSuite": {
+        "app": {
+          "output": "",
+          "passed": true
+        }
+      },
+      "graphSeq": 3,
+      "handoffs": {
+        "1.1": {
+          "decisions": [],
+          "filesChanged": [
+            "src/mul.ts"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "1.1"
+        },
+        "1.2": {
+          "decisions": [],
+          "filesChanged": [
+            "src/div.ts"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "1.2"
+        },
+        "context-packs": {
+          "decisions": [],
+          "filesChanged": [
+            ".factory/context/add-health/1.1.md",
+            ".factory/context/add-health/1.2.md"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "context-packs"
+        },
+        "design": {
+          "decisions": [],
+          "filesChanged": [
+            "openspec/changes/add-health/proposal.md",
+            "openspec/changes/add-health/design.md",
+            "openspec/changes/add-health/specs/health/spec.md",
+            "openspec/changes/add-health/tasks.md"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "design"
+        },
+        "intake": {
+          "decisions": [
+            "change-id: add-health",
+            "summary: Math helpers",
+            "repos: app"
+          ],
+          "filesChanged": [],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "intake"
+        },
+        "review:app": {
+          "decisions": [],
+          "filesChanged": [],
+          "findings": [],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "review:app"
+        },
+        "test-app": {
+          "decisions": [],
+          "filesChanged": [
+            "src/mul.test.ts"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "test-app"
+        }
+      },
+      "id": "add-health",
+      "likelyRepos": [
+        "app"
+      ],
+      "mergeSeq": 3,
+      "origin": "factory",
+      "phase": "done",
+      "pointers": [],
+      "pointersBumped": false,
+      "preserveProgress": false,
+      "reReview": [],
+      "reportPath": "<root>/.factory/reports/add-health.md",
+      "request": "Add a health endpoint",
+      "reviewRound": 1,
+      "reviewed": [
+        "app"
+      ],
+      "serialOwner": {},
+      "specFindings": [],
+      "suiteRounds": 0,
+      "summary": "Math helpers",
+      "tasks": [
+        {
+          "branch": "change/add-health--1.1",
+          "commit": "<sha>",
+          "deps": [],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "event": "approved"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "1.1",
+          "installed": true,
+          "kind": "task",
+          "mergeSeq": 1,
+          "repo": "app",
+          "serial": false,
+          "status": "merged",
+          "title": "Add a multiply helper",
+          "touches": [
+            "src/mul.ts"
+          ],
+          "worktree": "<root>/.factory/worktrees/add-health/app/1.1"
+        },
+        {
+          "branch": "change/add-health--1.2",
+          "commit": "<sha>",
+          "deps": [
+            "1.1"
+          ],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "event": "approved"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "1.2",
+          "installed": true,
+          "kind": "task",
+          "mergeSeq": 2,
+          "repo": "app",
+          "serial": false,
+          "status": "merged",
+          "title": "Add a divide helper",
+          "touches": [
+            "src/div.ts"
+          ],
+          "worktree": "<root>/.factory/worktrees/add-health/app/1.2"
+        },
+        {
+          "branch": "change/add-health--test-app",
+          "commit": "<sha>",
+          "deps": [],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "detail": "test",
+              "event": "added"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "test-app",
+          "installed": true,
+          "kind": "test",
+          "mergeSeq": 3,
+          "repo": "app",
+          "serial": false,
+          "status": "merged",
+          "title": "Ensure every scenario of app has a test",
+          "touches": [
+            "**"
+          ],
+          "worktree": "<root>/.factory/worktrees/add-health/app/test-app"
+        }
+      ],
+      "updatedAt": "<ts>",
+      "usage": {
+        "byAgent": {
+          "architect": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "explorer": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "implementer-app": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "orchestrator": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "reviewer": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "tester": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          }
+        },
+        "byModel": {
+          "anthropic/claude-haiku-5-5": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "anthropic/claude-opus-5-5": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "anthropic/claude-sonnet-5-5": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          }
+        },
+        "byStep": {
+          "1.1": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "1.2": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "context-packs": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "design": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "explore:app": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "intake": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "review:app": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "test-app": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          }
+        },
+        "retryOverhead": {
+          "cacheRead": "<tokens>",
+          "cacheWrite": "<tokens>",
+          "cost": "<cost>",
+          "input": "<tokens>",
+          "output": "<tokens>",
+          "reasoning": "<tokens>"
+        },
+        "sessions": 8,
+        "top": [
+          {
+            "step": "intake",
+            "tokens": 1900
+          },
+          {
+            "step": "explore:app",
+            "tokens": 1900
+          },
+          {
+            "step": "design",
+            "tokens": 1900
+          },
+          {
+            "step": "context-packs",
+            "tokens": 1900
+          },
+          {
+            "step": "1.1",
+            "tokens": 1900
+          }
+        ],
+        "total": {
+          "cacheRead": "<tokens>",
+          "cacheWrite": "<tokens>",
+          "cost": "<cost>",
+          "input": "<tokens>",
+          "output": "<tokens>",
+          "reasoning": "<tokens>"
+        },
+        "wastedReads": 0
+      },
+      "version": 1
+    }
+  ]
+}
+===== status --json (exit 0) =====
+{
+  "active": null,
+  "corrupt": [],
+  "driverAlive": false,
+  "queue": [],
+  "runs": [
+    {
+      "abortRequested": false,
+      "archiveCommit": "<sha>",
+      "archivedAs": "<date>-add-health",
+      "branches": {
+        ".": {
+          "base": "<sha>",
+          "branch": "change/add-health"
+        },
+        "app": {
+          "base": "<sha>",
+          "branch": "change/add-health"
+        }
+      },
+      "clarifications": [],
+      "contractResults": {},
+      "contractReviewed": false,
+      "contractRounds": 0,
+      "createdAt": "<ts>",
+      "factoryVersion": "<version>",
+      "fullSuite": {
+        "app": {
+          "output": "",
+          "passed": true
+        }
+      },
+      "graphSeq": 3,
+      "handoffs": {
+        "1.1": {
+          "decisions": [],
+          "filesChanged": [
+            "src/mul.ts"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "1.1"
+        },
+        "1.2": {
+          "decisions": [],
+          "filesChanged": [
+            "src/div.ts"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "1.2"
+        },
+        "context-packs": {
+          "decisions": [],
+          "filesChanged": [
+            ".factory/context/add-health/1.1.md",
+            ".factory/context/add-health/1.2.md"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "context-packs"
+        },
+        "design": {
+          "decisions": [],
+          "filesChanged": [
+            "openspec/changes/add-health/proposal.md",
+            "openspec/changes/add-health/design.md",
+            "openspec/changes/add-health/specs/health/spec.md",
+            "openspec/changes/add-health/tasks.md"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "design"
+        },
+        "intake": {
+          "decisions": [
+            "change-id: add-health",
+            "summary: Math helpers",
+            "repos: app"
+          ],
+          "filesChanged": [],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "intake"
+        },
+        "review:app": {
+          "decisions": [],
+          "filesChanged": [],
+          "findings": [],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "review:app"
+        },
+        "test-app": {
+          "decisions": [],
+          "filesChanged": [
+            "src/mul.test.ts"
+          ],
+          "openQuestions": [],
+          "risks": [],
+          "status": "done",
+          "task": "test-app"
+        }
+      },
+      "id": "add-health",
+      "likelyRepos": [
+        "app"
+      ],
+      "mergeSeq": 3,
+      "origin": "factory",
+      "phase": "done",
+      "pointers": [],
+      "pointersBumped": false,
+      "preserveProgress": false,
+      "reReview": [],
+      "reportPath": "<root>/.factory/reports/add-health.md",
+      "request": "Add a health endpoint",
+      "reviewRound": 1,
+      "reviewed": [
+        "app"
+      ],
+      "serialOwner": {},
+      "specFindings": [],
+      "suiteRounds": 0,
+      "summary": "Math helpers",
+      "tasks": [
+        {
+          "branch": "change/add-health--1.1",
+          "commit": "<sha>",
+          "deps": [],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "event": "approved"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "1.1",
+          "installed": true,
+          "kind": "task",
+          "mergeSeq": 1,
+          "repo": "app",
+          "serial": false,
+          "status": "merged",
+          "title": "Add a multiply helper",
+          "touches": [
+            "src/mul.ts"
+          ],
+          "worktree": "<root>/.factory/worktrees/add-health/app/1.1"
+        },
+        {
+          "branch": "change/add-health--1.2",
+          "commit": "<sha>",
+          "deps": [
+            "1.1"
+          ],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "event": "approved"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "1.2",
+          "installed": true,
+          "kind": "task",
+          "mergeSeq": 2,
+          "repo": "app",
+          "serial": false,
+          "status": "merged",
+          "title": "Add a divide helper",
+          "touches": [
+            "src/div.ts"
+          ],
+          "worktree": "<root>/.factory/worktrees/add-health/app/1.2"
+        },
+        {
+          "branch": "change/add-health--test-app",
+          "commit": "<sha>",
+          "deps": [],
+          "failures": 0,
+          "gatesPassed": true,
+          "history": [
+            {
+              "at": "<ts>",
+              "detail": "test",
+              "event": "added"
+            },
+            {
+              "at": "<ts>",
+              "detail": "attempt 1",
+              "event": "attempt"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "gates passed"
+            },
+            {
+              "at": "<ts>",
+              "detail": "<sha>",
+              "event": "merged"
+            }
+          ],
+          "id": "test-app",
+          "installed": true,
+          "kind": "test",
+          "mergeSeq": 3,
+          "repo": "app",
+          "serial": false,
+          "status": "merged",
+          "title": "Ensure every scenario of app has a test",
+          "touches": [
+            "**"
+          ],
+          "worktree": "<root>/.factory/worktrees/add-health/app/test-app"
+        }
+      ],
+      "updatedAt": "<ts>",
+      "usage": {
+        "byAgent": {
+          "architect": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "explorer": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "implementer-app": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "orchestrator": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "reviewer": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "tester": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          }
+        },
+        "byModel": {
+          "anthropic/claude-haiku-5-5": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "anthropic/claude-opus-5-5": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "anthropic/claude-sonnet-5-5": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          }
+        },
+        "byStep": {
+          "1.1": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "1.2": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "context-packs": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "design": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "explore:app": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "intake": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "review:app": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          },
+          "test-app": {
+            "cacheRead": "<tokens>",
+            "cacheWrite": "<tokens>",
+            "cost": "<cost>",
+            "input": "<tokens>",
+            "output": "<tokens>",
+            "reasoning": "<tokens>"
+          }
+        },
+        "retryOverhead": {
+          "cacheRead": "<tokens>",
+          "cacheWrite": "<tokens>",
+          "cost": "<cost>",
+          "input": "<tokens>",
+          "output": "<tokens>",
+          "reasoning": "<tokens>"
+        },
+        "sessions": 8,
+        "top": [
+          {
+            "step": "intake",
+            "tokens": 1900
+          },
+          {
+            "step": "explore:app",
+            "tokens": 1900
+          },
+          {
+            "step": "design",
+            "tokens": 1900
+          },
+          {
+            "step": "context-packs",
+            "tokens": 1900
+          },
+          {
+            "step": "1.1",
+            "tokens": 1900
+          }
+        ],
+        "total": {
+          "cacheRead": "<tokens>",
+          "cacheWrite": "<tokens>",
+          "cost": "<cost>",
+          "input": "<tokens>",
+          "output": "<tokens>",
+          "reasoning": "<tokens>"
+        },
+        "wastedReads": 0
+      },
+      "version": 1
+    }
+  ],
+  "workspaceUsage": {
+    "byAgent": {
+      "architect": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      },
+      "explorer": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      },
+      "implementer-app": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      },
+      "orchestrator": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      },
+      "reviewer": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      },
+      "tester": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      }
+    },
+    "byChange": {
+      "add-health": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      }
+    },
+    "byDay": {
+      "<date>": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      }
+    },
+    "byModel": {
+      "anthropic/claude-haiku-5-5": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      },
+      "anthropic/claude-opus-5-5": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      },
+      "anthropic/claude-sonnet-5-5": {
+        "cacheRead": "<tokens>",
+        "cacheWrite": "<tokens>",
+        "cost": "<cost>",
+        "input": "<tokens>",
+        "output": "<tokens>",
+        "reasoning": "<tokens>"
+      }
+    },
+    "changes": 1,
+    "corrupt": [],
+    "entries": 8,
+    "first": "<ts>",
+    "last": "<ts>",
+    "retryOverhead": {
+      "cacheRead": "<tokens>",
+      "cacheWrite": "<tokens>",
+      "cost": "<cost>",
+      "input": "<tokens>",
+      "output": "<tokens>",
+      "reasoning": "<tokens>"
+    },
+    "sessions": 8,
+    "sessionsByChange": {
+      "add-health": 8
+    },
+    "total": {
+      "cacheRead": "<tokens>",
+      "cacheWrite": "<tokens>",
+      "cost": "<cost>",
+      "input": "<tokens>",
+      "output": "<tokens>",
+      "reasoning": "<tokens>"
+    },
+    "wastedReads": 0
+  }
+}

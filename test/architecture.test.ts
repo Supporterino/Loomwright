@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, posix, relative, sep } from "node:path";
+import {
+  Command,
+  emptySnapshot,
+  PROTOCOL_VERSION,
+  RunEvent,
+  type RunSnapshot,
+  reduce,
+} from "@loomwright/protocol";
 
 export interface ImportEdge {
   /** Repo-relative POSIX path. */
@@ -338,5 +346,74 @@ describe("tests follow the packages", () => {
     const baselineTotal = Object.values(BASELINE_TEST_CASES).reduce((sum, n) => sum + n, 0);
     const total = [...declared.values()].reduce((sum, n) => sum + n, 0);
     expect(total).toBeGreaterThanOrEqual(baselineTotal);
+  });
+});
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readManifest(path: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(readFileSync(join(repoRoot, path), "utf8"));
+  if (!isRecord(parsed)) throw new Error(`${path} is not a JSON object`);
+  return parsed;
+}
+
+describe("monorepo layout", () => {
+  test("the root manifest declares the workspaces and publishes nothing", () => {
+    const root = readManifest("package.json");
+    expect(root.private).toBe(true);
+    expect(root.workspaces).toEqual(["packages/*"]);
+    expect(root).not.toHaveProperty("bin");
+    expect(root).not.toHaveProperty("files");
+    expect(root).not.toHaveProperty("publishConfig");
+  });
+
+  test("the three package identities are correct", () => {
+    const protocol = readManifest("packages/protocol/package.json");
+    const core = readManifest("packages/core/package.json");
+    const cli = readManifest("packages/cli/package.json");
+    expect([protocol.name, core.name, cli.name]).toEqual([
+      "@loomwright/protocol",
+      "@loomwright/core",
+      "@loomwright/cli",
+    ]);
+    expect(protocol.private).toBe(true);
+    expect(core.private).toBe(true);
+    expect(cli.private).toBeUndefined();
+  });
+
+  test("core exposes subpath exports", async () => {
+    const core = readManifest("packages/core/package.json");
+    if (!isRecord(core.exports)) throw new Error("packages/core/package.json has no exports map");
+    const pattern = core.exports["./*"];
+    expect(pattern).toBe("./src/*.ts");
+    if (typeof pattern !== "string") throw new Error("core exports lacks the ./* pattern");
+
+    // `@loomwright/core/policy/permissions` resolves straight to its module; no barrel is needed.
+    const target = pattern.replace("*", "policy/permissions");
+    expect(existsSync(join(repoRoot, "packages/core", target))).toBe(true);
+    expect(existsSync(join(repoRoot, "packages/core/src/index.ts"))).toBe(false);
+    const permissions: unknown = await import("@loomwright/core/policy/permissions");
+    expect(isRecord(permissions) && typeof permissions.ruleEffect === "function").toBe(true);
+  });
+
+  test("protocol is a versioned skeleton with no engine imports", () => {
+    expect(PROTOCOL_VERSION).toBe(1);
+    expect(typeof RunEvent.parse).toBe("function");
+    expect(typeof reduce).toBe("function");
+    expect(typeof emptySnapshot).toBe("function");
+    expect(Command).toBeDefined();
+
+    // The root export also carries the snapshot type, and the initial value it describes.
+    const snapshot: RunSnapshot = emptySnapshot("add-health");
+    expect(snapshot).toMatchObject({ runId: "add-health", lastSeq: 0, phase: null });
+
+    const edges = edgesOf(typescriptFiles(join(repoRoot, "packages/protocol/src")));
+    expect(checkImports(edges)).toEqual([]);
+    // The protocol leaf may import zod and nothing else from outside its own tree.
+    for (const edge of edges.filter((edge) => !edge.specifier.startsWith("."))) {
+      expect(edge.specifier).toBe("zod");
+    }
   });
 });

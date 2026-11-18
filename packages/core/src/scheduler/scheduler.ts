@@ -94,6 +94,8 @@ export interface SchedulerOptions {
   readonly signal?: AbortSignal;
   /** Progress listener; exceptions are ignored so output can never stall the DAG. */
   readonly observe?: (event: TaskEvent) => void;
+  /** Dependents cancelled by a failed task; `task.skipped` has no `TaskEvent` variant. */
+  readonly onSkipped?: (task: TaskState, reason: string) => void;
 }
 
 export interface RunSummary {
@@ -153,6 +155,14 @@ export class Scheduler {
     }
   }
 
+  #skipped(task: TaskState, reason: string): void {
+    try {
+      this.#opts.onSkipped?.(task, reason);
+    } catch {
+      // Progress is display-only: it must never stall the DAG.
+    }
+  }
+
   async #update(mutate: (draft: RunState) => void): Promise<RunState> {
     this.#state = await updateRun(this.#opts.root, this.#opts.id, mutate);
     return this.#state;
@@ -203,6 +213,7 @@ export class Scheduler {
   }
 
   async #fail(id: string, reason: string): Promise<void> {
+    const skipped: string[] = [];
     await this.#update((draft) => {
       const task = draft.tasks.find((t) => t.id === id);
       if (task === undefined) return;
@@ -214,11 +225,16 @@ export class Scheduler {
         if (dep && !TERMINAL.has(dep.status)) {
           dep.status = "cancelled";
           recordTask(dep, "cancelled", `dependency ${id} failed`);
+          skipped.push(depId);
         }
       }
     });
     const task = this.#state.tasks.find((t) => t.id === id);
     if (task !== undefined) this.#emit({ type: "failed", task, reason });
+    for (const depId of skipped) {
+      const dep = this.#state.tasks.find((t) => t.id === depId);
+      if (dep !== undefined) this.#skipped(dep, `dependency ${id} failed`);
+    }
   }
 
   /** Counts one failure against the budget; true when the task may try again. */

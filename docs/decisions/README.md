@@ -49,3 +49,4 @@ Short ADRs for every choice the build prompt did not lock. Format: Context / Dec
 | [0043](0043-bun-workspaces.md)                  | Bun workspaces: protocol, core and cli packages                    |
 | [0044](0044-guard-script-resolution.md)         | Guard: Bun builtins, script cycles and JS/TS sinks                 |
 | [0045](0045-opencode-feature-floors.md)         | opencode feature version floors                                    |
+| [0046](0046-typed-event-stream.md)              | Typed event stream: JSONL, sequence numbers, single writer         |

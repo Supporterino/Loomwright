@@ -23,7 +23,15 @@ import { dropAgentSnapshot } from "../update/snapshot.ts";
 import { summarizeUsage, usageReport } from "../usage/usage.ts";
 import { fence } from "../util/fence.ts";
 import type { Pipeline } from "./context.ts";
-import { cappedSpec, forbidShortcuts, gateDefinitions, packPath } from "./implement.ts";
+import {
+  cappedSpec,
+  emitGateEvent,
+  emitGateReport,
+  forbidShortcuts,
+  gateDefinitions,
+  packPath,
+  progressLine,
+} from "./implement.ts";
 import { findingPack, findingTaskTitle, reviewPrompt } from "./prompts.ts";
 
 const MAX_SUITE_ROUNDS = 2;
@@ -35,6 +43,7 @@ export const specPauseReason = (id: string, count: number): string =>
 const touchedRepos = (run: RunState): string[] => [...new Set(run.tasks.map((t) => t.repo))];
 
 function addTask(
+  p: Pipeline,
   draft: RunState,
   task: Omit<TaskState, "status" | "failures" | "serial" | "history" | "gatesPassed" | "installed">,
 ): boolean {
@@ -42,6 +51,10 @@ function addTask(
   const state = TaskState.parse({ ...task, status: "pending" });
   recordTask(state, "added", task.kind);
   draft.tasks.push(state);
+  p.emit("task.queued", {
+    task: { id: state.id, repo: state.repo, title: state.title },
+    attempt: state.failures + 1,
+  });
   return true;
 }
 
@@ -124,7 +137,7 @@ export async function review(
             // Round-scoped: `addTask` drops duplicates, so a fixed id per round would collide.
             const taskId = `fix-${name}-${round}-${n}`;
             if (
-              addTask(d, {
+              addTask(p, d, {
                 id: taskId,
                 title: findingTaskTitle(f),
                 repo: name,
@@ -143,7 +156,7 @@ export async function review(
           if (firstPass.has(name)) {
             if (!d.reviewed.includes(name)) d.reviewed.push(name);
             if (
-              addTask(d, {
+              addTask(p, d, {
                 id: `test-${name}`,
                 title: `Ensure every scenario of ${name} has a test`,
                 repo: name,
@@ -208,9 +221,13 @@ export async function fullSuite(p: Pipeline, id: string): Promise<string[]> {
           mode: "full",
           base: run.branches[name]?.base ?? "HEAD",
           forbidShortcuts: forbidShortcuts(p),
-          onGate: (event) => p.progress.gate(name, event),
+          onGate: (event) => {
+            if (p.bound) emitGateEvent(p, id, name, event, { repo: name });
+            else p.progress.gate(name, event);
+          },
         });
-        p.progress.gatesDone(name, gated, p.progress.now() - started);
+        if (p.bound) emitGateReport(p, name, gated, p.progress.now() - started);
+        else p.progress.gatesDone(name, gated, p.progress.now() - started);
         return gated;
       });
       appendLog(p.root, id, {
@@ -241,7 +258,7 @@ export async function fullSuite(p: Pipeline, id: string): Promise<string[]> {
     d.suiteRounds += 1;
     for (const name of failing) {
       const taskId = `suite-${name}-${d.suiteRounds}`;
-      addTask(d, {
+      addTask(p, d, {
         id: taskId,
         title: `Fix the full-suite failures in ${name}`,
         repo: name,
@@ -355,7 +372,7 @@ export async function close(p: Pipeline, id: string): Promise<string> {
 
   // Each step is recorded once done, so a close resumed after a crash skips it (audit P6).
   if (p.config.layout === "submodules" && !run.pointersBumped) {
-    p.progress.note("  ⚙ bumping submodule pointers");
+    progressLine(p, "normal", "  ⚙ bumping submodule pointers");
     const repos = touchedRepos(run)
       .map((n) => p.repo(n))
       .filter((r) => r.path !== ".");
@@ -374,7 +391,7 @@ export async function close(p: Pipeline, id: string): Promise<string> {
     // A crash between `openspec archive` and its commit leaves the moved folder behind.
     let archivedAs = archivedName(p.root, id);
     if (archivedAs === undefined) {
-      p.progress.note("  ⚙ archiving the spec");
+      progressLine(p, "normal", "  ⚙ archiving the spec");
       const issues = await validateChange(p.root, p.root, id);
       if (issues.length > 0)
         throw new PreconditionError(`openspec validate ${id} failed before archive`, issues);
@@ -467,6 +484,7 @@ export async function close(p: Pipeline, id: string): Promise<string> {
     d.phase = "done";
     d.reportPath = file;
   });
+  p.emit("phase.changed", { from: done.phase, to: "done" });
   // A record is a copy, never a precondition: a failure here leaves the run closed and the
   // local files intact, and `loomwright artifacts sync <id>` can retry.
   try {

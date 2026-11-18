@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { loadConfig } from "@loomwright/core/config/load";
 import type { ContractConfig } from "@loomwright/core/config/schema";
 import { checkContract } from "@loomwright/core/contracts/gate";
+import { readEventLines } from "@loomwright/core/events/reader";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { loadRun } from "@loomwright/core/state/run";
 import { parse as parseYaml, stringify as toYaml } from "yaml";
@@ -141,7 +142,7 @@ describe("contract phase in the pipeline", () => {
   });
   afterEach(() => fx.cleanup());
 
-  test("a breaking provider change gets one fix round, then the contract review runs", async () => {
+  test("a breaking provider change gets one fix round with attempt 1, then the contract review runs", async () => {
     const tasks: ScriptedTask[] = [
       {
         id: "1.1",
@@ -187,6 +188,14 @@ describe("contract phase in the pipeline", () => {
       "merged",
     ]);
     expect(runtime.calls.filter((c) => c.agent === "contract-reviewer")).toHaveLength(1);
+    // The `task.queued` event must carry the attempt the run file projects (`failures + 1`),
+    // otherwise a replay of this contract failure diverges from the run file.
+    const queued = readEventLines(fx.root, "rework-api").lines.flatMap((line) =>
+      line.event?.type === "task.queued" ? [line.event] : [],
+    );
+    expect(
+      queued.filter((e) => e.data.task.id === "contract-backend-1-1").map((e) => e.data.attempt),
+    ).toEqual([1]);
   });
 
   test("a contract review without a result pauses, and resume reviews again (audit P13)", async () => {

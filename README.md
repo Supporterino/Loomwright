@@ -124,7 +124,8 @@ While it runs, or after it stops:
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | See what is happening: phase, task DAG, worktrees, gate results, token usage                          | `loomwright status [<id>] [--json]`                          |
 | See AI usage across every change and quick task in the workspace                                      | `loomwright usage [--json]`                                  |
-| Watch it from a second terminal (refreshes every 2 s until Ctrl-C)                                    | `loomwright status <id> --watch`                             |
+| Watch it from a second terminal (refreshes on progress events until Ctrl-C)                           | `loomwright status <id> --watch`                             |
+| See the stored run event stream (JSONL, redacted)                                                     | `loomwright events <id> [--follow] [--from <n>]`             |
 | It paused because a task failed three times: fix it in the task's worktree (path in the report), then | `loomwright retry <id> --task <n>`                           |
 | It paused, was aborted, or the process died: continue from the last consistent state                  | `loomwright resume <id>`                                     |
 | A review finding concerns the spec itself: let the architect apply it                                 | `loomwright reword <id> [--finding <n,...>] [--dry-run]`     |

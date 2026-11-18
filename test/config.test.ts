@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { appendJsonc, parseJsonc, setJsonc } from "@loomwright/core/config/jsonc";
 import { parseConfigText } from "@loomwright/core/config/load";
 import { FactoryConfig, type FactoryConfigInput, modelFor } from "@loomwright/core/config/schema";
@@ -292,16 +294,44 @@ test("the three package identities are correct", () => {
   expect(cli.version).toBe(FACTORY_VERSION);
 });
 
-test("protocol is a versioned skeleton with no engine imports", () => {
-  expect(PROTOCOL_VERSION).toBe(0);
-  const source = readFileSync(
-    new URL("../packages/protocol/src/index.ts", import.meta.url),
-    "utf8",
-  );
-  expect(source).not.toContain("import");
-  expect(source).not.toContain("require(");
-  expect(source).not.toContain("@loomwright/core");
-  expect(source).not.toContain("@loomwright/cli");
+const MODULE_SPECIFIER =
+  /\bfrom\s*["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)|\bimport\s*["']([^"']+)["']/g;
+
+function moduleSpecifiers(source: string): string[] {
+  const found: string[] = [];
+  for (const match of source.matchAll(MODULE_SPECIFIER)) {
+    const specifier = match[1] ?? match[2] ?? match[3];
+    if (specifier !== undefined) found.push(specifier);
+  }
+  return found;
+}
+
+function protocolSources(dir: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...protocolSources(path));
+    else if (entry.name.endsWith(".ts")) files.push(path);
+  }
+  return files;
+}
+
+test("protocol stays a leaf package: version 1 and no engine imports", () => {
+  expect(PROTOCOL_VERSION).toBe(1);
+  const srcDir = fileURLToPath(new URL("../packages/protocol/src/", import.meta.url));
+  const files = protocolSources(srcDir);
+  expect(files.length).toBeGreaterThan(0);
+  for (const file of files) {
+    for (const specifier of moduleSpecifiers(readFileSync(file, "utf8"))) {
+      if (specifier.startsWith(".")) {
+        const resolved = resolve(dirname(file), specifier);
+        expect(relative(srcDir, resolved).startsWith("..")).toBe(false);
+      } else {
+        // The protocol leaf may import zod and nothing else.
+        expect(specifier).toBe("zod");
+      }
+    }
+  }
 });
 
 test("core exposes subpath exports", () => {
@@ -360,6 +390,23 @@ test("gate scripts keep their exact definitions", () => {
   expect(pkg.scripts?.typecheck).toBe("tsc --noEmit");
   expect(pkg.scripts?.test).toBe("bun test --timeout 60000 --parallel");
   expect(pkg.scripts?.["test:serial"]).toBe("bun test --timeout 60000");
+});
+
+test("no new retention knob is added", () => {
+  const config = parseConfigText(
+    readFileSync(new URL("../factory.config.jsonc", import.meta.url), "utf8"),
+    "factory.config.jsonc",
+  );
+  expect(Object.keys(config.logs).sort()).toEqual(["redact", "retentionDays"]);
+  expect(Object.keys(config)).not.toContain("events");
+
+  const schema = readFileSync(
+    new URL("../packages/core/src/config/schema.ts", import.meta.url),
+    "utf8",
+  );
+  // The only retention setting is the log tree's; the event log follows it, never a new knob.
+  expect(schema.match(/retentionDays/g)?.length).toBe(1);
+  expect(schema).not.toMatch(/events\s*:/);
 });
 
 test("protected configuration is checked for moved paths", () => {

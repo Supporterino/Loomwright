@@ -225,6 +225,8 @@ describe("status usage summary", () => {
   let fx: Fixture;
   beforeEach(async () => {
     fx = await createSingleRepoFixture();
+    // `status --json` reads the `Factory` document, which needs an installed workspace.
+    expect((await cli(fx.root, "init", "--no-graph")).code).toBe(ExitCode.Ok);
     writeFiles(fx.root, ledgers);
   });
   afterEach(() => fx.cleanup());

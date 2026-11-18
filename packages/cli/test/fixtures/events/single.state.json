@@ -1,0 +1,47 @@
+{
+  "v": 1,
+  "runId": "add-health",
+  "lastSeq": 0,
+  "phase": "done",
+  "pausedReason": null,
+  "abortRequested": false,
+  "branches": {
+    ".": {
+      "branch": "change/add-health",
+      "base": "<sha>"
+    },
+    "app": {
+      "branch": "change/add-health",
+      "base": "<sha>"
+    }
+  },
+  "tasks": {
+    "1.1": {
+      "status": "merged",
+      "attempt": 1
+    },
+    "1.2": {
+      "status": "merged",
+      "attempt": 1
+    },
+    "test-app": {
+      "status": "merged",
+      "attempt": 1
+    }
+  },
+  "questions": [],
+  "approval": {
+    "specHash": "<sha>",
+    "specCommit": "<sha>",
+    "approver": "fixture@example.com"
+  },
+  "usage": {
+    "input": 0,
+    "output": 0,
+    "reasoning": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": 0
+  },
+  "gates": {}
+}

@@ -1,8 +1,14 @@
 import { PreconditionError, TransientError } from "../errors.ts";
+import {
+  type InboxCommand,
+  readCommands,
+  removeCommand,
+  reportCommandProblem,
+} from "../events/inbox.ts";
 import { checkDesign } from "../openspec/cli.ts";
-import { claimActive, dequeue, readActive, releaseActive } from "../state/active.ts";
+import { claimActive, dequeue, readActive, releaseActive, releaseDriver } from "../state/active.ts";
 import { readOrCorrupt } from "../state/files.ts";
-import { loadRun, type Phase } from "../state/run.ts";
+import { loadRun, now, type Phase } from "../state/run.ts";
 import { verifyApproval } from "./approve.ts";
 import { ChangeAborted, type Pipeline } from "./context.ts";
 import { contractPhase } from "./contracts.ts";
@@ -40,12 +46,16 @@ async function ensureDriver(p: Pipeline, id: string): Promise<void> {
 }
 
 async function setPhase(p: Pipeline, id: string, phase: Phase, reason?: string): Promise<void> {
-  await p.update(id, (d) => {
+  const from = p.run(id).phase;
+  const updated = await p.update(id, (d) => {
     if (d.abortRequested) return; // `abort` won: the change stays aborted
     d.phase = phase;
     if (reason === undefined) delete d.pausedReason;
     else d.pausedReason = reason;
   });
+  if (updated.phase !== phase) return; // the update was a no-op (aborted)
+  p.emit("phase.changed", { from, to: phase, ...(reason === undefined ? {} : { reason }) });
+  if (phase === "paused") p.emit("run.paused", { reason: reason ?? "paused" });
 }
 
 /** Stops an aborted change: it stays aborted and frees the workspace for the next one. */
@@ -53,6 +63,8 @@ async function stopAborted(p: Pipeline, id: string): Promise<DriveOutcome> {
   await p.update(id, (d) => {
     d.phase = "aborted";
   });
+  p.emit("run.aborted", {});
+  p.emit("run.finished", { outcome: "aborted" });
   if (readActive(p.root)?.changeId === id) await releaseActive(p.root, id);
   return { id, phase: "aborted", detail: "aborted; branches and worktrees are kept" };
 }
@@ -69,22 +81,124 @@ async function nextQueued(p: Pipeline): Promise<string | undefined> {
 
 const WAITING: ReadonlySet<Phase> = new Set(["queued", "awaiting-approval", "paused"]);
 
+const PAUSE_REASON = "pause requested";
+
+type AnswerCommand = InboxCommand & { readonly command: "answer" };
+
+/** Records an inbox answer on the run's clarification list; the caller turns a failure into a diagnostic. */
+async function applyAnswer(p: Pipeline, id: string, command: AnswerCommand): Promise<void> {
+  let step = "answer";
+  let question = command.question ?? "answer";
+  await p.update(id, (draft) => {
+    const record =
+      command.question === undefined
+        ? draft.clarifications.find((c) => c.status === "unanswered")
+        : draft.clarifications.find((c) => c.question === command.question);
+    if (record === undefined) {
+      // A TUI can answer before an ask loop recorded the question: keep the answer anyway.
+      draft.clarifications.push({
+        step: "answer",
+        question,
+        status: "answered",
+        answer: command.answer,
+        at: now(),
+      });
+      return;
+    }
+    record.status = "answered";
+    record.answer = command.answer;
+    record.at = now();
+    step = record.step;
+    question = record.question;
+  });
+  p.emit("question.answered", { step, question, status: "answered", answer: command.answer });
+}
+
+/** Applies pending `.factory/commands/<id>/` files. Returns true when the run paused. */
+async function consumeCommands(p: Pipeline, id: string): Promise<boolean> {
+  for (const entry of readCommands(p.root, id)) {
+    if (entry.error !== undefined) {
+      reportCommandProblem(p, `${entry.file}: ${entry.error}`);
+      continue;
+    }
+    const command = entry.command;
+    if (command === undefined) continue;
+    if (command.runId !== id) {
+      reportCommandProblem(p, `${entry.file}: command is for ${command.runId}, not ${id}`);
+      continue;
+    }
+    switch (command.command) {
+      case "pause": {
+        // `abort` wins: its safe point stops the run and frees the workspace itself.
+        if (p.abortRequested(id)) continue;
+        if (p.run(id).phase === "done") {
+          reportCommandProblem(p, `${entry.file}: ${id} is already done`);
+          continue;
+        }
+        p.emit("run.pause-requested", { reason: PAUSE_REASON });
+        await setPhase(p, id, "paused", PAUSE_REASON);
+        // `abort` won the race: leave the request for a later reader instead of faking a pause.
+        if (p.run(id).phase !== "paused") continue;
+        // Pause keeps the change active: only the driver pid goes.
+        if (readActive(p.root)?.changeId === id) await releaseDriver(p.root, id);
+        // Last, so a crash before the pause persisted re-delivers the request.
+        removeCommand(entry.file);
+        return true;
+      }
+      case "answer": {
+        try {
+          await applyAnswer(p, id, command);
+          removeCommand(entry.file);
+        } catch (err: unknown) {
+          reportCommandProblem(
+            p,
+            `${entry.file}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        continue;
+      }
+      default:
+        reportCommandProblem(
+          p,
+          `${entry.file}: "${command.command}" has its own file path; use \`loomwright ${command.command} ${id}\``,
+        );
+    }
+  }
+  return false;
+}
+
+/**
+ * Binds a run's stream. A run with no log yet (created before the stream existed, or killed
+ * before `run.started`) still opens with the phase it resumes at instead of a bare phase gap.
+ */
+function bindStream(p: Pipeline, id: string): void {
+  p.bindRun(id);
+  if (p.events.lastSeq === 0) p.emit("run.started", { phase: p.run(id).phase });
+}
+
 /** Drives one change as far as it can go; continues with the next queued change on close. */
 export async function drive(p: Pipeline, firstId: string): Promise<DriveOutcome> {
   let id = firstId;
+  bindStream(p, id);
   // `resume` of an aborted change is the decision to continue it.
   if (p.run(id).phase === "aborted") {
     await p.update(id, (d) => {
       d.abortRequested = false;
     });
+    p.emit("run.resumed", {});
   }
   for (;;) {
-    if (p.deps.signal.aborted) return { id, phase: p.run(id).phase, detail: "interrupted" };
+    if (p.deps.signal.aborted) {
+      p.emit("run.finished", { outcome: "paused" });
+      return { id, phase: p.run(id).phase, detail: "interrupted" };
+    }
     if (p.abortRequested(id)) return stopAborted(p, id);
+    if (await consumeCommands(p, id)) return { id, phase: "paused", detail: PAUSE_REASON };
     try {
       const next = await step(p, id);
       if (next.kind === "stop") return next.outcome;
       id = next.id;
+      if (await consumeCommands(p, id)) return { id, phase: "paused", detail: PAUSE_REASON };
     } catch (err) {
       if (err instanceof ChangeAborted) return stopAborted(p, err.changeId);
       if (err instanceof TransientError) {
@@ -196,7 +310,10 @@ async function step(p: Pipeline, id: string): Promise<Step> {
       if (summary.status === "paused") {
         const report = writePauseReport(p, id, summary);
         const failed = summary.failed.length > 0 ? `failed: ${summary.failed.join(", ")}; ` : "";
-        return stop({ id, phase: "paused", detail: `${failed}report: ${report}` });
+        const detail = `${failed}report: ${report}`;
+        // The scheduler wrote the pause without an event: emit it so a replay matches the run.
+        await setPhase(p, id, "paused", p.run(id).pausedReason ?? detail);
+        return stop({ id, phase: "paused", detail });
       }
       await setPhase(p, id, "reviewing");
       return go(id);
@@ -253,11 +370,14 @@ async function step(p: Pipeline, id: string): Promise<Step> {
     case "closing": {
       await close(p, id);
       const next = await nextQueued(p);
+      p.emit("run.finished", { outcome: "done" });
       if (next === undefined) return stop({ id, phase: "done" });
+      bindStream(p, next);
       p.out(`▶ starting queued change ${next}`);
       return go(next);
     }
     case "done":
+      p.emit("run.finished", { outcome: "done" });
       return stop({ id, phase: "done" });
   }
 }

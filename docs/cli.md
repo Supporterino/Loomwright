@@ -228,9 +228,20 @@ Shows the active change and its driver, the queue, and each change's details, in
 - the worktrees
 - corrupt run files, `active.lock` or `queue.json`, with how to recover (other changes still show)
 
-`--watch` reprints the same view every `--interval` seconds (default 2) until Ctrl-C. It clears the screen on a terminal and prints a separator between frames when piped, so a second terminal can watch a long run. `--watch` and `--json` exclude each other.
+`--watch` reprints the same view after each event, and at least once per `--interval` seconds (default 2) so an idle run still gets a fresh timestamp, until Ctrl-C. It clears the screen on a terminal and prints a separator between frames when piped, so a second terminal can watch a long run. When the change has no `.factory/events/<id>.jsonl` (an older run or one that never bound), it falls back to reprinting at `--interval`. `--interval` is the heartbeat period and the fallback poll period; it does not delay a frame that an event triggers. `--watch` and `--json` exclude each other. The stream it follows is documented in [docs/events.md](events.md).
 
 Without an id, `status` also prints one workspace-wide usage line and `--json` includes `workspaceUsage` (the same totals as `loomwright usage`).
+
+## events
+
+```
+loomwright events <change-id> [--follow] [--from <n>] [--json]
+```
+
+Prints a change's stored event stream from `.factory/events/<id>.jsonl` as JSONL, one stored line per line and unchanged. The default output is already the canonical JSONL, so `--json` is only the explicit spelling of the same bytes: it adds no wrapper, field, sort or reformatting. Corrupt lines are reported on stderr and the rest of the stream still prints. The format is documented in [docs/events.md](events.md).
+- `--follow` keeps printing new events until Ctrl-C.
+- `--from <n>` starts at sequence number `n` (inclusive, default 1).
+- Exit codes: 0 ok, 2 for a non-integer or non-positive `--from`, 4 for an unknown change (no run state and no event log). An empty stream prints nothing and exits 0. A landed change keeps its event log, so its stream stays replayable after `land`.
 
 ## usage
 

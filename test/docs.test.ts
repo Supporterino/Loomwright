@@ -199,6 +199,47 @@ describe("documentation", () => {
     expect(read("docs/decisions/README.md")).toContain("| [0045](0045-opencode-feature-floors.md)");
   });
 
+  test("ADR-0046 records the event stream", () => {
+    const adr = read("docs/decisions/0046-typed-event-stream.md");
+    expect(adr.startsWith("# 0046 — ")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).not.toContain("Loomwright");
+    expect(read("docs/decisions/README.md")).toContain("| [0046](0046-typed-event-stream.md)");
+  });
+
+  test("docs/events.md covers the contract", () => {
+    const events = read("docs/events.md");
+    for (const topic of [
+      "v",
+      "seq",
+      "event families",
+      "truncated",
+      "redact",
+      "single writer",
+      "fromSeq",
+      "tailEvents",
+      "pause",
+      "additive evolution checklist",
+    ])
+      expect(events).toContain(topic);
+    expect(events).toContain("loomwright events");
+    expect(events).toContain("--json");
+    expect(events).toContain("status --watch");
+    expect(events).toContain("8 KiB");
+    expect(events).toContain("additive");
+    expect(read("docs/cli.md")).toContain("docs/events.md");
+  });
+
+  test("the architecture and README mention the event stream", () => {
+    const architecture = read("ARCHITECTURE.md");
+    expect(architecture).toContain(".factory/events/");
+    expect(architecture).toContain(".factory/commands/");
+    expect(architecture).toContain("packages/core/src/events/");
+    expect(read("README.md")).toContain("loomwright events");
+  });
+
   test("the docs describe the 2.x range and the mcp.roles floor", () => {
     const readme = read("README.md");
     expect(readme).toContain("2.x (≥ 2.1.2, < 3.0.0; tested 2.2.0)");
