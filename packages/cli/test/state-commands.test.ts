@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { eventLogPath } from "@loomwright/core/events/jsonl";
@@ -34,6 +42,16 @@ function heartbeat(seq: number): string {
       data: { text: "beat" },
     }),
   );
+}
+
+/** Bytes, mtime and siblings of a run's event log, to prove a reader never writes it. */
+function snapshotLog(root: string): { text: string; mtimeMs: number; files: string[] } {
+  const path = eventLogPath(root, "add-x");
+  return {
+    text: readFileSync(path, "utf8"),
+    mtimeMs: statSync(path).mtimeMs,
+    files: readdirSync(dirname(path)).sort(),
+  };
 }
 
 describe("status, retry and abort", () => {
@@ -141,6 +159,7 @@ describe("status, retry and abort", () => {
       err: () => {},
       signal: controller.signal,
     });
+    let merged = "";
     try {
       await waitFor(() => out.some((line) => line.startsWith("updated ")));
       const run = loadRun(fx.root, "add-x");
@@ -150,7 +169,7 @@ describe("status, retry and abort", () => {
       task.status = "merged";
       task.commit = "1234567890abcdef";
       saveRun(fx.root, run);
-      const merged = JSON.stringify(
+      merged = JSON.stringify(
         RunEvent.parse({
           v: 1,
           runId: "add-x",
@@ -166,6 +185,45 @@ describe("status, retry and abort", () => {
       controller.abort();
     }
     expect(await pending).toBe(ExitCode.Ok);
+    // Only the test appended; the watcher never touched the log.
+    expect(snapshotLog(fx.root)).toMatchObject({
+      text: `${heartbeat(1)}\n${merged}\n`,
+      files: ["add-x.jsonl"],
+    });
+  }, 30_000);
+
+  test("a second process only reads: status --watch and events --follow leave the log untouched", async () => {
+    const log = eventLogPath(fx.root, "add-x");
+    mkdirSync(dirname(log), { recursive: true });
+    const line = heartbeat(1);
+    writeFileSync(log, `${line}\n`);
+    const before = snapshotLog(fx.root);
+    const statusOut: string[] = [];
+    const eventsOut: string[] = [];
+    const status = new AbortController();
+    const events = new AbortController();
+    const watching = runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
+      cwd: fx.root,
+      out: (out) => statusOut.push(out),
+      err: () => {},
+      signal: status.signal,
+    });
+    const following = runCli(["events", "add-x", "--follow"], {
+      cwd: fx.root,
+      out: (out) => eventsOut.push(out),
+      err: () => {},
+      signal: events.signal,
+    });
+    try {
+      await waitFor(() => statusOut.some((out) => out.startsWith("updated ")));
+      await waitFor(() => eventsOut.includes(line));
+    } finally {
+      status.abort();
+      events.abort();
+    }
+    expect(await watching).toBe(ExitCode.Ok);
+    expect(await following).toBe(ExitCode.Ok);
+    expect(snapshotLog(fx.root)).toEqual(before);
   }, 30_000);
 
   test("a status --watch whose run file is removed exits cleanly", async () => {

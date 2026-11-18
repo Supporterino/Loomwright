@@ -563,7 +563,7 @@ describe("events", () => {
     expect(source).not.toMatch(/["'][^"']*events\//);
   });
 
-  test("pruneLogs leaves event files alone", () => {
+  test("no new retention knob is added: pruneLogs removes the old log and keeps the event file", () => {
     const log = join(root, ".factory/logs/old/2020-01-01.jsonl");
     const eventFile = join(root, ".factory/events/old.jsonl");
     mkdirSync(dirname(log), { recursive: true });
@@ -575,6 +575,9 @@ describe("events", () => {
     utimesSync(eventFile, old, old);
     const removed = pruneLogs(root, 1);
     expect(removed).toContain(log);
+    expect(removed).not.toContain(eventFile);
+    expect(existsSync(log)).toBe(false);
     expect(existsSync(eventFile)).toBe(true);
+    expect(readdirSync(dirname(eventFile))).toEqual(["old.jsonl"]);
   });
 });

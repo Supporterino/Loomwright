@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { readApproval } from "@loomwright/core/approval/approval";
 import { eventLogPath } from "@loomwright/core/events/jsonl";
@@ -134,6 +142,8 @@ describe("events", () => {
   test("--follow prints new events", async () => {
     const prefix = seedFinished();
     const stored = prefix.map((item) => JSON.stringify(item));
+    const log = eventLogPath(fx.root, ID);
+    const appended = JSON.stringify(event(7, "heartbeat", { text: "beat 7" }));
     const out: string[] = [];
     const controller = new AbortController();
     const pending = runCli(["events", ID, "--follow", "--json"], {
@@ -142,22 +152,28 @@ describe("events", () => {
       err: () => {},
       signal: controller.signal,
     });
+    let mtimeAfterAppend = 0;
     try {
       await waitFor(() => out.length >= stored.length);
-      const appended = JSON.stringify(event(7, "heartbeat", { text: "beat 7" }));
-      appendFileSync(eventLogPath(fx.root, ID), `${appended}\n`);
+      appendFileSync(log, `${appended}\n`);
       await waitFor(() => out.length >= stored.length + 1);
       expect(out.slice(0, stored.length)).toEqual(stored);
       expect(out[stored.length]).toBe(appended);
+      mtimeAfterAppend = statSync(log).mtimeMs;
     } finally {
       controller.abort();
     }
     expect(await pending).toBe(ExitCode.Ok);
+    // The follower reads only: the file holds the prefix plus the line the test appended.
+    expect(readFileSync(log, "utf8")).toBe(`${stored.join("\n")}\n${appended}\n`);
+    expect(statSync(log).mtimeMs).toBe(mtimeAfterAppend);
+    expect(readdirSync(dirname(log))).toEqual([`${ID}.jsonl`]);
   }, 30_000);
 
   test("--follow prints an appended corrupt line and warns instead of dropping it", async () => {
     const prefix = seedFinished();
     const stored = prefix.map((item) => JSON.stringify(item));
+    const log = eventLogPath(fx.root, ID);
     const out: string[] = [];
     const err: string[] = [];
     const controller = new AbortController();
@@ -167,18 +183,23 @@ describe("events", () => {
       err: (line) => err.push(line),
       signal: controller.signal,
     });
+    let mtimeAfterAppend = 0;
     try {
       await waitFor(() => out.length >= stored.length);
-      appendFileSync(eventLogPath(fx.root, ID), "{not json\n");
+      appendFileSync(log, "{not json\n");
       await waitFor(() => out.length >= stored.length + 1);
       expect(out.slice(0, stored.length)).toEqual(stored);
       expect(out[stored.length]).toBe("{not json");
       await waitFor(() => err.some((line) => line.includes("appended line skipped")));
       expect(err.join("\n")).toContain("(invalid)");
+      mtimeAfterAppend = statSync(log).mtimeMs;
     } finally {
       controller.abort();
     }
     expect(await pending).toBe(ExitCode.Ok);
+    expect(readFileSync(log, "utf8")).toBe(`${stored.join("\n")}\n{not json\n`);
+    expect(statSync(log).mtimeMs).toBe(mtimeAfterAppend);
+    expect(readdirSync(dirname(log))).toEqual([`${ID}.jsonl`]);
   }, 30_000);
 
   test("help and completion include the command", async () => {
