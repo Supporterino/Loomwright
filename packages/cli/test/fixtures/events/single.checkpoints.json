@@ -74,7 +74,7 @@
   },
   {
     "name": "after task 1.1",
-    "uptoSeq": 75,
+    "uptoSeq": 55,
     "state": {
       "v": 1,
       "runId": "add-health",
@@ -121,7 +121,7 @@
   },
   {
     "name": "after task 1.2",
-    "uptoSeq": 124,
+    "uptoSeq": 84,
     "state": {
       "v": 1,
       "runId": "add-health",
@@ -168,7 +168,7 @@
   },
   {
     "name": "after task test-app",
-    "uptoSeq": 182,
+    "uptoSeq": 122,
     "state": {
       "v": 1,
       "runId": "add-health",
@@ -219,7 +219,7 @@
   },
   {
     "name": "final",
-    "uptoSeq": 214,
+    "uptoSeq": 144,
     "state": {
       "v": 1,
       "runId": "add-health",

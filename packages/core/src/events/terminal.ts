@@ -82,7 +82,7 @@ const gateReport = (data: {
 export class TerminalSink implements EventSink {
   readonly #progress: Progress;
   #verbosity: Verbosity;
-  /** The pipeline step of the latest agent/install event; gate events carry no step. */
+  /** The pipeline step of the latest agent/install event; old gate events carry no step. */
   #step = "";
 
   constructor(progress: Progress, step = "") {
@@ -165,7 +165,7 @@ export class TerminalSink implements EventSink {
         return;
       case "gate.planned":
         this.#progress.gate(
-          this.#step,
+          event.data.step ?? this.#step,
           {
             phase: "plan",
             gates: event.data.gates.map(gateInfo),
@@ -174,10 +174,13 @@ export class TerminalSink implements EventSink {
         );
         return;
       case "gate.started":
-        this.#progress.gate(this.#step, { phase: "start", gate: gateInfo(event.data) });
+        this.#progress.gate(event.data.step ?? this.#step, {
+          phase: "start",
+          gate: gateInfo(event.data),
+        });
         return;
       case "gate.finished":
-        this.#progress.gate(this.#step, {
+        this.#progress.gate(event.data.step ?? this.#step, {
           phase: "end",
           gate: gateInfo(event.data),
           status: event.data.status,
@@ -186,7 +189,7 @@ export class TerminalSink implements EventSink {
         return;
       case "gate.report":
         this.#progress.gatesDone(
-          this.#step,
+          event.data.step ?? this.#step,
           gateReport(event.data),
           // Old streams predate the elapsed duration; the sum is the closest reconstruction.
           event.data.durationMs ??

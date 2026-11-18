@@ -106,12 +106,12 @@ failed task.
 
 ### gate
 
-| Event           | Payload                                                                          |
-| --------------- | -------------------------------------------------------------------------------- |
-| `gate.planned`  | `{ gates: GateRef[], stage? }`                                                   |
-| `gate.started`  | `GateRef`                                                                        |
-| `gate.finished` | `{ name, type, status, durationMs, outputRef? }`                                 |
-| `gate.report`   | `{ passed, results: [{ name, type, status, durationMs }], durationMs?, stage? }` |
+| Event           | Payload                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------- |
+| `gate.planned`  | `{ gates: GateRef[], step?, stage? }`                                                   |
+| `gate.started`  | `GateRef & { step? }`                                                                   |
+| `gate.finished` | `{ name, type, status, durationMs, step?, outputRef? }`                                 |
+| `gate.report`   | `{ passed, results: [{ name, type, status, durationMs }], durationMs?, step?, stage? }` |
 
 `type` is `format`, `lint`, `types`, `test` or `testAffected`; `status` is `pass`, `fail`,
 `missing`, `skipped`, `not-check-only` or `timeout`. `gate.finished` never carries the gate
@@ -119,7 +119,9 @@ output: `outputRef` points at it in `.factory/logs/`. `gate.report.durationMs` i
 wall clock of the whole gate run (`results[].durationMs` is one gate's own runtime); it is
 absent in streams written before it existed, and the terminal falls back to the sum. `stage`
 names the run (`gates`, `gates after rebase`) when it is not the default, so the terminal
-replays the same line it printed.
+replays the same line it printed. `step` names the pipeline step the gates ran for (a task id
+or repo name); it is absent in older streams, where the terminal falls back to the latest
+`agent.*` or `install.*` step.
 
 ### agent
 

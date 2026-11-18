@@ -139,14 +139,6 @@ export function progressLine(
   else p.progress.line(text);
 }
 
-/**
- * Gate events carry no step field: the terminal sink takes it from the last event. Marking the
- * step with a silent `step-started` keeps concurrent tasks and repos labelled correctly.
- */
-function markStep(p: Pipeline, step: string): void {
-  p.events.emit("agent.activity", { step, detail: "", kind: "step-started" });
-}
-
 const gateRef = (gate: GateInfo): { name: string; type: GateInfo["type"]; command: string } => ({
   name: gate.name ?? gate.type,
   type: gate.type,
@@ -229,14 +221,13 @@ export function emitGateEvent(
   entry: { readonly task?: string; readonly repo?: string },
   stage?: string,
 ): void {
-  markStep(p, step);
   const mapped = gateEventPayload(event, stage);
   if (event.phase === "end") {
     const outputRef = gateOutputRef(p, id, event, entry);
-    p.events.emit(mapped.type, { ...mapped.data, outputRef });
+    p.events.emit(mapped.type, { ...mapped.data, step, outputRef });
     return;
   }
-  p.events.emit(mapped.type, mapped.data);
+  p.events.emit(mapped.type, { ...mapped.data, step });
 }
 
 /** Emits the per-run gate summary the terminal renders through `Progress.gatesDone`. */
@@ -247,7 +238,6 @@ export function emitGateReport(
   durationMs: number,
   stage?: string,
 ): void {
-  markStep(p, step);
   p.events.emit("gate.report", {
     passed: report.passed,
     results: report.results.map((result) => ({
@@ -257,6 +247,7 @@ export function emitGateReport(
       durationMs: result.durationMs,
     })),
     durationMs,
+    step,
     ...(stage === undefined ? {} : { stage }),
   });
 }

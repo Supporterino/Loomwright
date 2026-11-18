@@ -556,6 +556,70 @@ describe("gate output is never inlined", () => {
     ]);
   });
 
+  test("gate events carry their own step and the stream has no synthetic agent.activity", () => {
+    const root = makeRoot();
+    const config = FactoryConfig.parse({
+      schemaVersion: 2,
+      layout: "single",
+      repos: [{ name: "app", path: ".", languages: [] }],
+      models: {
+        orchestrator: "anthropic/claude-sonnet-5-5",
+        architect: "anthropic/claude-sonnet-5-5",
+        reviewer: "anthropic/claude-sonnet-5-5",
+        implementer: "anthropic/claude-sonnet-5-5",
+        tester: "anthropic/claude-sonnet-5-5",
+        explorer: "anthropic/claude-sonnet-5-5",
+      },
+    });
+    const sink = new MemorySink();
+    const p = new Pipeline(root, config, {
+      runtime: new ScriptedRuntime(() => ({})),
+      out: () => {},
+      signal: new AbortController().signal,
+      events: { sink },
+      heartbeatMs: 0,
+    });
+    p.bindRun(RUN);
+
+    const gate: GateInfo = { type: "test", name: "tests", command: "bun test", cwd: "." };
+    const entry = { task: "1.1", repo: "app" };
+    emitGateEvent(p, RUN, "1.1", { phase: "plan", gates: [gate] }, entry);
+    emitGateEvent(p, RUN, "1.1", { phase: "start", gate }, entry);
+    emitGateEvent(
+      p,
+      RUN,
+      "1.1",
+      { phase: "end", gate, status: "pass", durationMs: 5, output: "" },
+      entry,
+    );
+    emitGateReport(
+      p,
+      "1.1",
+      {
+        repo: "app",
+        mode: "task",
+        base: "HEAD",
+        passed: true,
+        changed: [],
+        results: [{ ...gate, status: "pass", durationMs: 5, output: "" }],
+      },
+      10,
+    );
+
+    expect(sink.ofType("agent.activity")).toEqual([]);
+    const stored = storedEvents(logPath(root));
+    expect(stored.some((event) => event.type === "agent.activity")).toBe(false);
+    const gateSteps = stored.flatMap((event) =>
+      event.type === "gate.planned" ||
+      event.type === "gate.started" ||
+      event.type === "gate.finished" ||
+      event.type === "gate.report"
+        ? [event.data.step]
+        : [],
+    );
+    expect(gateSteps).toEqual(["1.1", "1.1", "1.1", "1.1"]);
+  });
+
   test("agent.finished.usage is display only and does not double count usage.delta", () => {
     const root = makeRoot();
     const emitter = new EventEmitter({

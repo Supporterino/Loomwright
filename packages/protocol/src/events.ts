@@ -234,12 +234,15 @@ export const RunEvent = z.discriminatedUnion("type", [
     "gate.planned",
     z.object({
       gates: z.array(GateRef),
+      /** The pipeline step the gates run for; absent in older streams. */
+      step: z.string().optional(),
       /** Which gate run this is, e.g. `gates after rebase`; absent in older streams. */
       stage: z.string().optional(),
       ...Bounded,
     }),
   ),
-  event("gate.started", GateRef),
+  /** `step` names the pipeline step for the same reason as on `gate.planned`. */
+  event("gate.started", GateRef.extend({ step: z.string().optional() })),
   event(
     "gate.finished",
     z.object({
@@ -247,6 +250,7 @@ export const RunEvent = z.discriminatedUnion("type", [
       type: GateType,
       status: GateStatus,
       durationMs: Duration,
+      step: z.string().optional(),
       outputRef: TruncationRef.optional(),
       ...Bounded,
     }),
@@ -265,6 +269,8 @@ export const RunEvent = z.discriminatedUnion("type", [
       ),
       /** Elapsed wall clock of the gate run; absent in streams written before it was added. */
       durationMs: Duration.optional(),
+      /** The pipeline step the gates run for; absent in older streams. */
+      step: z.string().optional(),
       /** Which gate run this is, e.g. `gates after rebase`; absent in older streams. */
       stage: z.string().optional(),
       ...Bounded,

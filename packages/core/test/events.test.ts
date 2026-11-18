@@ -449,6 +449,47 @@ describe("events", () => {
     compare(legacy, (p) => p.gatesDone("1.1", report(true), 13_600), { step: "1.1" });
   });
 
+  test("gate events label the line from their own step, not the last activity", () => {
+    const gates = [gate("format", "fmt"), gate("test", "test")];
+    compare(
+      event("gate.planned", { gates, step: "2.2" }),
+      (p) => p.gate("2.2", { phase: "plan", gates }),
+      { step: "stale" },
+    );
+    compare(
+      event("gate.started", { ...gate("test", "bun test"), step: "2.2" }),
+      (p) => p.gate("2.2", { phase: "start", gate: gate("test", "bun test") }),
+      { step: "stale", verbosity: "verbose" },
+    );
+    compare(
+      event("gate.finished", {
+        name: "test",
+        type: "test",
+        status: "pass",
+        durationMs: 1000,
+        step: "2.2",
+      }),
+      (p) =>
+        p.gate("2.2", {
+          phase: "end",
+          gate: gate("test", "test"),
+          status: "pass",
+          durationMs: 1000,
+        }),
+      { step: "stale" },
+    );
+    compare(
+      event("gate.report", {
+        passed: true,
+        results: [{ name: "test", type: "test", status: "pass", durationMs: 1000 }],
+        durationMs: 1000,
+        step: "2.2",
+      }),
+      (p) => p.gatesDone("2.2", report(true), 1000),
+      { step: "stale" },
+    );
+  });
+
   test("the re-gate stage replays from gate.planned and gate.report", () => {
     const gates = [gate("format", "fmt"), gate("test", "test")];
     compare(
