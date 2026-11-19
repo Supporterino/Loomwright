@@ -12,6 +12,7 @@ import {
   reduce,
 } from "@loomwright/protocol";
 import { runTui } from "../src/entry.tsx";
+import type { Launcher } from "../src/launch/launcher.ts";
 import { collectFacts } from "../src/model/facts.ts";
 import { applyKey } from "../src/model/keys.ts";
 import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/model/view-model.ts";
@@ -714,6 +715,7 @@ interface DrivenRun {
 async function driveTui(
   factory: Factory,
   drive: (input: FakeInput, output: FakeOutput) => Promise<void>,
+  launcher?: Launcher,
 ): Promise<DrivenRun> {
   const input = new FakeInput();
   const output = new FakeOutput();
@@ -745,7 +747,7 @@ async function driveTui(
       env: {},
       isTTY: false,
       factory,
-      launcher: {
+      launcher: launcher ?? {
         launch: async () => {
           throw new Error("the help panel must not launch");
         },
@@ -828,6 +830,45 @@ describe("the interactive entry", () => {
 
     expect(leaves).toBe(1);
     expect(output.text()).toContain("> newest");
+  });
+
+  test("quitting leaves the run alone: q exits 0 while the implementing run keeps its child", async () => {
+    const run = runState({
+      phase: "implementing",
+      tasks: [taskState({ id: "first", status: "running" })],
+    });
+    let launches = 0;
+    let pid: number | undefined;
+    const launcher: Launcher = {
+      launch: async () => {
+        launches += 1;
+        pid = 4242;
+        return {
+          pid,
+          logPath: "/workspace/.factory/logs/tui-spawn-2026-11-18T10-00-00-000Z.log",
+          displayPath: ".factory/logs/tui-spawn-2026-11-18T10-00-00-000Z.log",
+          // A detached child the UI never waits on.
+          exited: new Promise<never>(() => {}),
+        };
+      },
+    };
+
+    // The run was started from the TUI before the user pressed q.
+    await launcher.launch({ kind: "run-text", text: "add a health endpoint" });
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input) => {
+        await pause();
+        input.press("q");
+      },
+      launcher,
+    );
+
+    expect(result.code).toBe(0);
+    // The quit path left the child alone: no second launch, no signal and no wait.
+    expect(launches).toBe(1);
+    expect(pid).toBe(4242);
   });
 
   test("live detail arrives from the tail: a queued run opened before its log exists updates", async () => {

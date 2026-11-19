@@ -423,6 +423,7 @@ describe("terminal UI documentation", () => {
     ])
       expect(tui).toContain(heading);
     expect(tui).toContain("recorded — applies at the next step");
+    expect(tui).toContain("`l`");
 
     // The long actions are detached children; answer, abort and retry are in-process writes.
     expect(tui).toContain("detached CLI children");
@@ -433,6 +434,7 @@ describe("terminal UI documentation", () => {
     expect(readme).toContain("loomwright tui");
     expect(readme).toContain("recorded — applies at the next step");
     expect(readme).toContain("in-process");
+    expect(readme).toContain("`l`");
     expect(readme).toContain("docs/tui.md");
 
     const cli = read("docs/cli.md");
@@ -441,6 +443,7 @@ describe("terminal UI documentation", () => {
     expect(cli).toContain("status --watch");
     expect(cli).toContain("events --follow");
     expect(cli).toContain("in-process");
+    expect(cli).toContain("`l`");
     expect(cli).toContain("docs/tui.md");
   });
 
@@ -471,6 +474,7 @@ describe("terminal UI documentation", () => {
       ["r", "resume"],
       ["x", "abort"],
       ["t", "retry task"],
+      ["l", "land"],
       ["Q", "questions"],
       ["?", "help"],
       ["q", "quit"],

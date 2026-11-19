@@ -669,6 +669,8 @@ describe("no engine imports", () => {
       const namesFactoryPath = name === "intake/dialog.tsx" || name === "intake/paths.ts";
       if (text.includes(".factory/") && !namesFactoryPath)
         violations.push(`${name}: references .factory/`);
+      // Land is a detached CLI child, never an imported pipeline function.
+      if (/\blandChange\b/.test(text)) violations.push(`${name}: references landChange`);
       for (const match of text.matchAll(imports)) {
         const clause = match[1] ?? "";
         const specifier = match[2] ?? "";

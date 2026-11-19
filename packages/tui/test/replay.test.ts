@@ -119,6 +119,32 @@ describe("replay shows the recorded screens", () => {
     expect(view.panel?.lines).toContain("spec hash: unknown (older stream)");
   });
 
+  test("phase.changed, install and progress lines in the stream appear in the tail", async () => {
+    const path = tempFile(
+      "activity.jsonl",
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"intake","to":"design"}}',
+        '{"v":1,"runId":"add-health","seq":3,"ts":"2026-11-18T10:00:00.000Z","type":"install.started","data":{"step":"deps","repo":"loomwright","detail":"bun install"}}',
+        '{"v":1,"runId":"add-health","seq":4,"ts":"2026-11-18T10:00:00.000Z","type":"install.finished","data":{"step":"deps","repo":"loomwright","durationMs":1200,"detail":"bun install"}}',
+        '{"v":1,"runId":"add-health","seq":5,"ts":"2026-11-18T10:00:00.000Z","type":"progress.line","data":{"level":"always","text":"design: 3 capabilities planned"}}',
+        "",
+      ].join("\n"),
+    );
+
+    const view = viewOf(await readReplayFile(path));
+    const activity = view.run?.activity ?? [];
+    expect(activity.map((line) => line.kind)).toEqual([
+      "run",
+      "phase",
+      "install",
+      "install",
+      "log",
+    ]);
+    expect(activity.map((line) => line.step)).toContain("loomwright");
+    expect(activity.some((line) => line.text.includes("design"))).toBe(true);
+  });
+
   test("a replayed approval frame does not report a missing git identity", async () => {
     const view = viewOf(await readReplayFile(FIXTURE));
     expect(view.panel?.kind).toBe("approval");
