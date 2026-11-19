@@ -28,6 +28,7 @@ import {
   performControl,
   recordAnswer,
   resumeFailed,
+  resumeStarted,
   runInSession,
   startLand,
   startResume,
@@ -242,7 +243,10 @@ function fakeLauncher(): {
 }
 
 /** A launcher that spawns at once and lets the test decide when (and how) the child exits. */
-function resumeLauncher(logPath = LOG): {
+function resumeLauncher(
+  logPath = LOG,
+  displayPath = LOG,
+): {
   readonly launcher: { launch(action: LaunchAction): Promise<LaunchResult> };
   readonly launches: readonly LaunchAction[];
   readonly exit: (code: number | null) => void;
@@ -258,7 +262,7 @@ function resumeLauncher(logPath = LOG): {
     launcher: {
       async launch(action: LaunchAction): Promise<LaunchResult> {
         launches.push(action);
-        return { pid: 4242, logPath, displayPath: logPath, exited };
+        return { pid: 4242, logPath, displayPath, exited };
       },
     },
   };
@@ -616,9 +620,10 @@ describe("a resumed child is guarded and observed", () => {
         (_, index) => `log line ${String(index + 1).padStart(2, "0")}`,
       );
       writeFileSync(logPath, lines.join("\n"));
-      const data = resumeFailed(uiData(), RUN, logPath, 3);
+      const data = resumeFailed(uiData(), RUN, { logPath, displayPath: LOG }, 3);
       expect(data.approval).toBeNull();
       expect(data.notice).toContain(`resume ${RUN} exited with code 3`);
+      expect(data.notice).toContain(`spawn log: ${LOG}`);
       for (const line of lines.slice(-10)) expect(data.notice).toContain(line);
       expect(data.notice).not.toContain(lines[0]);
       expect(data.notice).not.toContain(lines[1]);
@@ -633,7 +638,12 @@ describe("a resumed child is guarded and observed", () => {
       const logPath = join(dir, "resume.log");
       writeFileSync(logPath, "boom\n");
       const waiting = approvalStarted({ kind: "launching", action: "approve-only" }, LOG);
-      const data = resumeFailed(uiData({ approval: waiting }), RUN, logPath, 4);
+      const data = resumeFailed(
+        uiData({ approval: waiting }),
+        RUN,
+        { logPath, displayPath: LOG },
+        4,
+      );
       expect(data.notice).toBeNull();
       expect(data.approval).toEqual({
         kind: "failed",
@@ -644,12 +654,52 @@ describe("a resumed child is guarded and observed", () => {
       });
 
       // An overlay state with nothing to fail keeps its state and reports through the notice.
-      const idle = resumeFailed(uiData({ approval: { kind: "idle" } }), RUN, logPath, 4);
+      const idle = resumeFailed(
+        uiData({ approval: { kind: "idle" } }),
+        RUN,
+        { logPath, displayPath: LOG },
+        4,
+      );
       expect(idle.approval).toEqual({ kind: "idle" });
       expect(idle.notice).toContain("exited with code 4");
+      expect(idle.notice).toContain(`spawn log: ${LOG}`);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("a running resume keeps its spawn log path on screen", async () => {
+    const fake = fakeFactory();
+    const { launcher } = resumeLauncher(join(tmpdir(), "resume.log"), LOG);
+    const states: UiData[] = [];
+    startResume(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createResumeGuard(),
+        update: (change: (data: UiData) => UiData) => states.push(change(uiData())),
+        refresh: async () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+
+    expect(states.at(-1)?.notice).toContain(`resume ${RUN}`);
+    expect(states.at(-1)?.notice).toContain(`spawn log: ${LOG}`);
+  });
+
+  test("a resume from the approve-only wait points the overlay at the resume child's log", () => {
+    const waiting = approvalStarted({ kind: "launching", action: "approve-only" }, "old.log");
+    const started = resumeStarted(uiData({ approval: waiting }), RUN, LOG);
+    expect(started.notice).toContain(`spawn log: ${LOG}`);
+    expect(started.approval).toMatchObject({
+      kind: "waiting",
+      action: "approve-only",
+      logPath: LOG,
+    });
+
+    // Without the overlay the same path goes to the notice alone.
+    expect(resumeStarted(uiData(), RUN, LOG).notice).toContain(`spawn log: ${LOG}`);
   });
 
   test("startResume surfaces a failed child through the UI update", async () => {
@@ -658,7 +708,7 @@ describe("a resumed child is guarded and observed", () => {
     try {
       const logPath = join(dir, "resume.log");
       writeFileSync(logPath, "boom\n");
-      const { launcher, exit } = resumeLauncher(logPath);
+      const { launcher, exit } = resumeLauncher(logPath, LOG);
       const states: UiData[] = [];
       startResume(
         {
@@ -675,6 +725,7 @@ describe("a resumed child is guarded and observed", () => {
       await Bun.sleep(0);
       expect(states.at(-1)?.notice).toContain("exited with code 3");
       expect(states.at(-1)?.notice).toContain("boom");
+      expect(states.at(-1)?.notice).toContain(`spawn log: ${LOG}`);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -865,8 +916,9 @@ describe("a failed land is visible", () => {
         (_, index) => `log line ${String(index + 1).padStart(2, "0")}`,
       );
       writeFileSync(logPath, lines.join("\n"));
-      const data = landFailed(uiData(), RUN, logPath, 5);
+      const data = landFailed(uiData(), RUN, { logPath, displayPath: LOG }, 5);
       expect(data.notice).toContain(`land ${RUN} exited with code 5`);
+      expect(data.notice).toContain(`spawn log: ${LOG}`);
       for (const line of lines.slice(-10)) expect(data.notice).toContain(line);
       expect(data.notice).not.toContain(lines[0]);
       expect(data.notice).not.toContain(lines[1]);
@@ -877,13 +929,39 @@ describe("a failed land is visible", () => {
     }
   });
 
+  test("a running land keeps its spawn log path on screen until the child settles", async () => {
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher(join(tmpdir(), "land.log"), LOG);
+    const states: UiData[] = [];
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createResumeGuard(),
+        update: (change) => states.push(change(uiData())),
+        refresh: async () => null,
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    expect(states.at(-1)?.notice).toContain(`land ${RUN}`);
+    expect(states.at(-1)?.notice).toContain(`spawn log: ${LOG}`);
+
+    // A child that never reports a code keeps the path next to the reason.
+    exit(null);
+    await Bun.sleep(0);
+    expect(states.at(-1)?.notice).toContain("ended without an exit code");
+    expect(states.at(-1)?.notice).toContain(`spawn log: ${LOG}`);
+  });
+
   test("startLand surfaces a failed child and leaves the run selected", async () => {
     const fake = fakeFactory();
     const dir = mkdtempSync(join(tmpdir(), "loomwright-land-"));
     try {
       const logPath = join(dir, "land.log");
       writeFileSync(logPath, "merge conflict\n");
-      const { launcher, exit } = resumeLauncher(logPath);
+      const { launcher, exit } = resumeLauncher(logPath, LOG);
       const states: UiData[] = [];
       startLand(
         {
@@ -902,6 +980,7 @@ describe("a failed land is visible", () => {
 
       const last = states.at(-1);
       expect(last?.notice).toContain("exited with code 3");
+      expect(last?.notice).toContain(`spawn log: ${LOG}`);
       expect(last?.notice).toContain("merge conflict");
       expect(last?.notice).not.toContain("landed");
       expect(last?.selectedRunId).toBe(RUN);

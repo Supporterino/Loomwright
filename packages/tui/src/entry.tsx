@@ -399,15 +399,45 @@ export function createResumeGuard(): ResumeGuard {
   };
 }
 
+/** The launcher's half a control keeps while its child runs: the log to tail and how to show it. */
+type SpawnLog = Pick<LaunchResult, "logPath" | "displayPath">;
+
+/** Every long action names its child's log, so a hung or failed child can be found from the UI. */
+function spawnLogLine(displayPath: string): string {
+  return `spawn log: ${displayPath}`;
+}
+
+/**
+ * The launch is in flight: the log path is visible at once. A resume started from the approve-only
+ * wait keeps that overlay read-only but points its log line at the resume child's own log.
+ */
+export function resumeStarted(data: UiData, id: string, displayPath: string): UiData {
+  const notice = `resume ${id} — ${spawnLogLine(displayPath)}`;
+  const approval = data.approval;
+  if (approval?.kind === "waiting") {
+    return { ...data, notice, approval: { ...approval, logPath: displayPath } };
+  }
+  return { ...data, notice };
+}
+
 /** A non-zero resume exit: the approval overlay shows it when open, a notice otherwise. */
-export function resumeFailed(data: UiData, id: string, logPath: string, code: number): UiData {
-  const tail = tailLog(logPath, 10);
+export function resumeFailed(data: UiData, id: string, spawn: SpawnLog, code: number): UiData {
+  const tail = tailLog(spawn.logPath, 10);
   const failed = data.approval === null ? null : approvalExited(data.approval, code, tail);
   if (failed !== null && failed !== data.approval) return { ...data, approval: failed };
   return {
     ...data,
-    notice: [`resume ${id} exited with code ${code}`, ...tail].join("\n"),
+    notice: [
+      `resume ${id} exited with code ${code}`,
+      spawnLogLine(spawn.displayPath),
+      ...tail,
+    ].join("\n"),
   };
+}
+
+/** The launch is in flight: a notice keeps the land child's log path on screen until it settles. */
+export function landStarted(data: UiData, id: string, displayPath: string): UiData {
+  return { ...data, notice: `land ${id} — ${spawnLogLine(displayPath)}` };
 }
 
 export interface ResumeRun extends ControlDeps {
@@ -433,10 +463,11 @@ export function startResume(deps: ResumeRun, id: string): void {
       deps.update((current) => ({ ...current, notice: message }));
       return;
     }
+    deps.update((current) => resumeStarted(current, id, result.displayPath));
     void result.exited.then(({ code }) => {
       deps.guard.end(id);
       if (code === null || code === 0) return;
-      deps.update((current) => resumeFailed(current, id, result.logPath, code));
+      deps.update((current) => resumeFailed(current, id, result, code));
     });
     try {
       await deps.refresh();
@@ -447,12 +478,14 @@ export function startResume(deps: ResumeRun, id: string): void {
   })();
 }
 
-/** A non-zero land exit: the code and the last ten log lines, never a success claim. */
-export function landFailed(data: UiData, id: string, logPath: string, code: number): UiData {
-  const tail = tailLog(logPath, 10);
+/** A non-zero land exit: the code, the child's log path and the last ten lines, never a success claim. */
+export function landFailed(data: UiData, id: string, spawn: SpawnLog, code: number): UiData {
+  const tail = tailLog(spawn.logPath, 10);
   return {
     ...data,
-    notice: [`land ${id} exited with code ${code}`, ...tail].join("\n"),
+    notice: [`land ${id} exited with code ${code}`, spawnLogLine(spawn.displayPath), ...tail].join(
+      "\n",
+    ),
   };
 }
 
@@ -512,18 +545,23 @@ export function startLand(deps: LandRun, id: string): void {
       deps.update((current) => ({ ...current, notice: message }));
       return;
     }
+    deps.update((current) => landStarted(current, id, result.displayPath));
     void result.exited.then(({ code }) => {
       deps.guard.end(id);
       if (code === null) {
         const tail = tailLog(result.logPath, 10);
         deps.update((current) => ({
           ...current,
-          notice: [`land ${id} ended without an exit code`, ...tail].join("\n"),
+          notice: [
+            `land ${id} ended without an exit code`,
+            spawnLogLine(result.displayPath),
+            ...tail,
+          ].join("\n"),
         }));
         return;
       }
       if (code !== 0) {
-        deps.update((current) => landFailed(current, id, result.logPath, code));
+        deps.update((current) => landFailed(current, id, result, code));
         return;
       }
       void deps.refresh().then((refreshed) => {
