@@ -539,16 +539,40 @@ describe("applyKey", () => {
     expect(applyKey(runView, "j")).toEqual({ kind: "next-task" });
     expect(applyKey(runView, "Up")).toEqual({ kind: "prev-task" });
     expect(applyKey(runView, "k")).toEqual({ kind: "prev-task" });
-    expect(applyKey(runView, "a")).toEqual({ kind: "approve" });
-    expect(applyKey(runView, "A")).toEqual({ kind: "approve-only" });
-    expect(applyKey(runView, "w")).toEqual({ kind: "reword" });
-    expect(applyKey(runView, "R")).toEqual({ kind: "reapprove" });
+    // The approval overlay owns a/A/w/R; the run screen leaves them inert.
+    expect(applyKey(runView, "a")).toEqual({ kind: "none" });
+    expect(applyKey(runView, "A")).toEqual({ kind: "none" });
+    expect(applyKey(runView, "w")).toEqual({ kind: "none" });
+    expect(applyKey(runView, "R")).toEqual({ kind: "none" });
     expect(applyKey(runView, "r")).toEqual({ kind: "resume" });
     expect(applyKey(runView, "x")).toEqual({ kind: "abort" });
     expect(applyKey(runView, "t")).toEqual({ kind: "retry" });
     expect(applyKey(runView, "Q")).toEqual({ kind: "open-questions" });
     expect(applyKey(runView, "q")).toEqual({ kind: "quit" });
     expect(applyKey(runView, "?")).toEqual({ kind: "help" });
+  });
+
+  test("the run footer leaves a, A, w and R to the approval overlay", () => {
+    const implementing = runState({
+      specFindings: [
+        {
+          severity: "nice",
+          what: "the spec is wordy",
+          problem: "it repeats the request",
+          fix: "shorten it",
+          impact: "review is slower",
+        },
+      ],
+    });
+    const pending = runState({ phase: "awaiting-approval" });
+    for (const run of [implementing, pending]) {
+      const view = buildViewModel(runInput(run));
+      const keys = view.footer.map((hint) => hint.key);
+      expect(keys).not.toContain("a");
+      expect(keys).not.toContain("A");
+      expect(keys).not.toContain("w");
+      expect(keys).not.toContain("R");
+    }
   });
 
   test("two panes become one: Esc backs out of the drilled task before it leaves the run", () => {

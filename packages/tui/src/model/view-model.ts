@@ -293,14 +293,10 @@ function listFooter(input: ViewModelInput): KeyHint[] {
   ];
 }
 
-function runFooter(run: RunDetail | null, state: RunState | undefined): KeyHint[] {
+// The approval overlay owns a/A/w/R: its panel keys replace this footer while it is open.
+function runFooter(run: RunDetail | null): KeyHint[] {
   if (run === null) return [keyHint("q", "quit"), keyHint("?", "help")];
   const hints: KeyHint[] = [];
-  if (run.phase === "awaiting-approval") {
-    hints.push(keyHint("a", "approve and run"), keyHint("A", "approve only"));
-  }
-  if (state !== undefined && state.specFindings.length > 0) hints.push(keyHint("w", "reword"));
-  if (run.approval?.specCommit != null) hints.push(keyHint("R", "reapprove"));
   if (canResume(run.phase)) hints.push(keyHint("r", "resume"));
   if (run.phase !== "done" && run.phase !== "aborted") hints.push(keyHint("x", "abort"));
   if (run.detail?.task.status === "failed") hints.push(keyHint("t", "retry task"));
@@ -309,13 +305,9 @@ function runFooter(run: RunDetail | null, state: RunState | undefined): KeyHint[
   return hints;
 }
 
-function footerFor(
-  input: ViewModelInput,
-  run: RunDetail | null,
-  state: RunState | undefined,
-): readonly KeyHint[] {
+function footerFor(input: ViewModelInput, run: RunDetail | null): readonly KeyHint[] {
   if (input.panel !== undefined && input.panel !== null) return input.panel.keys;
-  return input.screen === "list" ? listFooter(input) : runFooter(run, state);
+  return input.screen === "list" ? listFooter(input) : runFooter(run);
 }
 
 export function buildViewModel(input: ViewModelInput): ViewModel {
@@ -350,7 +342,7 @@ export function buildViewModel(input: ViewModelInput): ViewModel {
     selectedRunId: input.selectedRunId,
     run,
     panel: input.panel ?? null,
-    footer: footerFor(input, run, entry?.run),
+    footer: footerFor(input, run),
     notice,
   };
 }

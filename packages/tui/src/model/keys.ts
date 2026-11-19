@@ -34,10 +34,6 @@ export type Intent =
   | { kind: "prev-run" }
   | { kind: "next-task" }
   | { kind: "prev-task" }
-  | { kind: "approve" }
-  | { kind: "approve-only" }
-  | { kind: "reword" }
-  | { kind: "reapprove" }
   | { kind: "resume" }
   | { kind: "abort" }
   | { kind: "retry" }
@@ -73,14 +69,6 @@ function runIntent(viewModel: ViewModel, key: string): Intent {
     case "Up":
     case "k":
       return { kind: "prev-task" };
-    case "a":
-      return { kind: "approve" };
-    case "A":
-      return { kind: "approve-only" };
-    case "w":
-      return { kind: "reword" };
-    case "R":
-      return { kind: "reapprove" };
     case "r":
       return { kind: "resume" };
     case "x":
