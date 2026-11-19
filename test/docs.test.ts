@@ -280,6 +280,34 @@ describe("documentation", () => {
     expect(fleet).toMatch(/bunx "@loomwright\/cli@\$\{version\}"/);
     expect(fleet).toContain("loomwright rollback");
   });
+
+  test("the README rows describe the override precedence", () => {
+    const readme = read("README.md");
+    const scriptsRow = readme.split("\n").find((l) => l.startsWith("| `gates.scripts`"));
+    expect(scriptsRow).toBeDefined();
+    expect(scriptsRow).toContain("replaces the script lookup");
+    expect(scriptsRow).toContain("write-mode script warning");
+
+    const doctorRow = readme
+      .split("\n")
+      .find((l) => l.includes("`doctor` / `gate`: `no format gate`"));
+    expect(doctorRow).toBeDefined();
+    expect(doctorRow).toContain("replaces the script lookup");
+    expect(doctorRow).toContain("write-mode script warning");
+  });
+
+  test("the CLI reference describes the override precedence", () => {
+    const cli = read("docs/cli.md");
+
+    const doctorBullet = cli.split("\n").find((l) => l.startsWith("- **Gates:**"));
+    expect(doctorBullet).toBeDefined();
+    expect(doctorBullet).toContain("skips the write-mode script warning");
+    expect(doctorBullet).toContain("replaces the script lookup");
+
+    const gateBullet = cli.split("\n").find((l) => l.startsWith("- Gates resolve as"));
+    expect(gateBullet).toBeDefined();
+    expect(gateBullet).toContain("replaces the script lookup");
+  });
 });
 
 describe("compatibility surface", () => {
