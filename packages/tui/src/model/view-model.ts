@@ -216,12 +216,14 @@ function taskRow(
   };
 }
 
-function questionRows(run: RunState): QuestionRow[] {
+function questionRows(run: RunState, snapshot: RunSnapshot | null): QuestionRow[] {
   const questionsFile =
     run.draft === undefined
       ? `openspec/changes/${run.id}/questions.md`
       : `${run.draft}/openspec/changes/${run.id}/questions.md`;
-  return run.clarifications.map((question) => ({
+  // The snapshot carries `question.answered`, so rows flip without waiting for the next status poll.
+  const records = snapshot?.questions ?? run.clarifications;
+  return records.map((question) => ({
     step: question.step,
     question: question.question,
     status: question.status,
@@ -271,7 +273,7 @@ function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
     selectedTaskId: input.selectedTaskId,
     detail: selected === null ? null : taskDetail(selected, input.facts),
     activity: input.facts.activity,
-    questions: questionRows(run),
+    questions: questionRows(run, input.snapshot),
     approval: approvalView(run, input.snapshot),
     replayed: input.source === "replay",
   };

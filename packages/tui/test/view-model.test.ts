@@ -338,16 +338,25 @@ describe("buildViewModel", () => {
     expect(view.run?.detail?.retries).toBe(2);
   });
 
-  test("questions map status, answer and the draft-aware questions file", () => {
-    const run = runState({
-      draft: ".factory/drafts/add-health",
-      clarifications: [
-        { step: "intake", question: "Which repo?", status: "unanswered", at: ISO },
-        { step: "intake", question: "Need auth?", status: "skipped", at: ISO },
-        { step: "design", question: "Path?", status: "answered", answer: "/health", at: ISO },
-      ],
-    });
-    const view = buildViewModel(runInput(run));
+  test("question.answered flips the snapshot row to answered and keeps the questions file", () => {
+    const run = runState({ draft: ".factory/drafts/add-health" });
+    resetSeq();
+    const events = [
+      event("question.raised", {
+        step: "intake",
+        question: "Which repo?",
+        status: "unanswered",
+      }),
+      event("question.raised", { step: "intake", question: "Need auth?", status: "skipped" }),
+      event("question.raised", { step: "design", question: "Path?", status: "unanswered" }),
+      event("question.answered", {
+        step: "design",
+        question: "Path?",
+        status: "answered",
+        answer: "/health",
+      }),
+    ];
+    const view = buildViewModel(runInput(run, events));
     const questions = view.run?.questions ?? [];
     expect(questions[0]?.status).toBe("unanswered");
     expect(questions[0]?.questionsFile).toBe(
@@ -357,13 +366,15 @@ describe("buildViewModel", () => {
     expect(questions[1]?.status).toBe("skipped");
     expect(questions[2]?.status).toBe("answered");
     expect(questions[2]?.answer).toBe("/health");
+  });
 
+  test("a logless run falls back to run state questions", () => {
     const plain = runState({
       clarifications: [{ step: "intake", question: "Which repo?", status: "unanswered", at: ISO }],
     });
-    expect(buildViewModel(runInput(plain)).run?.questions[0]?.questionsFile).toBe(
-      "openspec/changes/add-health/questions.md",
-    );
+    const questions = buildViewModel(runInput(plain)).run?.questions ?? [];
+    expect(questions[0]?.status).toBe("unanswered");
+    expect(questions[0]?.questionsFile).toBe("openspec/changes/add-health/questions.md");
   });
 
   test("approval: pending gives hash and change dir, granted adds commit and approver", () => {

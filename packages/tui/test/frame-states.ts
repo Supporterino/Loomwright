@@ -344,23 +344,21 @@ function approveOnlyConfirm(): ViewModel {
 }
 
 function questionOpen(): ViewModel {
-  const run = runState({
-    clarifications: [
-      {
-        step: "design",
-        question: "Which endpoints should be public?",
-        status: "unanswered",
-        at: ISO,
-      },
-      {
-        step: "design",
-        question: "Do health checks need auth?",
-        status: "skipped",
-        at: ISO,
-      },
-    ],
-  });
-  const input = runInput(run, [], 0, 0);
+  const run = runState();
+  resetSeq();
+  const events = [
+    event("question.raised", {
+      step: "design",
+      question: "Which endpoints should be public?",
+      status: "unanswered",
+    }),
+    event("question.raised", {
+      step: "design",
+      question: "Do health checks need auth?",
+      status: "skipped",
+    }),
+  ];
+  const input = runInput(run, events, 0, 0);
   const base = buildViewModel(input);
   if (base.run === null) throw new Error("the question frame has no run");
   const state = openQuestions(base.run);
