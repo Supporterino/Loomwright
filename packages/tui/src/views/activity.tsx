@@ -18,12 +18,14 @@ export function ActivityTail({
   glyphs,
   depth,
   maxLines = 20,
-}: ActivityTailProps): ReactElement {
-  const count = Math.max(0, maxLines);
-  const shown = count === 0 ? [] : lines.slice(Math.max(0, lines.length - count));
-  if (shown.length === 0) {
+}: ActivityTailProps): ReactElement | null {
+  if (lines.length === 0) {
     return <Text {...colorProps("muted", depth)}>no activity yet</Text>;
   }
+  const count = Math.max(0, maxLines);
+  // No rows to show but activity exists: render nothing rather than a false empty state.
+  if (count === 0) return null;
+  const shown = lines.slice(Math.max(0, lines.length - count));
   return (
     <Box flexDirection="column">
       {shown.map((line) => (

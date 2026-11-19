@@ -441,6 +441,52 @@ describe("run view layout", () => {
     expect(drilled).toContain("first - Health endpoint");
   });
 
+  test("a long narrow run keeps its run-level tail instead of claiming no activity", async () => {
+    const tasks = Array.from({ length: 18 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    resetSeq();
+    const events = [event("progress.line", { level: "normal", text: "run-level line" })];
+    const text = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: null })),
+      80,
+      24,
+      true,
+    );
+    expect(text).toContain("Tasks");
+    expect(text).toContain("run-level line");
+    expect(text).not.toContain("no activity yet");
+  });
+
+  test("the tail renders nothing rather than no activity when zero rows are left", async () => {
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    resetSeq();
+    const events = [event("progress.line", { level: "normal", text: "hidden line" })];
+    const text = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: null })),
+      80,
+      24,
+      true,
+    );
+    expect(text).not.toContain("hidden line");
+    expect(text).not.toContain("no activity yet");
+  });
+
+  test("the activity tail says no activity yet only when there are no lines", async () => {
+    const run = runState({ tasks: [taskState({ id: "first", title: "Health endpoint" })] });
+    const text = await frame(
+      buildViewModel(runInput(run, [], { selectedTaskId: null })),
+      80,
+      24,
+      true,
+    );
+    expect(text).toContain("no activity yet");
+  });
+
   test("the task detail stays task-scoped", async () => {
     const run = runState({
       tasks: [

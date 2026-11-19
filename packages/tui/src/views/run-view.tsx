@@ -16,11 +16,14 @@ export interface RunViewProps {
   readonly twoPane: boolean;
 }
 
-/** Rows left for the tail in one pane: header (1–2), notice, graph title and rows, footer. */
+/** Rows left for the tail in one pane: header, notice, graph title and rows, footer. */
 export function singlePaneTailRows(viewModel: ViewModel): number {
   const run = viewModel.run;
   if (run === null) return 0;
-  return Math.max(0, viewModel.rows - 6 - run.tasks.length);
+  const headerRows = run.phase === "awaiting-approval" ? 2 : 1;
+  const noticeRows = viewModel.notice === null ? 0 : 1;
+  const graphRows = 1 + run.tasks.length;
+  return Math.max(0, viewModel.rows - headerRows - noticeRows - graphRows - 1);
 }
 
 export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): ReactElement {
