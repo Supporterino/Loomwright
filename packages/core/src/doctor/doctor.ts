@@ -9,6 +9,7 @@ import { parseJsonc } from "../config/jsonc.ts";
 import { loadConfig } from "../config/load.ts";
 import {
   type FactoryConfig,
+  GATE_TYPES,
   type GateType,
   modelEntries,
   type RepoConfig,
@@ -402,15 +403,18 @@ function checkWriteModeScripts(
   c.in("gates");
   for (const repo of repos.filter((r) => r.role === "code")) {
     const dir = join(root, repo.path);
-    for (const [type, name] of Object.entries(config.gates.scripts)) {
-      if (typeof name !== "string") continue;
+    for (const type of GATE_TYPES) {
+      const name = config.gates.scripts[type];
+      if (name === undefined) continue;
+      // An override (a command or "skip") replaces the script lookup entirely.
+      if (config.gates.overrides[repo.name]?.[type] !== undefined) continue;
       const script = packageScript(dir, name);
       if (script !== undefined && WRITE_FLAG.test(script)) {
         c.add(
           "warn",
           `${repo.name} ${type} script`,
           `\`${name}\` writes files: ${script}`,
-          `point gates.scripts.${type} at a check-only variant, or set gates.overrides.${repo.name}.${type}`,
+          `set gates.overrides.${repo.name}.${type} to a check-only variant (it replaces the script lookup), or point gates.scripts.${type} at a check-only variant`,
         );
       }
     }
