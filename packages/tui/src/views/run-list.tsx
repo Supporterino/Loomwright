@@ -5,7 +5,7 @@ import { roleLabel, type ViewModel } from "../model/view-model.ts";
 import { LABELS } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
-import { colorProps, joinFields } from "./style.ts";
+import { colorProps, joinFields, phaseGlyph, phaseToken } from "./style.ts";
 
 export interface RunListProps {
   readonly viewModel: ViewModel;
@@ -21,6 +21,9 @@ export function RunList({ viewModel, glyphs, depth }: RunListProps): ReactElemen
         <Text key={item.id} wrap="truncate">
           <Text {...(item.selected ? colorProps("focus", depth) : {})}>
             {item.selected ? glyphs.focus : " "}
+          </Text>{" "}
+          <Text {...colorProps(phaseToken(item.phase), depth)}>
+            {phaseGlyph(item.phase, glyphs)}
           </Text>{" "}
           {joinFields(glyphs, [
             item.id,

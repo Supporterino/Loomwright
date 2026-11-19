@@ -214,7 +214,7 @@ describe("run list", () => {
     );
     const text = await frame(view, 80, 24, true);
     const lines = text.split("\n");
-    expect(lines.some((line) => line.startsWith("> oldest"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("> > oldest"))).toBe(true);
     const queuedAt = text.indexOf("queued #1");
     const runningAt = text.indexOf("active (pid 4242)");
     const oldestAt = text.indexOf("idle");
@@ -223,6 +223,31 @@ describe("run list", () => {
     expect(oldestAt).toBeGreaterThan(runningAt);
     expect(text).toContain("12.3k tokens");
     expect(text).toContain("$0.42");
+  });
+
+  test("every run row carries its phase glyph beside the phase label", async () => {
+    const running = runState({ id: "running", createdAt: "2026-11-17T09:10:00.000Z" });
+    const done = runState({
+      id: "finished",
+      createdAt: "2026-11-17T09:00:00.000Z",
+      phase: "done",
+    });
+    const view = buildViewModel(
+      vmInput({
+        screen: "list",
+        status: statusDoc([
+          { run: running, tokens: 0, cost: 0 },
+          { run: done, tokens: 0, cost: 0 },
+        ]),
+        runs: [running, done],
+        selectedRunId: "running",
+      }),
+    );
+    const lines = (await frame(view, 80, 24, true)).split("\n");
+    expect(lines.some((line) => line.startsWith("> > ") && line.includes("implementing"))).toBe(
+      true,
+    );
+    expect(lines.some((line) => line.startsWith("  + ") && line.includes("done"))).toBe(true);
   });
 
   test("an empty workspace explains itself: no changes and n in the footer", async () => {
@@ -846,7 +871,7 @@ describe("the interactive entry", () => {
       });
       await until(() => input.isRaw);
       // Open only once the list is on screen; otherwise Enter could race the first paint.
-      await until(() => output.text().includes(`> ${run.id}`), "the run row");
+      await until(() => output.text().includes(`! ${run.id}`), "the run row");
       // One Enter only: a repeat would call openRun again and abort the load that opens the gate.
       input.press("\r");
       await until(() => output.text().includes("Approval - add-health"), "the approval overlay");
