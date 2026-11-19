@@ -299,8 +299,10 @@ function listFooter(input: ViewModelInput): KeyHint[] {
 }
 
 // The approval overlay owns a/A/w/R: its panel keys replace this footer while it is open.
-function runFooter(run: RunDetail | null): KeyHint[] {
+function runFooter(input: ViewModelInput, run: RunDetail | null): KeyHint[] {
   if (run === null) return [keyHint("q", "quit"), keyHint("?", "help")];
+  // Replay intercepts every write key (see `REPLAY_WRITE_KEYS` in the entry), so only help and quit remain.
+  if (input.source === "replay") return [keyHint("?", "help"), keyHint("q", "quit")];
   const hints: KeyHint[] = [];
   if (canResume(run.phase)) hints.push(keyHint("r", "resume"));
   if (canLand(run.phase)) hints.push(keyHint("l", "land"));
@@ -313,7 +315,7 @@ function runFooter(run: RunDetail | null): KeyHint[] {
 
 function footerFor(input: ViewModelInput, run: RunDetail | null): readonly KeyHint[] {
   if (input.panel !== undefined && input.panel !== null) return input.panel.keys;
-  return input.screen === "list" ? listFooter(input) : runFooter(run);
+  return input.screen === "list" ? listFooter(input) : runFooter(input, run);
 }
 
 export function buildViewModel(input: ViewModelInput): ViewModel {

@@ -248,6 +248,20 @@ describe("buildViewModel", () => {
     expect(view.notice).toBe(replayNotice);
   });
 
+  test("replay is read-only: the footer lists only help and quit", () => {
+    for (const phase of ["implementing", "paused", "done", "aborted"] as const) {
+      const run = runState({
+        phase,
+        tasks: [taskState({ id: "first", status: "failed" })],
+      });
+      const view = buildViewModel(runInput(run, [], { source: "replay", selectedTaskId: "first" }));
+      expect(
+        view.footer.map((hint) => hint.key),
+        phase,
+      ).toEqual(["?", "q"]);
+    }
+  });
+
   test("task order is kept from run state, with attempt and failures shown", () => {
     const run = runState({
       tasks: [
