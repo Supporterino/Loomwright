@@ -201,6 +201,23 @@ describe("file intake validates", () => {
     });
   });
 
+  test("file intake validates a huge file from a bounded head", () => {
+    const ws = workspace();
+    const path = join(ws, "huge.md");
+    // One line far longer than the head proves the preview is not decoded from the whole file.
+    const content = `first line\n${"x".repeat(2 * 1024 * 1024)}`;
+    writeFileSync(path, content);
+
+    const check = checkRequestFile(path, ws);
+    expect(check.ok).toBe(true);
+    if (!check.ok) return;
+    expect(check.file.bytes).toBe(Buffer.byteLength(content));
+    expect(check.file.preview[0]).toBe("first line");
+    const previewBytes = Buffer.byteLength(check.file.preview.join("\n"));
+    expect(previewBytes).toBeLessThanOrEqual(64 * 1024);
+    expect(previewBytes).toBeLessThan(content.length);
+  });
+
   test("a short terminal trims the preview and names the shown count", () => {
     const ws = workspace();
     mkdirSync(join(ws, ".factory", "requests"), { recursive: true });

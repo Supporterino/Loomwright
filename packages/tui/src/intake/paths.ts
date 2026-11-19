@@ -4,10 +4,12 @@
  */
 import {
   accessSync,
+  closeSync,
   constants,
   type Dirent,
+  openSync,
   readdirSync,
-  readFileSync,
+  readSync,
   type Stats,
   statSync,
 } from "node:fs";
@@ -140,6 +142,29 @@ function statReason(error: unknown, absolute: string): string {
   return `${absolute} is not readable`;
 }
 
+/** The most bytes read for a preview; a typo pointing at a huge file must not stall the UI. */
+const PREVIEW_BYTES = 64 * 1024;
+const PREVIEW_LINES = 20;
+
+/** Reads at most `PREVIEW_BYTES` from the head of `absolute`, or null when it cannot be read. */
+function readHead(absolute: string): string | null {
+  let fd: number;
+  try {
+    fd = openSync(absolute, "r");
+  } catch {
+    return null;
+  }
+  try {
+    const buffer = Buffer.alloc(PREVIEW_BYTES);
+    const read = readSync(fd, buffer, 0, PREVIEW_BYTES, 0);
+    return buffer.toString("utf8", 0, read);
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** Validates a request path and builds the preview without parsing the request. */
 export function checkRequestFile(path: string, cwd: string): RequestCheck {
   const expanded = expandTilde(path);
@@ -163,12 +188,8 @@ export function checkRequestFile(path: string, cwd: string): RequestCheck {
     return { ok: false, reason: `${absolute} is not readable` };
   }
 
-  let text: string;
-  try {
-    text = readFileSync(absolute, "utf8");
-  } catch {
-    return { ok: false, reason: `${absolute} is not readable` };
-  }
+  const text = readHead(absolute);
+  if (text === null) return { ok: false, reason: `${absolute} is not readable` };
   if (text.trim() === "") return { ok: false, reason: `${absolute} is empty` };
 
   return {
@@ -176,7 +197,7 @@ export function checkRequestFile(path: string, cwd: string): RequestCheck {
     file: {
       absolute,
       bytes: stats.size,
-      preview: text.split(/\r?\n/u).slice(0, 20),
+      preview: text.split(/\r?\n/u).slice(0, PREVIEW_LINES),
     },
   };
 }
