@@ -501,6 +501,16 @@ describe("a non-zero child exit restores the actionable overlay", () => {
     const pressed = approvalKeys(failed, "a", key());
     expect(pressed.state).toEqual({ kind: "confirming", action: "approve" });
   });
+
+  test("failed lists the action hints for the available actions", () => {
+    const failed = approvalExited({ kind: "launching", action: "approve" }, 3, ["boom"]);
+    const text = panelText(detail(runState(), pendingEvents()), failed);
+    expect(text).toContain("a approve and run");
+    expect(text).toContain("A approve only");
+    expect(text).toContain("q quit");
+    expect(text).not.toContain("w reword");
+    expect(text).not.toContain("R reapprove");
+  });
 });
 
 describe("the identity check", () => {

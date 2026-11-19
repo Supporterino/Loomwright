@@ -293,7 +293,7 @@ function panelKeys(input: ApprovalInput): PanelView["keys"] {
     keys.push(keyHint("Enter", "confirm"), keyHint("Esc", "cancel"));
   } else if (state.kind === "waiting") {
     if (state.action === "approve-only") keys.push(keyHint("r", "resume"));
-  } else if (state.kind === "idle") {
+  } else if (state.kind === "idle" || state.kind === "failed") {
     const available = approvalAvailable(evidence);
     if (available.approve) keys.push(keyHint("a", "approve and run"));
     if (available["approve-only"]) keys.push(keyHint("A", "approve only"));
