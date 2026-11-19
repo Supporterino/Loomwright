@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Factory, StatusDocument } from "@loomwright/core/factory";
 import { RunState, TaskState } from "@loomwright/core/state/run";
 import type { UsageSummary } from "@loomwright/core/usage/usage";
+import { approvalStarted } from "../src/approval/overlay.ts";
 import {
   confirmFor,
   confirmKeys,
@@ -15,8 +19,21 @@ import {
   questionsKeys,
   questionsPanel,
 } from "../src/controls/questions.tsx";
-import { performControl, recordAnswer, runInSession } from "../src/entry.tsx";
-import { actionArgs, type LaunchAction } from "../src/launch/launcher.ts";
+import {
+  createResumeGuard,
+  performControl,
+  recordAnswer,
+  resumeFailed,
+  runInSession,
+  startResume,
+  type UiData,
+} from "../src/entry.tsx";
+import {
+  actionArgs,
+  type ExitResult,
+  type LaunchAction,
+  type LaunchResult,
+} from "../src/launch/launcher.ts";
 import { collectFacts } from "../src/model/facts.ts";
 import type { KeyInput } from "../src/model/keys.ts";
 import { buildViewModel, type RunDetail, type ViewModelInput } from "../src/model/view-model.ts";
@@ -26,6 +43,7 @@ import { ASCII_GLYPHS, UNICODE_GLYPHS } from "../src/theme/glyphs.ts";
 
 const ISO = "2026-11-18T10:00:00.000Z";
 const RUN = "add-health";
+const LOG = ".factory/logs/tui-spawn-test.log";
 const ZERO_USAGE = {
   input: 0,
   output: 0,
@@ -215,6 +233,52 @@ function fakeLauncher(): {
         throw new Error("the launcher fake never resolves");
       },
     },
+  };
+}
+
+/** A launcher that spawns at once and lets the test decide when (and how) the child exits. */
+function resumeLauncher(logPath = LOG): {
+  readonly launcher: { launch(action: LaunchAction): Promise<LaunchResult> };
+  readonly launches: readonly LaunchAction[];
+  readonly exit: (code: number | null) => void;
+} {
+  const launches: LaunchAction[] = [];
+  let settle: (result: ExitResult) => void = () => {};
+  const exited = new Promise<ExitResult>((resolve) => {
+    settle = resolve;
+  });
+  return {
+    launches,
+    exit: (code) => settle({ code, signal: null }),
+    launcher: {
+      async launch(action: LaunchAction): Promise<LaunchResult> {
+        launches.push(action);
+        return { pid: 4242, logPath, displayPath: logPath, exited };
+      },
+    },
+  };
+}
+
+function uiData(overrides: Partial<UiData> = {}): UiData {
+  const run = runState();
+  return {
+    screen: "run",
+    selectedRunId: run.id,
+    selectedTaskId: null,
+    columns: 120,
+    rows: 40,
+    status: statusDoc(run),
+    runs: [run],
+    snapshot: null,
+    facts: collectFacts([]),
+    notice: null,
+    intake: null,
+    approval: null,
+    questions: null,
+    confirmation: null,
+    help: false,
+    identity: null,
+    ...overrides,
   };
 }
 
@@ -493,6 +557,142 @@ describe("resume is a child, not a call", () => {
       const view = buildViewModel(viewInput(runState({ phase })));
       expect(view.footer.some((hint) => hint.key === "r")).toBe(resumeFor(view) !== null);
     }
+  });
+
+  test("resume hands back the child's LaunchResult and abort returns null", async () => {
+    const fake = fakeFactory();
+    const { launcher } = resumeLauncher();
+    const result = await performControl(
+      { factory: fake.factory, launcher },
+      {
+        kind: "resume",
+        id: RUN,
+      },
+    );
+    expect(result.pid).toBe(4242);
+    expect(result.displayPath).toBe(LOG);
+    expect(
+      await performControl({ factory: fake.factory, launcher }, { kind: "abort", id: RUN }),
+    ).toBeNull();
+  });
+});
+
+describe("a resumed child is guarded and observed", () => {
+  test("a double-tapped r launches one resume child for the run", async () => {
+    const fake = fakeFactory();
+    const { launcher, launches, exit } = resumeLauncher();
+    const deps = {
+      factory: fake.factory,
+      launcher,
+      guard: createResumeGuard(),
+      update: () => {},
+      refresh: async () => {},
+    };
+
+    startResume(deps, RUN);
+    startResume(deps, RUN);
+    await Bun.sleep(0);
+    expect(launches).toEqual([{ kind: "resume", id: RUN }]);
+
+    // The guard clears on the child's exit, so the next `r` is a new resume rather than a lost key.
+    exit(0);
+    await Bun.sleep(0);
+    startResume(deps, RUN);
+    await Bun.sleep(0);
+    expect(launches).toHaveLength(2);
+  });
+
+  test("a non-zero resume exit is never silent: the notice names the code and the log tail", () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-resume-"));
+    try {
+      const logPath = join(dir, "resume.log");
+      writeFileSync(logPath, ["start", "the run lock is held", "abort"].join("\n"));
+      const data = resumeFailed(uiData(), RUN, logPath, 3);
+      expect(data.approval).toBeNull();
+      expect(data.notice).toContain(`resume ${RUN} exited with code 3`);
+      expect(data.notice).toContain("the run lock is held");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a non-zero resume from the approve-only wait fails the overlay with its code and tail", () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-resume-"));
+    try {
+      const logPath = join(dir, "resume.log");
+      writeFileSync(logPath, "boom\n");
+      const waiting = approvalStarted({ kind: "launching", action: "approve-only" }, LOG);
+      const data = resumeFailed(uiData({ approval: waiting }), RUN, logPath, 4);
+      expect(data.notice).toBeNull();
+      expect(data.approval).toEqual({
+        kind: "failed",
+        action: "approve-only",
+        code: 4,
+        tail: ["boom"],
+        logPath: LOG,
+      });
+
+      // An overlay state with nothing to fail keeps its state and reports through the notice.
+      const idle = resumeFailed(uiData({ approval: { kind: "idle" } }), RUN, logPath, 4);
+      expect(idle.approval).toEqual({ kind: "idle" });
+      expect(idle.notice).toContain("exited with code 4");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("startResume surfaces a failed child through the UI update", async () => {
+    const fake = fakeFactory();
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-resume-"));
+    try {
+      const logPath = join(dir, "resume.log");
+      writeFileSync(logPath, "boom\n");
+      const { launcher, exit } = resumeLauncher(logPath);
+      const states: UiData[] = [];
+      startResume(
+        {
+          factory: fake.factory,
+          launcher,
+          guard: createResumeGuard(),
+          update: (change: (data: UiData) => UiData) => states.push(change(uiData())),
+          refresh: async () => {},
+        },
+        RUN,
+      );
+      await Bun.sleep(0);
+      exit(3);
+      await Bun.sleep(0);
+      expect(states.at(-1)?.notice).toContain("exited with code 3");
+      expect(states.at(-1)?.notice).toContain("boom");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a resume that threw releases the guard and shows the message", async () => {
+    const fake = fakeFactory();
+    let attempts = 0;
+    const launcher = {
+      async launch(_action: LaunchAction): Promise<LaunchResult> {
+        attempts += 1;
+        throw new Error("spawn failed");
+      },
+    };
+    const notices: string[] = [];
+    const deps = {
+      factory: fake.factory,
+      launcher,
+      guard: createResumeGuard(),
+      update: (change: (data: UiData) => UiData) => notices.push(change(uiData()).notice ?? ""),
+      refresh: async () => {},
+    };
+
+    startResume(deps, RUN);
+    await Bun.sleep(0);
+    expect(notices).toEqual(["spawn failed"]);
+    startResume(deps, RUN);
+    await Bun.sleep(0);
+    expect(attempts).toBe(2);
   });
 });
 

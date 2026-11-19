@@ -336,26 +336,105 @@ export interface ControlDeps {
   readonly launcher: Pick<Launcher, "launch">;
 }
 
+type ResumeAction = Extract<ControlAction, { readonly kind: "resume" }>;
+
 /**
  * The only in-process control effects: abort and retry return after writing run state, and
- * resume is a detached child. Nothing here waits for a pipeline phase.
+ * resume is a detached child. Nothing here waits for a pipeline phase; resume hands back the
+ * child so the caller can watch its exit.
  */
-export async function performControl(deps: ControlDeps, action: ControlAction): Promise<void> {
+export function performControl(deps: ControlDeps, action: ResumeAction): Promise<LaunchResult>;
+export function performControl(
+  deps: ControlDeps,
+  action: ControlAction,
+): Promise<LaunchResult | null>;
+export async function performControl(
+  deps: ControlDeps,
+  action: ControlAction,
+): Promise<LaunchResult | null> {
   switch (action.kind) {
     case "abort":
       await deps.factory.abort(action.id);
-      return;
+      return null;
     case "retry":
       await deps.factory.retry(action.id, action.taskId);
-      return;
+      return null;
     case "resume":
-      await deps.launcher.launch({ kind: "resume", id: action.id });
-      return;
+      return deps.launcher.launch({ kind: "resume", id: action.id });
     default: {
       const unhandled: never = action;
       throw new Error(`unknown control action: ${String(unhandled)}`);
     }
   }
+}
+
+/** One detached resume per run at a time: `r` is easy to double-tap. */
+export interface ResumeGuard {
+  /** True when the id may launch; false while its child is still in flight. */
+  begin(id: string): boolean;
+  end(id: string): void;
+}
+
+export function createResumeGuard(): ResumeGuard {
+  const inFlight = new Set<string>();
+  return {
+    begin(id: string): boolean {
+      if (inFlight.has(id)) return false;
+      inFlight.add(id);
+      return true;
+    },
+    end(id: string): void {
+      inFlight.delete(id);
+    },
+  };
+}
+
+/** A non-zero resume exit: the approval overlay shows it when open, a notice otherwise. */
+export function resumeFailed(data: UiData, id: string, logPath: string, code: number): UiData {
+  const tail = tailLog(logPath, 10);
+  const failed = data.approval === null ? null : approvalExited(data.approval, code, tail);
+  if (failed !== null && failed !== data.approval) return { ...data, approval: failed };
+  return {
+    ...data,
+    notice: [`resume ${id} exited with code ${code}`, ...tail.slice(-3)].join("\n"),
+  };
+}
+
+export interface ResumeRun extends ControlDeps {
+  readonly guard: ResumeGuard;
+  /** The UI's `setData`. */
+  readonly update: (change: (data: UiData) => UiData) => void;
+  readonly refresh: () => Promise<void>;
+}
+
+/**
+ * Starts one detached `resume` and watches its exit: a repeat while the child runs is ignored,
+ * and a non-zero exit is shown with the log tail instead of looking successful.
+ */
+export function startResume(deps: ResumeRun, id: string): void {
+  if (!deps.guard.begin(id)) return;
+  void (async () => {
+    let result: LaunchResult;
+    try {
+      result = await performControl(deps, { kind: "resume", id });
+    } catch (err: unknown) {
+      deps.guard.end(id);
+      const message = err instanceof Error ? err.message : String(err);
+      deps.update((current) => ({ ...current, notice: message }));
+      return;
+    }
+    void result.exited.then(({ code }) => {
+      deps.guard.end(id);
+      if (code === null || code === 0) return;
+      deps.update((current) => resumeFailed(current, id, result.logPath, code));
+    });
+    try {
+      await deps.refresh();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.update((current) => ({ ...current, notice: message }));
+    }
+  })();
 }
 
 /** `Factory.answer` writes the command inbox and returns; the run is not waited for. */
@@ -731,10 +810,24 @@ function Interactive({
     [factory, refreshStatus],
   );
 
-  /** Abort and retry return immediately; resume is a detached child. Never a whole phase. */
+  /** Abort and retry return immediately; resume runs one guarded detached child per run. */
+  const resumeGuard = useRef<ResumeGuard>(createResumeGuard());
   const applyControl = useCallback(
     (action: ControlAction): void => {
       if (isReadOnly(viewRef.current)) return;
+      if (action.kind === "resume") {
+        startResume(
+          {
+            factory,
+            launcher,
+            guard: resumeGuard.current,
+            update: setData,
+            refresh: refreshStatus,
+          },
+          action.id,
+        );
+        return;
+      }
       void (async () => {
         try {
           await performControl({ factory, launcher }, action);
