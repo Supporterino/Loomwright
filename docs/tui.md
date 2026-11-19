@@ -74,8 +74,9 @@ table name the keys above.
 - **Text.** Type the request. `Ctrl-J` inserts a newline and `Enter` starts it. A blank or
   whitespace-only request is refused with `the request is empty` and starts nothing.
 - **File.** Type a path; completion lists matches. The panel shows the resolved path, the byte size
-  and a preview of the first 20 lines. A missing path, a directory, a non-regular file, an
-  unreadable file and an empty file are each refused with the reason and start nothing.
+  and a preview of the first 20 lines, trimmed to what the terminal has room for with the shown count
+  named. A missing path, a directory, a non-regular file, an unreadable file and an empty file are
+  each refused with the reason and start nothing.
 
 Starting launches `loomwright run` as a detached child (`--no-interactive`) from the current
 workspace. The dialog shows the spawn log path (`.factory/logs/tui-spawn-*.log`) and its last lines.

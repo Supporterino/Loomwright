@@ -254,7 +254,7 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
     return buildViewModel({ ...baseInput, panel });
   }
   if (data.intake !== null) {
-    return buildViewModel({ ...baseInput, panel: intakePanel(data.intake, glyphs) });
+    return buildViewModel({ ...baseInput, panel: intakePanel(data.intake, glyphs, data.rows) });
   }
   if (data.questions !== null && base.run !== null) {
     return buildViewModel({

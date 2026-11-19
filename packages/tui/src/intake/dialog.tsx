@@ -141,30 +141,49 @@ function title(state: IntakeState, glyphs: GlyphSet): string {
   return `New change ${dash} ${state.mode}`;
 }
 
-const PREVIEW_LINES = 14;
+/** Rows the box chrome and the footer below it take: two borders, the title, the key line, footer. */
+const PANEL_CHROME_ROWS = 5;
+/** The chosen file's fixed header: the path, the byte size and the preview's label. */
+const PREVIEW_HEADER_ROWS = 3;
 
-function fileLines(state: IntakeState, glyphs: GlyphSet): string[] {
-  const lines = [`path: ${state.path === "" ? "(type a path)" : state.path}`];
-  for (const candidate of state.candidates.slice(0, 8)) {
-    const marker = candidate.kind === "dir" ? glyphs.focus : glyphs.bullet;
-    lines.push(`  ${marker} ${candidate.path}`);
+/**
+ * The file keeps its first twenty lines; the dialog shows as many as the terminal has room for and
+ * names the shown count when it has to trim.
+ */
+function fileLines(state: IntakeState, glyphs: GlyphSet, rows: number, trailing: number): string[] {
+  if (state.file === null) {
+    const lines = [`path: ${state.path === "" ? "(type a path)" : state.path}`];
+    for (const candidate of state.candidates.slice(0, 8)) {
+      const marker = candidate.kind === "dir" ? glyphs.focus : glyphs.bullet;
+      lines.push(`  ${marker} ${candidate.path}`);
+    }
+    return lines;
   }
-  if (state.file !== null) {
-    lines.push(`file: ${state.file.absolute}`);
-    lines.push(`size: ${state.file.bytes} bytes`);
-    // A 24-row frame leaves room for this window; the RequestFile keeps all twenty lines.
-    lines.push(`preview (${state.file.preview.length} lines):`);
-    for (const line of state.file.preview.slice(0, PREVIEW_LINES)) lines.push(`  | ${line}`);
-  }
-  return lines;
+  const limit = Math.max(0, rows - PANEL_CHROME_ROWS - PREVIEW_HEADER_ROWS - trailing);
+  const shown = state.file.preview.slice(0, limit);
+  const label =
+    shown.length < state.file.preview.length
+      ? `preview (${shown.length} of ${state.file.preview.length} lines):`
+      : `preview (${state.file.preview.length} lines):`;
+  return [
+    `file: ${state.file.absolute}`,
+    `size: ${state.file.bytes} bytes`,
+    label,
+    ...shown.map((line) => `  | ${line}`),
+  ];
 }
 
 /** The panel the frame renders; the error rides in `notice` so it stays inline and visible. */
-export function intakePanel(state: IntakeState, glyphs: GlyphSet): PanelView {
+export function intakePanel(state: IntakeState, glyphs: GlyphSet, rows = 40): PanelView {
+  const spawnedRows = state.spawned === null ? 0 : 1 + state.spawned.tail.length;
+  const trailing =
+    (state.submitting && state.spawned === null ? 1 : 0) +
+    spawnedRows +
+    (state.queuedNote === null ? 0 : 1);
   const lines: string[] =
     state.mode === "text"
       ? [state.text === "" ? "request: (empty)" : `request: ${state.text}`]
-      : fileLines(state, glyphs);
+      : fileLines(state, glyphs, rows, trailing);
   if (state.submitting && state.spawned === null) lines.push("starting...");
   if (state.spawned !== null) {
     lines.push(`spawn log: ${state.spawned.displayPath}`);

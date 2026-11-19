@@ -13,7 +13,7 @@ describe("every screen has both sizes", () => {
     for (const size of SIZES) {
       const file = join(framesDir, `${state}-${size.columns}x${size.rows}.txt`);
       test(`${state} at ${size.columns}x${size.rows}`, async () => {
-        const actual = await renderFrame(make(), size, { ascii: true });
+        const actual = await renderFrame(make(size), size, { ascii: true });
         expect(actual.includes("\u001b[")).toBe(false);
         expect(actual).toMatch(/^[\t\n -~]*$/u);
         expect(actual.split("\n").length).toBeLessThanOrEqual(size.rows);
@@ -31,7 +31,11 @@ describe("every screen has both sizes", () => {
 
 describe("an empty workspace frame", () => {
   test("says no changes exist and names n", async () => {
-    const text = await renderFrame(STATES["no-runs"](), { columns: 80, rows: 24 }, { ascii: true });
+    const text = await renderFrame(
+      STATES["no-runs"]({ columns: 80, rows: 24 }),
+      { columns: 80, rows: 24 },
+      { ascii: true },
+    );
     expect(text).toContain(emptyWorkspace);
     expect(text).toContain("n");
   });

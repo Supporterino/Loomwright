@@ -206,7 +206,7 @@ describe("layout, keyboard and accessibility", () => {
     expect(glyphsFor({ ascii: false, env: {} }).focus).toBe("›");
 
     const unicode = await renderFrame(
-      STATES["failing-task"](),
+      STATES["failing-task"]({ columns: 120, rows: 40 }),
       { columns: 120, rows: 40 },
       {
         ascii: false,
@@ -215,7 +215,7 @@ describe("layout, keyboard and accessibility", () => {
     );
     expect(unicode).toContain("›");
     const ascii = await renderFrame(
-      STATES["failing-task"](),
+      STATES["failing-task"]({ columns: 120, rows: 40 }),
       { columns: 120, rows: 40 },
       {
         ascii: true,
@@ -234,7 +234,7 @@ describe("layout, keyboard and accessibility", () => {
     expect(glyphsFor({ ascii: false, env: {} })).toBe(UNICODE_GLYPHS);
 
     const dumb = await renderFrame(
-      STATES["running-graph"](),
+      STATES["running-graph"]({ columns: 80, rows: 24 }),
       { columns: 80, rows: 24 },
       { env: { TERM: "dumb" } },
     );
@@ -242,7 +242,7 @@ describe("layout, keyboard and accessibility", () => {
     expect(dumb.includes("▶")).toBe(false);
 
     const forced = await renderFrame(
-      STATES["running-graph"](),
+      STATES["running-graph"]({ columns: 80, rows: 24 }),
       { columns: 80, rows: 24 },
       { ascii: true, env: { LANG: "de_DE.UTF-8", TERM: "xterm-256color" } },
     );
@@ -253,7 +253,7 @@ describe("layout, keyboard and accessibility", () => {
   test("no background is painted: no frame carries a background SGR", async () => {
     for (const [state, make] of Object.entries(STATES)) {
       for (const size of SIZES) {
-        const raw = await renderAnsiFrame(make(), size, {
+        const raw = await renderAnsiFrame(make(size), size, {
           ascii: true,
           env: {},
           depth: "truecolor",
@@ -278,7 +278,7 @@ describe("layout, keyboard and accessibility", () => {
 
     for (const state of ["running-graph", "failing-task", "finished", "no-runs"] as const) {
       const raw = await renderAnsiFrame(
-        STATES[state](),
+        STATES[state]({ columns: 120, rows: 40 }),
         { columns: 120, rows: 40 },
         {
           ascii: true,
@@ -289,7 +289,7 @@ describe("layout, keyboard and accessibility", () => {
       expect(raw).not.toContain(coral);
     }
 
-    const gate = STATES["awaiting-approval"]();
+    const gate = STATES["awaiting-approval"]({ columns: 120, rows: 40 });
     const bannerFrame = await renderAnsiFrame(
       { ...gate, panel: null },
       { columns: 120, rows: 40 },

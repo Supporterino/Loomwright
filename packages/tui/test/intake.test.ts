@@ -189,12 +189,29 @@ describe("file intake validates", () => {
     expect(text).toContain(`${check.file.bytes} bytes`);
     expect(text).toContain("preview (20 lines)");
     expect(text).toContain("request line 1");
+    // The chosen file replaces the completion list and every preview line is rendered.
+    const lines = intakePanel(state, ASCII_GLYPHS).lines;
+    expect(lines).toContain("  | request line 20");
+    expect(lines.some((line) => line.startsWith("  - "))).toBe(false);
 
     const outcome = intakeKeys(state, "", key({ return: true }), ctx);
     expect(outcome.submit).toEqual({
       kind: "run-file",
       path: join(ws, ".factory", "requests", "faster-imports.md"),
     });
+  });
+
+  test("a short terminal trims the preview and names the shown count", () => {
+    const ws = workspace();
+    mkdirSync(join(ws, ".factory", "requests"), { recursive: true });
+    const content = `${Array.from({ length: 25 }, (_, index) => `request line ${index + 1}`).join("\n")}\n`;
+    writeFileSync(join(ws, ".factory", "requests", "faster-imports.md"), content);
+
+    const state = fileMode(".factory/requests/faster-imports.md", context(ws));
+    const lines = intakePanel(state, ASCII_GLYPHS, 24).lines;
+    expect(lines).toContain("preview (16 of 20 lines):");
+    expect(lines).toContain("  | request line 16");
+    expect(lines).not.toContain("  | request line 17");
   });
 
   test("nonexistent, directory, unreadable and empty files are rejected in place", () => {

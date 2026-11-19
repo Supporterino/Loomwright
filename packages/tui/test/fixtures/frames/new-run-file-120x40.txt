@@ -1,7 +1,5 @@
 +----------------------------------------------------------------------------------------------------------------------+
 | New change - file                                                                                                    |
-| path: .factory/requests/faster-imports.md                                                                            |
-|   - .factory/requests/faster-imports.md                                                                              |
 | file: /work/app/.factory/requests/faster-imports.md                                                                  |
 | size: 512 bytes                                                                                                      |
 | preview (20 lines):                                                                                                  |
@@ -19,12 +17,14 @@
 |   | request line 12                                                                                                  |
 |   | request line 13                                                                                                  |
 |   | request line 14                                                                                                  |
+|   | request line 15                                                                                                  |
+|   | request line 16                                                                                                  |
+|   | request line 17                                                                                                  |
+|   | request line 18                                                                                                  |
+|   | request line 19                                                                                                  |
+|   | request line 20                                                                                                  |
 | Tab text mode - Enter start - Esc cancel                                                                             |
 +----------------------------------------------------------------------------------------------------------------------+
-
-
-
-
 
 
 

@@ -24,6 +24,7 @@ import {
 import { collectFacts } from "../src/model/facts.ts";
 import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/model/view-model.ts";
 import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
+import type { FrameSize } from "../src/views/frame.tsx";
 
 const ISO = "2026-11-17T10:00:00.000Z";
 const RUN = "add-health";
@@ -265,7 +266,7 @@ function newRunText(): ViewModel {
   );
 }
 
-function newRunFile(): ViewModel {
+function newRunFile({ rows }: FrameSize): ViewModel {
   const preview = Array.from({ length: 20 }, (_, index) => `request line ${index + 1}`);
   const state: IntakeState = {
     ...initialIntake,
@@ -284,7 +285,7 @@ function newRunFile(): ViewModel {
       preview,
     },
   };
-  return buildViewModel(vmInput({ screen: "list", panel: intakePanel(state, ASCII_GLYPHS) }));
+  return buildViewModel(vmInput({ screen: "list", panel: intakePanel(state, ASCII_GLYPHS, rows) }));
 }
 
 function queuedAfterApproval(): ViewModel {
@@ -368,7 +369,21 @@ function questionOpen(): ViewModel {
   return buildViewModel({ ...input, panel });
 }
 
-export const STATES = {
+/** Every snapshot state, built for the size it renders at. */
+type StateName =
+  | "no-runs"
+  | "running-graph"
+  | "failing-task"
+  | "finished"
+  | "new-run-text"
+  | "new-run-file"
+  | "queued-after-approval"
+  | "awaiting-approval"
+  | "approve-and-run-confirm"
+  | "approve-only-confirm"
+  | "question-open";
+
+export const STATES: Record<StateName, (size: FrameSize) => ViewModel> = {
   "no-runs": noRuns,
   "running-graph": runningGraph,
   "failing-task": failingTask,
@@ -380,7 +395,7 @@ export const STATES = {
   "approve-and-run-confirm": approveAndRunConfirm,
   "approve-only-confirm": approveOnlyConfirm,
   "question-open": questionOpen,
-} satisfies Record<string, () => ViewModel>;
+};
 
 export const SIZES = [
   { columns: 80, rows: 24 },
