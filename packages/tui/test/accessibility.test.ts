@@ -276,7 +276,14 @@ describe("layout, keyboard and accessibility", () => {
     expect(coral).toBeDefined();
     if (coral === undefined) throw new Error("the approval token has no truecolor form");
 
-    for (const state of ["running-graph", "failing-task", "finished", "no-runs"] as const) {
+    for (const state of [
+      "running-graph",
+      "failing-task",
+      "finished",
+      "design-activity",
+      "land-confirm",
+      "no-runs",
+    ] as const) {
       const raw = await renderAnsiFrame(
         STATES[state]({ columns: 120, rows: 40 }),
         { columns: 120, rows: 40 },

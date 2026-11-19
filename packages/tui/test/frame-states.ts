@@ -14,6 +14,7 @@ import {
   reduce,
 } from "@loomwright/protocol";
 import { type ApprovalState, approvalPanel } from "../src/approval/overlay.ts";
+import { confirmPanel } from "../src/controls/actions.ts";
 import { openQuestions, questionsPanel } from "../src/controls/questions.tsx";
 import {
   type IntakeState,
@@ -286,6 +287,50 @@ function finished(): ViewModel {
   return buildViewModel(runInput(run, events, 54_321, 1.23, { selectedTaskId: null }));
 }
 
+function designActivity(): ViewModel {
+  const run = runState({ phase: "design" });
+  resetSeq();
+  const events = [
+    event("run.started", { phase: "design" }),
+    event("phase.changed", { from: "intake", to: "design" }),
+    event("install.started", { step: "install", repo: "loomwright" }),
+    event("install.finished", {
+      step: "install",
+      repo: "loomwright",
+      durationMs: 1_200,
+      detail: "bun install",
+    }),
+    event("progress.line", { level: "normal", text: "design: 3 capabilities planned" }),
+  ];
+  return buildViewModel(runInput(run, events, 0, 0, { selectedTaskId: null }));
+}
+
+function landConfirm(): ViewModel {
+  const run = runState({
+    phase: "done",
+    tasks: [
+      taskState({ id: "first", title: "Health endpoint", repo: "app", status: "merged" }),
+      taskState({
+        id: "second",
+        title: "Wire client",
+        repo: "api",
+        status: "merged",
+        deps: ["first"],
+      }),
+    ],
+  });
+  resetSeq();
+  const events = [
+    event("task.merged", { task: { id: "first", repo: "app" }, commit: "abc123" }),
+    event("task.merged", { task: { id: "second", repo: "api" }, commit: "def456" }),
+  ];
+  return buildViewModel(
+    runInput(run, events, 0, 0, {
+      panel: confirmPanel({ kind: "land", id: RUN }, ASCII_GLYPHS),
+    }),
+  );
+}
+
 function newRunText(): ViewModel {
   return buildViewModel(
     vmInput({
@@ -403,6 +448,8 @@ type StateName =
   | "running-graph"
   | "failing-task"
   | "finished"
+  | "design-activity"
+  | "land-confirm"
   | "new-run-text"
   | "new-run-file"
   | "queued-after-approval"
@@ -417,6 +464,8 @@ export const STATES: Record<StateName, (size: FrameSize) => ViewModel> = {
   "running-graph": runningGraph,
   "failing-task": failingTask,
   finished,
+  "design-activity": designActivity,
+  "land-confirm": landConfirm,
   "new-run-text": newRunText,
   "new-run-file": newRunFile,
   "queued-after-approval": queuedAfterApproval,

@@ -16,6 +16,13 @@ export interface RunViewProps {
   readonly twoPane: boolean;
 }
 
+/** Rows left for the tail in one pane: header (1–2), notice, graph title and rows, footer. */
+export function singlePaneTailRows(viewModel: ViewModel): number {
+  const run = viewModel.run;
+  if (run === null) return 0;
+  return Math.max(0, viewModel.rows - 6 - run.tasks.length);
+}
+
 export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): ReactElement {
   const run = viewModel.run;
   if (run === null) {
@@ -48,7 +55,15 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
           </Box>
         </Box>
       ) : run.detail === null ? (
-        <TaskGraph tasks={run.tasks} glyphs={glyphs} depth={depth} />
+        <Box flexDirection="column">
+          <TaskGraph tasks={run.tasks} glyphs={glyphs} depth={depth} />
+          <ActivityTail
+            lines={run.activity}
+            glyphs={glyphs}
+            depth={depth}
+            maxLines={singlePaneTailRows(viewModel)}
+          />
+        </Box>
       ) : (
         <TaskDetail detail={run.detail} glyphs={glyphs} depth={depth} />
       )}

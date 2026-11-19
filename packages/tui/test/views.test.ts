@@ -136,7 +136,7 @@ async function frame(view: ViewModel, columns = 120, rows = 40, ascii = false): 
   return renderFrame(view, { columns, rows }, { ascii });
 }
 
-function failingTaskView(): ViewModel {
+function failingTaskView(selectedTaskId: string | null = "first"): ViewModel {
   const run = runState({
     tasks: [
       taskState({ id: "first", title: "Health endpoint", repo: "app", status: "failed" }),
@@ -145,6 +145,7 @@ function failingTaskView(): ViewModel {
   });
   resetSeq();
   const events = [
+    event("run.started", { phase: "implementing" }),
     event("task.started", { task: { id: "first", repo: "app" }, attempt: 2 }),
     event("agent.started", {
       step: "first",
@@ -183,7 +184,7 @@ function failingTaskView(): ViewModel {
     }),
     event("agent.activity", { step: "first", detail: "retrying gate", kind: "tool" }),
   ];
-  return buildViewModel(runInput(run, events, { selectedTaskId: "first" }));
+  return buildViewModel(runInput(run, events, { selectedTaskId }));
 }
 
 describe("run list", () => {
@@ -371,11 +372,119 @@ describe("run view layout", () => {
     expect(second).toBeGreaterThan(-1);
     expect(first).toBeGreaterThan(second);
   });
+
+  test("design and install activity is visible at 80 and 120 columns", async () => {
+    const run = runState({ phase: "design" });
+    resetSeq();
+    const events = [
+      event("run.started", { phase: "design" }),
+      event("phase.changed", { from: "intake", to: "design" }),
+      event("install.started", { step: "install", repo: "loomwright" }),
+      event("install.finished", {
+        step: "install",
+        repo: "loomwright",
+        durationMs: 1_200,
+        detail: "bun install",
+      }),
+      event("progress.line", { level: "normal", text: "design: 3 capabilities planned" }),
+    ];
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null }));
+    for (const [columns, rows] of [
+      [80, 24],
+      [120, 40],
+    ] as const) {
+      const text = await frame(view, columns, rows, true);
+      const tasks = text.indexOf("Tasks");
+      expect(tasks).toBeGreaterThan(-1);
+      for (const line of [
+        "run - run - started in design",
+        "run - phase - intake -> design",
+        "loomwright - install - install started",
+        "loomwright - install - install finished in 1.2s: bun install",
+        "run - log - design: 3 capabilities planned",
+      ]) {
+        expect(text).toContain(line);
+        expect(text.indexOf(line)).toBeGreaterThan(tasks);
+      }
+    }
+  });
+
+  test("the activity tail appears in one pane: graph then tail, selecting a task replaces both", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = [
+      event("progress.line", { level: "normal", text: "run-level line" }),
+      event("task.started", { task: { id: "first", repo: "app" }, attempt: 1 }),
+      event("agent.activity", { step: "first", detail: "task tool line", kind: "tool" }),
+    ];
+    const open = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: null })),
+      80,
+      24,
+      true,
+    );
+    expect(open).toContain("Tasks");
+    expect(open).toContain("run-level line");
+    expect(open.indexOf("run-level line")).toBeGreaterThan(open.indexOf("Tasks"));
+
+    const drilled = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: "first" })),
+      80,
+      24,
+      true,
+    );
+    expect(drilled).not.toContain("Tasks");
+    expect(drilled).not.toContain("run-level line");
+    expect(drilled).toContain("first - Health endpoint");
+  });
+
+  test("the task detail stays task-scoped", async () => {
+    const run = runState({
+      tasks: [
+        taskState({ id: "first", title: "Health endpoint", repo: "app" }),
+        taskState({ id: "second", title: "Wire client", repo: "api", deps: ["first"] }),
+      ],
+    });
+    resetSeq();
+    const events = [
+      event("progress.line", { level: "normal", text: "run-level progress" }),
+      event("task.started", { task: { id: "first", repo: "app" }, attempt: 1 }),
+      event("agent.activity", { step: "first", detail: "first tool line", kind: "tool" }),
+      event("task.started", { task: { id: "second", repo: "api" }, attempt: 1 }),
+      event("agent.activity", { step: "second", detail: "second tool line", kind: "tool" }),
+    ];
+
+    const tail = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: null })),
+      120,
+      40,
+      true,
+    );
+    expect(tail).toContain("run-level progress");
+    expect(tail).toContain("first tool line");
+    expect(tail).toContain("second tool line");
+
+    const detail = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: "first" })),
+      120,
+      40,
+      true,
+    );
+    expect(detail).toContain("first tool line");
+    expect(detail).not.toContain("run-level progress");
+    expect(detail).not.toContain("second tool line");
+  });
 });
 
 describe("task detail", () => {
   test("a task detail shows the evidence: role, duration, attempt, gates and the log tail", async () => {
+    const tail = await frame(failingTaskView(null), 120, 40, false);
+    expect(tail).toContain("started in implementing");
+
     const text = await frame(failingTaskView(), 120, 40, false);
+    expect(text).not.toContain("started in implementing");
     expect(text).toContain("implementer");
     expect(text).toContain("claude-5");
     expect(text).toContain("2m05s");
