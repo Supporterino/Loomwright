@@ -570,6 +570,13 @@ export function startLand(deps: LandRun, id: string): void {
         if (!refreshed.status.runs.some((run) => run.id === id)) deps.stopTail();
       });
     });
+    // The spawn is the one extra poll that does not wait for the next second.
+    try {
+      await deps.refresh();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.update((current) => ({ ...current, notice: message }));
+    }
   })();
 }
 

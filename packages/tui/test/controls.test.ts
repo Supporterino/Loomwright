@@ -844,6 +844,40 @@ describe("a double-tapped land launches one child", () => {
     expect(launches).toHaveLength(2);
   });
 
+  test("status is polled once a second: a land spawn triggers one refresh immediately", async () => {
+    const fake = fakeFactory();
+    const { launcher } = resumeLauncher();
+    const notices: (string | null)[] = [];
+    let refreshes = 0;
+    const refreshNotices: (string | null)[] = [];
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createResumeGuard(),
+        update: (change) => {
+          const data = change(uiData());
+          notices.push(data.notice);
+          return data;
+        },
+        refresh: async () => {
+          refreshes += 1;
+          refreshNotices.push(notices.at(-1) ?? null);
+          return null;
+        },
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+
+    // One refresh right after the spawn, once the spawn's log path is already on screen.
+    expect(refreshes).toBe(1);
+    const noticeAtRefresh = refreshNotices[0] ?? null;
+    expect(noticeAtRefresh).toContain(`land ${RUN}`);
+    expect(noticeAtRefresh).toContain(`spawn log: ${LOG}`);
+  });
+
   test("the second confirmation is ignored while the land child is in flight", () => {
     const view = buildViewModel(viewInput(runState({ phase: "done" })));
     const guard = createResumeGuard();
