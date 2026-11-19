@@ -157,8 +157,9 @@ loomwright tui
 
 The terminal UI reads the run state and the event stream and shows every change in one place: the
 run list (newest first, with phase, role, tokens, cost and elapsed time) and, on `Enter`, the task
-graph, each task's role, model, retries, gates and activity. At 100 columns and wider it uses two
-panes; below that, one pane with drill-down.
+graph, each task's role, model, retries, gates and the activity tail folded from every run event —
+design, installs, merges and closing included. At 100 columns and wider it uses two panes; below
+that, one pane with drill-down, where the tail sits below the graph.
 - `n` starts a change: type the request, `Ctrl-J` for a newline, or `Tab` to pick a request file with
   a preview. It launches `loomwright run` as a detached child and shows the spawn log.
 - At `awaiting-approval` the overlay offers `a` approve and run, `A` approve only, `w` reword (when
@@ -167,11 +168,14 @@ panes; below that, one pane with drill-down.
 - `Q` opens the questions pane. A recorded answer reads "recorded — applies at the next step" until
   the run emits `question.answered`, and only then "answered"; the UI never claims it was applied.
 - `r` resumes, `x` aborts and `t` retries a failed task; `?` is help and `q` quits.
+- `l` lands a `done` run: a confirmation, then a detached `land <id>` that merges locally, deletes
+  the branches and removes the worktrees and run state, pushing nothing.
 - `loomwright tui --replay <file>` replays a recorded stream read-only; `--once` prints one frame and
   is what CI smoke-tests.
 
-The long actions — intake, approve, approve only, reword, reapprove and resume — are detached CLI
-children, so closing the UI never stops a run; answer, abort and retry are short in-process writes.
+The long actions — intake, approve, approve only, reword, reapprove, resume and land — are detached
+CLI children, so closing the UI never stops a run; answer, abort and retry are short in-process
+writes.
 Keys, screens, flags and accessibility: [docs/tui.md](docs/tui.md).
 
 ## Configuration reference
