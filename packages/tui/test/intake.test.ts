@@ -214,6 +214,61 @@ describe("file intake validates", () => {
     expect(lines).not.toContain("  | request line 17");
   });
 
+  test("reads under .factory are limited to .factory/requests/*.md", () => {
+    const ws = workspace();
+    const requests = join(ws, ".factory", "requests");
+    mkdirSync(requests, { recursive: true });
+    mkdirSync(join(ws, ".factory", "events"), { recursive: true });
+    mkdirSync(join(ws, ".factory", "runs"), { recursive: true });
+    writeFileSync(join(requests, "faster-imports.md"), "# faster imports\n");
+    writeFileSync(join(requests, "notes.txt"), "notes\n");
+    writeFileSync(
+      join(ws, ".factory", "events", "run-1.jsonl"),
+      '{"seq":1,"type":"run.started"}\n',
+    );
+    writeFileSync(join(ws, ".factory", "runs", "run-1.json"), "{}\n");
+    writeFileSync(join(ws, ".factory", "active.json"), "{}\n");
+
+    // The lock, the run state, the event log and anything else there is neither listed nor read.
+    const blocked = [
+      ".factory",
+      ".factory/",
+      ".factory/events/",
+      ".factory/events/run-1.jsonl",
+      ".factory/runs/run-1.json",
+      ".factory/active.json",
+      ".factory/requests/../events/run-1.jsonl",
+    ];
+    for (const path of blocked) {
+      expect(completePath(path, ws)).toEqual([]);
+      const check = checkRequestFile(path, ws);
+      expect(check.ok).toBe(false);
+      if (!check.ok) expect(check.reason).toContain("not a .factory/requests/*.md file");
+    }
+
+    // A non-md file under requests may be listed, but it is never previewed.
+    expect(completePath(".factory/requests/notes.txt", ws).map((item) => item.path)).toEqual([
+      ".factory/requests/notes.txt",
+    ]);
+    const notes = checkRequestFile(".factory/requests/notes.txt", ws);
+    expect(notes.ok).toBe(false);
+    if (!notes.ok) expect(notes.reason).toContain("not a .factory/requests/*.md file");
+
+    const allowed = checkRequestFile(".factory/requests/faster-imports.md", ws);
+    expect(allowed.ok).toBe(true);
+    if (!allowed.ok) return;
+    expect(allowed.file.preview).toEqual(["# faster imports", ""]);
+
+    // Typing the event log in the dialog previews nothing and Enter refuses to launch it.
+    const ctx = context(ws);
+    const state = fileMode(".factory/events/run-1.jsonl", ctx);
+    expect(state.file).toBeNull();
+    expect(state.candidates).toEqual([]);
+    const outcome = intakeKeys(state, "", key({ return: true }), ctx);
+    expect(outcome.submit).toBeUndefined();
+    expect(outcome.state.error).toContain("not a .factory/requests/*.md file");
+  });
+
   test("nonexistent, directory, unreadable and empty files are rejected in place", () => {
     const ws = workspace();
     const ctx = context(ws);

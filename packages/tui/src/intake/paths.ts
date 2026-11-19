@@ -47,6 +47,23 @@ function joinDisplay(dir: string, name: string): string {
   return dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`;
 }
 
+/**
+ * Reads under `<cwd>/.factory` are limited to `.factory/requests/*.md`: everything else there is
+ * run state, the event log, the lock or driver files the TUI must not read or list.
+ * shortcut: the guard is lexical; a symlink under `requests` could still point elsewhere.
+ */
+function allowedUnderFactory(absolute: string, cwd: string): boolean {
+  const requests = join(cwd, ".factory", "requests");
+  if (absolute === requests) return true;
+  return absolute.startsWith(`${requests}${sep}`) && absolute.endsWith(".md");
+}
+
+function blockedByFactory(absolute: string, cwd: string): boolean {
+  const factory = join(cwd, ".factory");
+  const inside = absolute === factory || absolute.startsWith(`${factory}${sep}`);
+  return inside && !allowedUnderFactory(absolute, cwd);
+}
+
 function rankOf(candidate: PathCandidate, cwd: string): number {
   const requests = join(cwd, ".factory", "requests");
   return candidate.absolute.startsWith(`${requests}${sep}`) && candidate.absolute.endsWith(".md")
@@ -64,8 +81,8 @@ function byRequestThenPath(cwd: string): (a: PathCandidate, b: PathCandidate) =>
 
 /**
  * Completes `input` against the filesystem. `~` expands to the home directory; `.`, `..` and a
- * trailing separator list that directory. Candidates under `<cwd>/.factory/requests/*.md` come
- * first, the rest alphabetically.
+ * trailing separator list that directory. Only `.factory/requests` is listed under `.factory`.
+ * Candidates under `<cwd>/.factory/requests/*.md` come first, the rest alphabetically.
  */
 export function completePath(input: string, cwd: string): readonly PathCandidate[] {
   const expanded = expandTilde(input);
@@ -97,6 +114,7 @@ export function completePath(input: string, cwd: string): readonly PathCandidate
 
   let entries: Dirent[];
   try {
+    if (blockedByFactory(listDir, cwd)) return [];
     entries = readdirSync(listDir, { withFileTypes: true });
   } catch {
     return [];
@@ -126,6 +144,9 @@ function statReason(error: unknown, absolute: string): string {
 export function checkRequestFile(path: string, cwd: string): RequestCheck {
   const expanded = expandTilde(path);
   const absolute = isAbsolute(expanded) ? resolve(expanded) : resolve(cwd, expanded);
+  if (blockedByFactory(absolute, cwd)) {
+    return { ok: false, reason: `${absolute} is not a .factory/requests/*.md file` };
+  }
 
   let stats: Stats;
   try {
