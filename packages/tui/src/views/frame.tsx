@@ -4,7 +4,9 @@ import type { ViewModel } from "../model/view-model.ts";
 import { detectColorDepth, type TerminalEnv } from "../theme/env.ts";
 import { type GlyphSet, glyphsFor } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
+import { ActivityTail } from "./activity.tsx";
 import { KeyFooter } from "./footer.tsx";
+import { RunHeader } from "./header.tsx";
 import { PanelBox } from "./panel.tsx";
 import { RunList } from "./run-list.tsx";
 import { RunView } from "./run-view.tsx";
@@ -21,13 +23,31 @@ export interface FrameSize {
 }
 
 export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
+  const run = viewModel.run;
   return (
     <Box flexDirection="column" width={viewModel.columns} height={viewModel.rows}>
       <Box flexDirection="column" flexGrow={1} overflowY="hidden">
         {viewModel.panel !== null ? (
           <PanelBox panel={viewModel.panel} glyphs={glyphs} depth={depth} />
         ) : viewModel.screen === "list" ? (
-          <RunList viewModel={viewModel} glyphs={glyphs} depth={depth} />
+          viewModel.twoPane && run !== null ? (
+            <Box flexDirection="row">
+              <Box flexDirection="column" width={Math.floor(viewModel.columns / 2)}>
+                <RunList viewModel={viewModel} glyphs={glyphs} depth={depth} />
+              </Box>
+              <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
+                <RunHeader run={run} glyphs={glyphs} depth={depth} />
+                <ActivityTail
+                  lines={run.activity}
+                  glyphs={glyphs}
+                  depth={depth}
+                  maxLines={Math.max(0, viewModel.rows - 6)}
+                />
+              </Box>
+            </Box>
+          ) : (
+            <RunList viewModel={viewModel} glyphs={glyphs} depth={depth} />
+          )
         ) : (
           <RunView
             viewModel={viewModel}

@@ -145,6 +145,35 @@ function noRuns(): ViewModel {
   return buildViewModel(vmInput({ screen: "list" }));
 }
 
+function listWithRuns(): ViewModel {
+  const selected = runState({
+    tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "running" })],
+  });
+  const older = runState({
+    id: "faster-imports",
+    createdAt: "2026-11-17T09:00:00.000Z",
+    phase: "done",
+  });
+  resetSeq();
+  const events = [
+    event("task.started", { task: { id: "first", repo: "app" }, attempt: 1 }),
+    event("agent.activity", { step: "first", detail: "edited src/health.ts", kind: "tool" }),
+  ];
+  return buildViewModel(
+    vmInput({
+      screen: "list",
+      status: statusDoc([
+        { run: older, tokens: 0, cost: 0 },
+        { run: selected, tokens: 0, cost: 0 },
+      ]),
+      runs: [older, selected],
+      selectedRunId: selected.id,
+      snapshot: reduce(events),
+      facts: collectFacts(events),
+    }),
+  );
+}
+
 function runningGraph(): ViewModel {
   const run = runState({
     tasks: [
@@ -370,6 +399,7 @@ function questionOpen(): ViewModel {
 /** Every snapshot state, built for the size it renders at. */
 type StateName =
   | "no-runs"
+  | "list-with-runs"
   | "running-graph"
   | "failing-task"
   | "finished"
@@ -383,6 +413,7 @@ type StateName =
 
 export const STATES: Record<StateName, (size: FrameSize) => ViewModel> = {
   "no-runs": noRuns,
+  "list-with-runs": listWithRuns,
   "running-graph": runningGraph,
   "failing-task": failingTask,
   finished,

@@ -212,7 +212,7 @@ describe("run list", () => {
         selectedRunId: "oldest",
       }),
     );
-    const text = await frame(view, 120, 40, true);
+    const text = await frame(view, 80, 24, true);
     const lines = text.split("\n");
     expect(lines.some((line) => line.startsWith("> oldest"))).toBe(true);
     const queuedAt = text.indexOf("queued #1");
@@ -286,6 +286,28 @@ describe("run view layout", () => {
       .some((line) => line.includes("second") && line.includes("agent"));
     expect(sideBySide).toBe(true);
     expect(graph.run?.tasks).toHaveLength(2);
+
+    const selectedRun = runState({ tasks: [taskState({ id: "first", status: "running" })] });
+    resetSeq();
+    const activity = [
+      event("agent.activity", { step: "first", detail: "edited src/health.ts", kind: "tool" }),
+    ];
+    const listInput = vmInput({
+      screen: "list",
+      status: statusDoc([{ run: selectedRun, tokens: 0, cost: 0 }]),
+      runs: [selectedRun],
+      selectedRunId: RUN,
+      snapshot: reduce(activity),
+      facts: collectFacts(activity),
+    });
+    const wideList = await frame(buildViewModel(listInput), 120, 40, true);
+    const sharedRow = wideList
+      .split("\n")
+      .find((line) => line.includes(`> ${RUN}`) && line.includes("edited src/health.ts"));
+    expect(sharedRow).toBeDefined();
+    const narrowList = await frame(buildViewModel(listInput), 80, 24, true);
+    expect(narrowList).toContain(`> ${RUN}`);
+    expect(narrowList).not.toContain("edited src/health.ts");
 
     const list = buildViewModel(
       vmInput({
