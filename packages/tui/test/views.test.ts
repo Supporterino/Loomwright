@@ -12,7 +12,7 @@ import {
   reduce,
 } from "@loomwright/protocol";
 import { runTui } from "../src/entry.tsx";
-import type { Launcher } from "../src/launch/launcher.ts";
+import type { LaunchAction, Launcher } from "../src/launch/launcher.ts";
 import { collectFacts } from "../src/model/facts.ts";
 import { applyKey } from "../src/model/keys.ts";
 import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/model/view-model.ts";
@@ -762,6 +762,7 @@ async function driveTui(
   factory: Factory,
   drive: (input: FakeInput, output: FakeOutput) => Promise<void>,
   launcher?: Launcher,
+  frames = false,
 ): Promise<DrivenRun> {
   const input = new FakeInput();
   const output = new FakeOutput();
@@ -792,6 +793,7 @@ async function driveTui(
       out: () => {},
       env: {},
       isTTY: false,
+      frames,
       factory,
       launcher: launcher ?? {
         launch: async () => {
@@ -915,6 +917,56 @@ describe("the interactive entry", () => {
     // The quit path left the child alone: no second launch, no signal and no wait.
     expect(launches).toBe(1);
     expect(pid).toBe(4242);
+  });
+
+  test("l opens the land confirmation: Esc launches nothing and Enter launches one land child", async () => {
+    const run = runState({ phase: "done" });
+    const launches: LaunchAction[] = [];
+    const launcher: Launcher = {
+      launch: async (action) => {
+        launches.push(action);
+        return {
+          pid: 4242,
+          logPath: "/workspace/.factory/logs/tui-spawn-2026-11-18T10-00-00-000Z.log",
+          displayPath: ".factory/logs/tui-spawn-2026-11-18T10-00-00-000Z.log",
+          // A detached child the UI never waits on.
+          exited: new Promise<never>(() => {}),
+        };
+      },
+    };
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(RUN), "the run row");
+        input.press("\r");
+        await until(() => output.text().includes("l land"), "the done run view");
+
+        // Esc cancels the confirmation: no land child may start.
+        input.press("l");
+        await until(() => output.text().includes(`Land ${RUN}?`), "the land confirmation");
+        input.press("\u001b");
+        await pause();
+        expect(launches).toEqual([]);
+
+        // A second l opens it again and Enter confirms exactly one detached land.
+        const mark = output.writes.length;
+        input.press("l");
+        await until(
+          () => output.writes.slice(mark).join("").includes(`Land ${RUN}?`),
+          "the land confirmation again",
+        );
+        input.press("\r");
+        await until(() => launches.length === 1, "the land launch");
+        await pause();
+        input.press("q");
+      },
+      launcher,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
   });
 
   test("live detail arrives from the tail: a queued run opened before its log exists updates", async () => {
