@@ -10,6 +10,7 @@ import {
   confirmFor,
   confirmKeys,
   confirmPanel,
+  landFor,
   resumeFor,
   retryFor,
 } from "../src/controls/actions.ts";
@@ -21,10 +22,13 @@ import {
 } from "../src/controls/questions.tsx";
 import {
   createResumeGuard,
+  landFailed,
+  landSettled,
   performControl,
   recordAnswer,
   resumeFailed,
   runInSession,
+  startLand,
   startResume,
   type UiData,
 } from "../src/entry.tsx";
@@ -702,6 +706,212 @@ describe("a resumed child is guarded and observed", () => {
   });
 });
 
+describe("land confirms before merging", () => {
+  test("the confirmation names the change id, local merges, cleanup and that nothing is pushed", () => {
+    const view = buildViewModel(viewInput(runState({ phase: "done" })));
+    const action = landFor(view);
+    expect(action).toEqual({ kind: "land", id: RUN });
+    if (action === null) throw new Error("the land confirmation did not open");
+
+    const panel = confirmPanel(action, ASCII_GLYPHS);
+    expect(panel.kind).toBe("confirm");
+    expect(panel.title).toBe(`Land ${RUN}?`);
+    expect(panel.keys.map((hint) => hint.key)).toEqual(["Enter", "Esc"]);
+    const text = panel.lines.join("\n");
+    expect(text).toContain(RUN);
+    expect(text).toContain("merged into their base branches locally");
+    expect(text).toContain("worktrees and run state removed");
+    expect(text).toContain("nothing is pushed");
+  });
+
+  test("no child runs until Enter or y confirms and Esc or n cancels", async () => {
+    const fake = fakeFactory();
+    const { launcher, launches } = resumeLauncher();
+    const view = buildViewModel(viewInput(runState({ phase: "done" })));
+    const action = landFor(view);
+    if (action === null) throw new Error("land was not offered");
+
+    expect(confirmKeys("n", key())).toBe("cancel");
+    expect(confirmKeys("", key({ escape: true }))).toBe("cancel");
+    expect(launches).toEqual([]);
+
+    expect(confirmKeys("", key({ return: true }))).toBe("confirm");
+    expect(confirmKeys("y", key())).toBe("confirm");
+    await performControl({ factory: fake.factory, launcher }, action);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
+  });
+});
+
+describe("land is offered only for a done run", () => {
+  test("every other phase has no l hint, no landFor and no confirmation", () => {
+    for (const phase of [
+      "paused",
+      "aborted",
+      "queued",
+      "implementing",
+      "reviewing",
+      "awaiting-approval",
+    ] as const) {
+      const view = buildViewModel(viewInput(runState({ phase })));
+      expect(
+        view.footer.some((hint) => hint.key === "l"),
+        phase,
+      ).toBe(false);
+      expect(landFor(view), phase).toBeNull();
+    }
+
+    const done = buildViewModel(viewInput(runState({ phase: "done" })));
+    expect(landFor(done)).toEqual({ kind: "land", id: RUN });
+    expect(done.footer).toContainEqual({ key: "l", label: "land", enabled: true });
+  });
+});
+
+describe("a double-tapped land launches one child", () => {
+  test("two startLand calls launch one child and a finished child frees the guard", async () => {
+    const fake = fakeFactory();
+    const { launcher, launches, exit } = resumeLauncher();
+    const run = runState({ phase: "done" });
+    const deps = {
+      factory: fake.factory,
+      launcher,
+      guard: createResumeGuard(),
+      update: () => {},
+      refresh: async () => ({ status: statusDoc(run), runs: [run] }),
+      stopTail: () => {},
+    };
+
+    startLand(deps, RUN);
+    startLand(deps, RUN);
+    await Bun.sleep(0);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
+
+    exit(0);
+    await Bun.sleep(0);
+    startLand(deps, RUN);
+    await Bun.sleep(0);
+    expect(launches).toHaveLength(2);
+  });
+});
+
+describe("a landed run leaves the screen", () => {
+  test("a zero exit and a refreshed status without the run returns to the list with a notice", async () => {
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher();
+    const empty: StatusDocument = {
+      active: null,
+      driverAlive: false,
+      queue: [],
+      corrupt: [],
+      runs: [],
+    };
+    const states: UiData[] = [];
+    let stopped = 0;
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createResumeGuard(),
+        update: (change) => states.push(change(uiData())),
+        refresh: async () => ({ status: empty, runs: [] }),
+        stopTail: () => {
+          stopped += 1;
+        },
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    exit(0);
+    await Bun.sleep(0);
+
+    const last = states.at(-1);
+    expect(last?.screen).toBe("list");
+    expect(last?.selectedRunId).toBeNull();
+    expect(last?.selectedTaskId).toBeNull();
+    expect(last?.snapshot).toBeNull();
+    expect(last?.notice).toContain(`landed ${RUN}`);
+    expect(last?.notice).toContain("the run is gone");
+    expect(stopped).toBe(1);
+  });
+
+  test("a still-listed run stays selected after a zero exit", () => {
+    const run = runState({ phase: "done" });
+    const next = landSettled(uiData(), RUN, { status: statusDoc(run), runs: [run] });
+    expect(next.screen).toBe("run");
+    expect(next.selectedRunId).toBe(RUN);
+    expect(next.notice).toBeNull();
+  });
+});
+
+describe("a failed land is visible", () => {
+  test("a non-zero exit shows the code and the last ten log lines and never says it landed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-land-"));
+    try {
+      const logPath = join(dir, "land.log");
+      const lines = Array.from(
+        { length: 12 },
+        (_, index) => `log line ${String(index + 1).padStart(2, "0")}`,
+      );
+      writeFileSync(logPath, lines.join("\n"));
+      const data = landFailed(uiData(), RUN, logPath, 5);
+      expect(data.notice).toContain(`land ${RUN} exited with code 5`);
+      for (const line of lines.slice(-10)) expect(data.notice).toContain(line);
+      expect(data.notice).not.toContain(lines[0]);
+      expect(data.notice).not.toContain(lines[1]);
+      expect(data.notice).not.toContain("landed");
+      expect(data.selectedRunId).toBe(RUN);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("startLand surfaces a failed child and leaves the run selected", async () => {
+    const fake = fakeFactory();
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-land-"));
+    try {
+      const logPath = join(dir, "land.log");
+      writeFileSync(logPath, "merge conflict\n");
+      const { launcher, exit } = resumeLauncher(logPath);
+      const states: UiData[] = [];
+      startLand(
+        {
+          factory: fake.factory,
+          launcher,
+          guard: createResumeGuard(),
+          update: (change) => states.push(change(uiData())),
+          refresh: async () => null,
+          stopTail: () => {},
+        },
+        RUN,
+      );
+      await Bun.sleep(0);
+      exit(3);
+      await Bun.sleep(0);
+
+      const last = states.at(-1);
+      expect(last?.notice).toContain("exited with code 3");
+      expect(last?.notice).toContain("merge conflict");
+      expect(last?.notice).not.toContain("landed");
+      expect(last?.selectedRunId).toBe(RUN);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("land is a child, not a call", () => {
+  test("performControl launches the detached land and never calls Factory.land", async () => {
+    const fake = fakeFactory();
+    const { launcher, launches } = resumeLauncher();
+    const result = await performControl(
+      { factory: fake.factory, launcher },
+      { kind: "land", id: RUN },
+    );
+    expect(result.pid).toBe(4242);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
+    expect("land" in fake.factory).toBe(false);
+  });
+});
+
 describe("quit restores the terminal", () => {
   function fakeStreams(): {
     readonly stdin: NodeJS.ReadStream;
@@ -814,6 +1024,7 @@ describe("the launcher matrix is complete", () => {
       { kind: "reword", id: RUN },
       { kind: "reapprove", id: RUN },
       { kind: "resume", id: RUN },
+      { kind: "land", id: RUN },
     ];
     expect(actions.map((action) => actionArgs(action)[0])).toEqual([
       "run",
@@ -823,6 +1034,7 @@ describe("the launcher matrix is complete", () => {
       "reword",
       "reapprove",
       "resume",
+      "land",
     ]);
   });
 });

@@ -13,6 +13,7 @@ import {
   RunEvent as RunEventSchema,
   reduce,
 } from "@loomwright/protocol";
+import { landFor } from "../src/controls/actions.ts";
 import { ACTIVITY_LIMIT, collectFacts } from "../src/model/facts.ts";
 import { formatElapsed, formatPercent, formatTokensShort, truncate } from "../src/model/format.ts";
 import { applyKey } from "../src/model/keys.ts";
@@ -547,6 +548,7 @@ describe("applyKey", () => {
     expect(applyKey(runView, "r")).toEqual({ kind: "resume" });
     expect(applyKey(runView, "x")).toEqual({ kind: "abort" });
     expect(applyKey(runView, "t")).toEqual({ kind: "retry" });
+    expect(applyKey(runView, "l")).toEqual({ kind: "land" });
     expect(applyKey(runView, "Q")).toEqual({ kind: "open-questions" });
     expect(applyKey(runView, "q")).toEqual({ kind: "quit" });
     expect(applyKey(runView, "?")).toEqual({ kind: "help" });
@@ -573,6 +575,31 @@ describe("applyKey", () => {
       expect(keys).not.toContain("w");
       expect(keys).not.toContain("R");
     }
+  });
+
+  test("the land footer hint shares landFor's predicate and appears only for a done run", () => {
+    for (const phase of [
+      "intake",
+      "design",
+      "awaiting-approval",
+      "queued",
+      "implementing",
+      "reviewing",
+      "contracts",
+      "full-suite",
+      "closing",
+      "done",
+      "paused",
+      "aborted",
+    ] as const) {
+      const view = buildViewModel(runInput(runState({ phase })));
+      expect(
+        view.footer.some((hint) => hint.key === "l"),
+        phase,
+      ).toBe(landFor(view) !== null);
+    }
+    const done = buildViewModel(runInput(runState({ phase: "done" })));
+    expect(done.footer).toContainEqual({ key: "l", label: "land", enabled: true });
   });
 
   test("two panes become one: Esc backs out of the drilled task before it leaves the run", () => {

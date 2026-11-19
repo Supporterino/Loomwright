@@ -142,6 +142,7 @@ const MATRIX: readonly { readonly action: LaunchAction; readonly expected: reado
   { action: { kind: "reword", id: "add-health" }, expected: ["reword", "add-health"] },
   { action: { kind: "reapprove", id: "add-health" }, expected: ["reapprove", "add-health"] },
   { action: { kind: "resume", id: "add-health" }, expected: ["resume", "add-health"] },
+  { action: { kind: "land", id: "add-health" }, expected: ["land", "add-health"] },
 ];
 
 describe("the argv for every action", () => {

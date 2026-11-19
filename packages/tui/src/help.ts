@@ -16,6 +16,7 @@ const HELP_LINES: readonly string[] = [
   "r resume",
   "x abort",
   "t retry the selected failed task",
+  "l land a done run",
   "Q questions",
   "? help",
   "q quit",

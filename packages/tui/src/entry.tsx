@@ -29,6 +29,7 @@ import {
   confirmFor,
   confirmKeys,
   confirmPanel,
+  landFor,
   resumeFor,
   retryFor,
 } from "./controls/actions.ts";
@@ -61,6 +62,7 @@ import {
 } from "./model/view-model.ts";
 import { type ReplayLoad, readReplayFile, replayModel } from "./replay/replay.ts";
 import { createTerminalSession, type TerminalSession } from "./session.ts";
+import { landedNotice } from "./strings.ts";
 import { detectColorDepth, type TerminalEnv, terminalEnv } from "./theme/env.ts";
 import { type GlyphSet, glyphsFor } from "./theme/glyphs.ts";
 import type { ColorDepth } from "./theme/tokens.ts";
@@ -142,6 +144,7 @@ const REPLAY_WRITE_KEYS: ReadonlySet<string> = new Set([
   "r",
   "x",
   "t",
+  "l",
   "Q",
 ]);
 
@@ -336,14 +339,14 @@ export interface ControlDeps {
   readonly launcher: Pick<Launcher, "launch">;
 }
 
-type ResumeAction = Extract<ControlAction, { readonly kind: "resume" }>;
+type LaunchedAction = Extract<ControlAction, { readonly kind: "resume" | "land" }>;
 
 /**
  * The only in-process control effects: abort and retry return after writing run state, and
- * resume is a detached child. Nothing here waits for a pipeline phase; resume hands back the
- * child so the caller can watch its exit.
+ * resume and land are detached children. Nothing here waits for a pipeline phase; a child is
+ * handed back so the caller can watch its exit.
  */
-export function performControl(deps: ControlDeps, action: ResumeAction): Promise<LaunchResult>;
+export function performControl(deps: ControlDeps, action: LaunchedAction): Promise<LaunchResult>;
 export function performControl(
   deps: ControlDeps,
   action: ControlAction,
@@ -361,6 +364,8 @@ export async function performControl(
       return null;
     case "resume":
       return deps.launcher.launch({ kind: "resume", id: action.id });
+    case "land":
+      return deps.launcher.launch({ kind: "land", id: action.id });
     default: {
       const unhandled: never = action;
       throw new Error(`unknown control action: ${String(unhandled)}`);
@@ -434,6 +439,94 @@ export function startResume(deps: ResumeRun, id: string): void {
       const message = err instanceof Error ? err.message : String(err);
       deps.update((current) => ({ ...current, notice: message }));
     }
+  })();
+}
+
+/** A non-zero land exit: the code and the last ten log lines, never a success claim. */
+export function landFailed(data: UiData, id: string, logPath: string, code: number): UiData {
+  const tail = tailLog(logPath, 10);
+  return {
+    ...data,
+    notice: [`land ${id} exited with code ${code}`, ...tail].join("\n"),
+  };
+}
+
+/** The refreshed status and run list a finished land reports against. */
+export interface LandRefresh {
+  readonly status: StatusDocument;
+  readonly runs: readonly RunState[];
+}
+
+/**
+ * A zero-exit land: the refreshed status decides. A run still listed means the child left it
+ * unfinished, so it stays selected with its branches; only an absent run returns to the list.
+ */
+export function landSettled(data: UiData, id: string, refreshed: LandRefresh): UiData {
+  const next: UiData = { ...data, status: refreshed.status, runs: refreshed.runs };
+  if (refreshed.status.runs.some((run) => run.id === id)) return next;
+  return {
+    ...next,
+    screen: "list",
+    selectedRunId: null,
+    selectedTaskId: null,
+    snapshot: null,
+    facts: collectFacts([]),
+    notice: landedNotice(id),
+    intake: null,
+    approval: null,
+    questions: null,
+    confirmation: null,
+    help: false,
+    identity: null,
+  };
+}
+
+export interface LandRun extends ControlDeps {
+  readonly guard: ResumeGuard;
+  /** The UI's `setData`. */
+  readonly update: (change: (data: UiData) => UiData) => void;
+  /** Refreshes `status()` and `listRuns()`; null when the refresh failed. */
+  readonly refresh: () => Promise<LandRefresh | null>;
+  readonly stopTail: () => void;
+}
+
+/**
+ * Starts one detached `land` and watches its exit: a repeat while the child runs is ignored, a
+ * zero exit returns to the list when the refreshed status no longer lists the run, and a failure
+ * shows the code and log tail without claiming the change landed.
+ */
+export function startLand(deps: LandRun, id: string): void {
+  if (!deps.guard.begin(id)) return;
+  void (async () => {
+    let result: LaunchResult;
+    try {
+      result = await performControl(deps, { kind: "land", id });
+    } catch (err: unknown) {
+      deps.guard.end(id);
+      const message = err instanceof Error ? err.message : String(err);
+      deps.update((current) => ({ ...current, notice: message }));
+      return;
+    }
+    void result.exited.then(({ code }) => {
+      deps.guard.end(id);
+      if (code === null) {
+        const tail = tailLog(result.logPath, 10);
+        deps.update((current) => ({
+          ...current,
+          notice: [`land ${id} ended without an exit code`, ...tail].join("\n"),
+        }));
+        return;
+      }
+      if (code !== 0) {
+        deps.update((current) => landFailed(current, id, result.logPath, code));
+        return;
+      }
+      void deps.refresh().then((refreshed) => {
+        if (refreshed === null) return;
+        deps.update((current) => landSettled(current, id, refreshed));
+        if (!refreshed.status.runs.some((run) => run.id === id)) deps.stopTail();
+      });
+    });
   })();
 }
 
@@ -747,20 +840,20 @@ function Interactive({
     [launcher],
   );
 
-  const refreshStatus = useCallback(async (): Promise<void> => {
+  const refreshStatus = useCallback(async (): Promise<LandRefresh | null> => {
     try {
       const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
       const pending = spawnBaseline.current;
       if (pending === null) {
         setData((current) => syncApproval({ ...current, status, runs }));
-        return;
+        return { status, runs };
       }
       const watch = watchSpawn(pending.ids, status, pending.logPath, tailLog);
       if (watch.started !== null) {
         spawnBaseline.current = null;
         setData((current) => syncApproval({ ...current, status, runs }));
         openRun(watch.started);
-        return;
+        return { status, runs };
       }
       setData((current) => {
         const intake = current.intake;
@@ -774,8 +867,10 @@ function Interactive({
               : { ...intake, spawned: { ...intake.spawned, tail: watch.tail } },
         });
       });
+      return { status, runs };
     } catch {
       // A refresh failure keeps the last good status; the next poll retries.
+      return null;
     }
   }, [factory, openRun]);
 
@@ -819,6 +914,7 @@ function Interactive({
 
   /** Abort and retry return immediately; resume runs one guarded detached child per run. */
   const resumeGuard = useRef<ResumeGuard>(createResumeGuard());
+  const landGuard = useRef<ResumeGuard>(createResumeGuard());
   const applyControl = useCallback(
     (action: ControlAction): void => {
       if (isReadOnly(viewRef.current)) return;
@@ -829,7 +925,23 @@ function Interactive({
             launcher,
             guard: resumeGuard.current,
             update: setData,
+            refresh: async () => {
+              await refreshStatus();
+            },
+          },
+          action.id,
+        );
+        return;
+      }
+      if (action.kind === "land") {
+        startLand(
+          {
+            factory,
+            launcher,
+            guard: landGuard.current,
+            update: setData,
             refresh: refreshStatus,
+            stopTail,
           },
           action.id,
         );
@@ -845,12 +957,16 @@ function Interactive({
         }
       })();
     },
-    [factory, launcher, refreshStatus],
+    [factory, launcher, refreshStatus, stopTail],
   );
 
   useEffect(() => {
     if (isReadOnly(viewRef.current)) return;
-    const poller = createStatusPoller({ poll: refreshStatus });
+    const poller = createStatusPoller({
+      poll: async () => {
+        await refreshStatus();
+      },
+    });
     pollerRef.current = poller;
     poller.start();
     return () => {
@@ -1024,6 +1140,13 @@ function Interactive({
         if (action !== null) {
           setData((state) => ({ ...state, confirmation: null }));
           applyControl(action);
+        }
+        return;
+      }
+      case "land": {
+        const action = landFor(current);
+        if (action !== null) {
+          setData((state) => ({ ...state, confirmation: action, questions: null }));
         }
         return;
       }

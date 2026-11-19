@@ -15,7 +15,8 @@ export type LaunchAction =
   | { readonly kind: "approve-only"; readonly id: string }
   | { readonly kind: "reword"; readonly id: string }
   | { readonly kind: "reapprove"; readonly id: string }
-  | { readonly kind: "resume"; readonly id: string };
+  | { readonly kind: "resume"; readonly id: string }
+  | { readonly kind: "land"; readonly id: string };
 
 export interface ExitResult {
   readonly code: number | null;
@@ -50,6 +51,8 @@ export function actionArgs(action: LaunchAction): readonly string[] {
       return ["reapprove", action.id];
     case "resume":
       return ["resume", action.id];
+    case "land":
+      return ["land", action.id];
     default: {
       const unhandled: never = action;
       throw new Error(`unknown launch action: ${String(unhandled)}`);

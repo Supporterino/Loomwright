@@ -224,11 +224,12 @@ describe("replay is read-only", () => {
 
   test("every write key produces the read-only notice and quits only on q or Ctrl-C", async () => {
     const view = viewOf(await readReplayFile(FIXTURE));
-    for (const input of ["n", "a", "A", "w", "R", "r", "x", "t", "Q"]) {
+    for (const input of ["n", "a", "A", "w", "R", "r", "x", "t", "l", "Q"]) {
       const outcome = replayKey(view, input, key());
       expect(outcome.quit).toBe(false);
       expect(outcome.notice).toBe(REPLAY_READ_ONLY);
     }
+    expect(replayKey(view, "l", key()).notice).toBe(REPLAY_READ_ONLY);
     expect(replayKey(view, "q", key()).quit).toBe(true);
     expect(replayKey(view, "c", key({ ctrl: true })).quit).toBe(true);
   });

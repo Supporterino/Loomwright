@@ -284,6 +284,11 @@ export function canResume(phase: Phase): boolean {
   return phase === "paused" || phase === "aborted" || phase === "queued";
 }
 
+/** Only a done run lands; the footer and `landFor` share this predicate. */
+export function canLand(phase: Phase): boolean {
+  return phase === "done";
+}
+
 function listFooter(input: ViewModelInput): KeyHint[] {
   return [
     keyHint("n", "new change"),
@@ -298,6 +303,7 @@ function runFooter(run: RunDetail | null): KeyHint[] {
   if (run === null) return [keyHint("q", "quit"), keyHint("?", "help")];
   const hints: KeyHint[] = [];
   if (canResume(run.phase)) hints.push(keyHint("r", "resume"));
+  if (canLand(run.phase)) hints.push(keyHint("l", "land"));
   if (run.phase !== "done" && run.phase !== "aborted") hints.push(keyHint("x", "abort"));
   if (run.detail?.task.status === "failed") hints.push(keyHint("t", "retry task"));
   if (run.questions.length > 0) hints.push(keyHint("Q", "questions"));
