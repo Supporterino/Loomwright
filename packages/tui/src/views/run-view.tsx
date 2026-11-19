@@ -5,6 +5,7 @@ import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
 import { ActivityTail } from "./activity.tsx";
 import { RunHeader } from "./header.tsx";
+import { colorProps } from "./style.ts";
 import { TaskDetail } from "./task-detail.tsx";
 import { TaskGraph } from "./task-graph.tsx";
 
@@ -23,6 +24,11 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
   return (
     <Box flexDirection="column">
       <RunHeader run={run} glyphs={glyphs} depth={depth} />
+      {viewModel.notice === null ? null : (
+        <Text {...colorProps("muted", depth)} wrap="truncate">
+          {viewModel.notice}
+        </Text>
+      )}
       {twoPane ? (
         <Box flexDirection="row">
           <Box flexDirection="column" width={Math.floor(viewModel.columns / 2)}>

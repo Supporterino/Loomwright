@@ -9,6 +9,7 @@ import type { Launcher } from "../src/launch/launcher.ts";
 import type { KeyInput } from "../src/model/keys.ts";
 import { renderOnceFrame } from "../src/replay/once.ts";
 import { readReplayFile, replayModel } from "../src/replay/replay.ts";
+import { replayNotice } from "../src/strings.ts";
 
 const FIXTURE = fileURLToPath(
   new URL("../../../test/fixtures/tui/approval-gate.jsonl", import.meta.url),
@@ -189,6 +190,26 @@ describe("replay is read-only", () => {
 
     const keys = view.panel?.keys.map((hint) => hint.key) ?? [];
     for (const write of ["a", "A", "w", "R"]) expect(keys).not.toContain(write);
+  });
+
+  test("replay is read-only on a stream that does not end at the gate", async () => {
+    const path = tempFile(
+      "implementing.jsonl",
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"implementing"}}',
+        "",
+      ].join("\n"),
+    );
+    const view = viewOf(await readReplayFile(path));
+    expect(view.panel).toBeNull();
+    expect(view.screen).toBe("run");
+    expect(await renderOnceFrame(view, SIZE)).toContain(replayNotice);
+
+    const pressed = replayKey(view, "n", key());
+    expect(pressed.notice).toBe(REPLAY_READ_ONLY);
+    const after = await renderOnceFrame({ ...view, notice: pressed.notice }, SIZE);
+    expect(after).toContain(REPLAY_READ_ONLY);
   });
 
   test("every write key produces the read-only notice and quits only on q or Ctrl-C", async () => {
