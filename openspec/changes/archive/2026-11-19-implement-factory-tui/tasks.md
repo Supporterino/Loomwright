@@ -2,43 +2,43 @@
 
 ## 1. loomwright
 
-- [ ] 1.1 Add the additive `approval.pending` event and emit it when design parks a change at `awaiting-approval`, with the gate replay fixture and re-recorded goldens
+- [x] 1.1 Add the additive `approval.pending` event and emit it when design parks a change at `awaiting-approval`, with the gate replay fixture and re-recorded goldens
   - repo: loomwright
   - deps: none
   - touches: packages/protocol/src/events.ts, packages/protocol/src/snapshot.ts, packages/protocol/test/events.test.ts, packages/protocol/test/reduce.test.ts, packages/core/src/pipeline/design.ts, packages/core/src/events/terminal.ts, packages/core/test/pipeline-events.test.ts, packages/core/test/events-reduce.test.ts, docs/events.md, packages/cli/test/fixtures/events/**, test/fixtures/tui/**
-- [ ] 1.2 Scaffold the private `packages/tui` workspace and bundle it lazily as `dist/tui.js`, with the `tui` command stub, a Node 20.3 proof of the bundle and ADR-0047
+- [x] 1.2 Scaffold the private `packages/tui` workspace and bundle it lazily as `dist/tui.js`, with the `tui` command stub, a Node 20.3 proof of the bundle and ADR-0047
   - repo: loomwright
   - deps: 1.1
   - touches: package.json, bun.lock, tsconfig.json, scripts/build-tui.ts, packages/tui/package.json, packages/tui/src/entry.tsx, packages/tui/src/strings.ts, packages/cli/src/commands/tui.ts, packages/cli/src/main.ts, packages/cli/test/tui-command.test.ts, test/publish.test.ts, test/architecture.test.ts, docs/decisions/0047-tui.md, docs/decisions/README.md
-- [ ] 1.3 Add the pure view-model (`snapshot` and status to `ViewModel`) and the brand token and glyph modules, unit-tested without Ink
+- [x] 1.3 Add the pure view-model (`snapshot` and status to `ViewModel`) and the brand token and glyph modules, unit-tested without Ink
   - repo: loomwright
   - deps: 1.2
   - touches: packages/tui/src/model/**, packages/tui/src/theme/**, packages/tui/src/strings.ts, packages/tui/test/view-model.test.ts, packages/tui/test/theme.test.ts
-- [ ] 1.4 Render the run list and the run view (header, task graph, task detail, activity ring buffer, key footer) with the 80×24/120×40 frame snapshots for no runs, running graph, failing task and finished
+- [x] 1.4 Render the run list and the run view (header, task graph, task detail, activity ring buffer, key footer) with the 80×24/120×40 frame snapshots for no runs, running graph, failing task and finished
   - repo: loomwright
   - deps: 1.3
   - touches: packages/tui/src/views/**, packages/tui/src/session.ts, packages/tui/src/entry.tsx, packages/tui/test/views.test.ts, packages/tui/test/frames.test.ts, packages/tui/test/fixtures/frames/**
-- [ ] 1.5 Add the injectable `Launcher` (detached children, log file, failure frame) and the new-run dialog for typed text and request files, with its guards and frame snapshots
+- [x] 1.5 Add the injectable `Launcher` (detached children, log file, failure frame) and the new-run dialog for typed text and request files, with its guards and frame snapshots
   - repo: loomwright
   - deps: 1.4
   - touches: packages/tui/src/launch/**, packages/tui/src/intake/**, packages/tui/src/entry.tsx, packages/tui/test/launcher.test.ts, packages/tui/test/intake.test.ts, packages/tui/test/fixtures/frames/**
-- [ ] 1.6 Add the phase-driven approval overlay with its identity check, the four confirmed actions, the read-only waiting state and the approve-and-run and approve-only frame snapshots
+- [x] 1.6 Add the phase-driven approval overlay with its identity check, the four confirmed actions, the read-only waiting state and the approve-and-run and approve-only frame snapshots
   - repo: loomwright
   - deps: 1.5
   - touches: packages/tui/src/approval/**, packages/tui/src/entry.tsx, packages/tui/test/approval.test.ts, packages/tui/test/fixtures/frames/**
-- [ ] 1.7 Add the question pane and answer semantics, abort, retry and resume, with the keybinding tests and the question-open frame snapshot
+- [x] 1.7 Add the question pane and answer semantics, abort, retry and resume, with the keybinding tests and the question-open frame snapshot
   - repo: loomwright
   - deps: 1.6
   - touches: packages/tui/src/controls/**, packages/tui/src/entry.tsx, packages/tui/test/controls.test.ts, packages/tui/test/fixtures/frames/**
-- [ ] 1.8 Add `--replay` and `--once`, rendering recorded streams read-only through the same tree and printing one frame to stdout
+- [x] 1.8 Add `--replay` and `--once`, rendering recorded streams read-only through the same tree and printing one frame to stdout
   - repo: loomwright
   - deps: 1.7
   - touches: packages/tui/src/replay/**, packages/tui/src/entry.tsx, packages/tui/test/replay.test.ts
-- [ ] 1.9 Bound rendering and polling (10 fps batching, 2,000-line tail, one-second status poll) and finish the `NO_COLOR`, `--ascii` and locale handling, with the 100k-event soak and accessibility tests
+- [x] 1.9 Bound rendering and polling (10 fps batching, 2,000-line tail, one-second status poll) and finish the `NO_COLOR`, `--ascii` and locale handling, with the 100k-event soak and accessibility tests
   - repo: loomwright
   - deps: 1.8
   - touches: packages/tui/src/model/**, packages/tui/src/theme/**, packages/tui/src/views/**, packages/tui/src/entry.tsx, packages/tui/test/performance.test.ts, packages/tui/test/accessibility.test.ts
-- [ ] 1.10 Write `docs/tui.md`, the README section, the `docs/cli.md` entry and the architecture rows, add the changeset, and add the replay smoke to the Node 20.3/22/24 CI job with the recorded timing and size report
+- [x] 1.10 Write `docs/tui.md`, the README section, the `docs/cli.md` entry and the architecture rows, add the changeset, and add the replay smoke to the Node 20.3/22/24 CI job with the recorded timing and size report
   - repo: loomwright
   - deps: 1.9
   - touches: docs/tui.md, README.md, docs/cli.md, ARCHITECTURE.md, docs/plan.md, .changeset/*.md, .github/workflows/ci.yml
