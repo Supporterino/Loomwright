@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "changeId": "fix-doctor-overridden-gate-scripts",
+  "entries": [
+    {
+      "at": "2026-11-19T11:55:04.538Z",
+      "sessionId": "ses_e0c5737aeffehaMDKV7gAtV8U5",
+      "agent": "orchestrator",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "intake",
+      "kind": "step",
+      "usage": {
+        "input": 9979,
+        "output": 622,
+        "reasoning": 359,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-19T11:57:57.781Z",
+      "sessionId": "ses_e0c56f30effeul0nZnjYtx9E7F",
+      "agent": "explorer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "explore:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 40396,
+        "output": 4653,
+        "reasoning": 2109,
+        "cacheRead": 690048,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-19T12:04:40.701Z",
+      "sessionId": "ses_e0c544d70ffeTpWjcxN1rBBuka",
+      "agent": "architect",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "design",
+      "kind": "step",
+      "usage": {
+        "input": 125884,
+        "output": 10626,
+        "reasoning": 12205,
+        "cacheRead": 2484096,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-19T12:11:44.535Z",
+      "sessionId": "ses_e0c4aa9ffffeO52SQRha4DFIvo",
+      "agent": "architect",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "context-packs",
+      "kind": "step",
+      "usage": {
+        "input": 39675,
+        "output": 10313,
+        "reasoning": 618,
+        "cacheRead": 634368,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-19T12:15:35.734Z",
+      "sessionId": "ses_e0c47ae3affedsTZN7wxnLPOOf",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 35068,
+        "output": 5836,
+        "reasoning": 3415,
+        "cacheRead": 765440,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-19T12:16:41.895Z",
+      "sessionId": "ses_e0c43a59cffeGWVgTZyKG7pB1T",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.3",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 19033,
+        "output": 664,
+        "reasoning": 235,
+        "cacheRead": 88448,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-19T12:18:56.524Z",
+      "sessionId": "ses_e0c43a59cffdVa8NDvdc8vSGQP",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 38490,
+        "output": 2564,
+        "reasoning": 1040,
+        "cacheRead": 335488,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-19T12:23:43.902Z",
+      "sessionId": "ses_e0c40effdffeILuhQQVaBEptSd",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.4",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 21734,
+        "output": 1770,
+        "reasoning": 1293,
+        "cacheRead": 219264,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-19T12:33:51.275Z",
+      "sessionId": "ses_e0c3c9ac4ffeGTrX0F0d5v56UC",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 122589,
+        "output": 5327,
+        "reasoning": 26419,
+        "cacheRead": 2807296,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-19T12:35:08.348Z",
+      "sessionId": "ses_e0c336ffdffe6KBZg0VIcWxVo7",
+      "agent": "tester",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "test-loomwright",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 23361,
+        "output": 1035,
+        "reasoning": 2737,
+        "cacheRead": 85888,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    }
+  ],
+  "wastedReads": 33
+}
