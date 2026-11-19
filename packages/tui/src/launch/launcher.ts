@@ -4,7 +4,7 @@
  * exactly as it would be without the UI.
  */
 import { type ChildProcess, spawn as defaultSpawn } from "node:child_process";
-import { closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
+import { closeSync, fstatSync, mkdirSync, openSync, readSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import process from "node:process";
 
@@ -121,12 +121,30 @@ export function createLauncher(options: LauncherOptions): Launcher {
   };
 }
 
+/** How many trailing bytes `tailLog` reads: enough for ten lines of any realistic child. */
+const TAIL_BYTES = 64 * 1024;
+
+/** The last `cap` bytes of a file; a leading partial line from the seek point is dropped. */
+function readTail(logPath: string, cap: number): string {
+  const fd = openSync(logPath, "r");
+  try {
+    const size = fstatSync(fd).size;
+    const start = Math.max(0, size - cap);
+    const buffer = Buffer.alloc(size - start);
+    const read = readSync(fd, buffer, 0, buffer.length, start);
+    const text = buffer.subarray(0, read).toString("utf8");
+    return start === 0 ? text : text.slice(text.indexOf("\n") + 1);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** The last `lines` lines of a spawn log; an absent log reads as an empty tail. */
 export function tailLog(logPath: string, lines = 10): readonly string[] {
   if (lines <= 0) return [];
   let text: string;
   try {
-    text = readFileSync(logPath, "utf8");
+    text = readTail(logPath, TAIL_BYTES);
   } catch {
     return [];
   }

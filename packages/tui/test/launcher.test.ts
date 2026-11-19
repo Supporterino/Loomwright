@@ -200,6 +200,23 @@ describe("a failed child is visible", () => {
   });
 });
 
+describe("a large spawn log is only read from its tail", () => {
+  test("a verbose log yields the last lines and never the first ones", () => {
+    const ws = workspace();
+    const logPath = join(ws, "big.log");
+    // ~200 KiB, far past the byte cap the tail reader seeks from.
+    const rows = Array.from({ length: 5000 }, (_, index) => `row ${index + 1}`);
+    rows[0] = "FIRST-ROW-SENTINEL";
+    writeFileSync(logPath, `${rows.join("\n")}\n`);
+
+    const tail = tailLog(logPath, 20);
+
+    expect(tail).toEqual(rows.slice(-20));
+    expect(tail).not.toContain("FIRST-ROW-SENTINEL");
+    expect(tailLog(logPath, 2)).toEqual(rows.slice(-2));
+  });
+});
+
 describe("no signal is sent on exit", () => {
   test("quit, SIGINT and a thrown render leave the child alive", async () => {
     const ws = workspace();
