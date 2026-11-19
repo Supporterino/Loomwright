@@ -2,11 +2,13 @@
 
 `loomwright tui` watches and drives runs from one terminal. It reads the stored event stream
 (`.factory/events/<id>.jsonl`) and the read API (run state, status and the usage ledger) and renders
-what they say; it never reimplements pipeline rules. Every long action that changes a run — intake,
-approve, reword, reapprove, resume, abort, retry — is launched as a detached CLI child with its
-output in a log under `.factory/logs/`. Quitting the UI, closing the terminal or crashing it leaves
-the run exactly as it would be without the UI, and reopening finds it again. An answer is written
-straight into the run's command inbox and applied at the run's next safe point.
+what they say; it never reimplements pipeline rules. The long actions — intake, approve, approve
+only, reword, reapprove and resume — are launched as detached CLI children with their output in a log
+under `.factory/logs/`. The short writes are made in-process: answer, abort and retry return after
+recording into the run's state, so an answer goes into the run's command inbox and applies at the
+run's next safe point, and abort and retry never wait for a pipeline phase. Quitting the UI, closing
+the terminal or crashing it leaves the run exactly as it would be without the UI, and reopening finds
+it again.
 
 ## Opening it
 

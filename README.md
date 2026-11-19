@@ -170,8 +170,9 @@ panes; below that, one pane with drill-down.
 - `loomwright tui --replay <file>` replays a recorded stream read-only; `--once` prints one frame and
   is what CI smoke-tests.
 
-Every action is a detached CLI child, so closing the UI never stops a run. Keys, screens, flags and
-accessibility: [docs/tui.md](docs/tui.md).
+The long actions — intake, approve, approve only, reword, reapprove and resume — are detached CLI
+children, so closing the UI never stops a run; answer, abort and retry are short in-process writes.
+Keys, screens, flags and accessibility: [docs/tui.md](docs/tui.md).
 
 ## Configuration reference
 

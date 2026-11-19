@@ -396,10 +396,15 @@ describe("terminal UI documentation", () => {
       expect(tui).toContain(heading);
     expect(tui).toContain("recorded — applies at the next step");
 
+    // The long actions are detached children; answer, abort and retry are in-process writes.
+    expect(tui).toContain("detached CLI children");
+    expect(tui).toContain("in-process");
+
     const readme = read("README.md");
     expect(readme).toContain("## Watching and driving from the terminal");
     expect(readme).toContain("loomwright tui");
     expect(readme).toContain("recorded — applies at the next step");
+    expect(readme).toContain("in-process");
     expect(readme).toContain("docs/tui.md");
 
     const cli = read("docs/cli.md");
@@ -407,6 +412,7 @@ describe("terminal UI documentation", () => {
     expect(cli).toContain("loomwright tui [--replay <file>] [--once] [--ascii]");
     expect(cli).toContain("status --watch");
     expect(cli).toContain("events --follow");
+    expect(cli).toContain("in-process");
     expect(cli).toContain("docs/tui.md");
   });
 
