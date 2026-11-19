@@ -2,6 +2,12 @@
 
 All notable changes per release. `loomwright update` applies them to an installed workspace (see [docs/cli.md](docs/cli.md#update)).
 
+## 1.2.0
+
+### Minor Changes
+
+- 06f4b4a: Add `loomwright tui`: watch runs, start changes, answer questions and approve from the terminal.
+
 ## 1.1.0
 
 ### Minor Changes
