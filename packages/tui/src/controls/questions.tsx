@@ -106,10 +106,12 @@ export function questionsKeys(
       const draft = draftFor(record);
       return draft === null ? { state } : { state: { ...state, draft, notice: null } };
     }
+    // Already sent to `Factory.answer`; only `question.answered` changes the record now.
+    if (state.draft.recorded) return { state };
     const text = state.draft.text.trim();
     if (text === "") return { state: { ...state, notice: "the answer is empty" } };
     // `answered` comes only from `question.answered`; a skipped record takes no answer.
-    if (record.status !== "unanswered" && !state.draft.recorded) return { state };
+    if (record.status !== "unanswered") return { state };
     return { state, answer: { answer: text, question: record.question } };
   }
 

@@ -329,6 +329,25 @@ describe("an answer is recorded, then confirmed", () => {
     expect(answered).toContain("answered");
     expect(answered).toContain("public /health");
   });
+
+  test("a second Enter before question.answered does not emit the answer again", () => {
+    const run = askRun([
+      { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const typed = typeText(run, opened, "public /health");
+    const first = questionsKeys(run, typed, "Enter", key({ return: true }));
+    if (first.answer === undefined) throw new Error("the first Enter did not emit");
+
+    const recorded: QuestionsState = {
+      ...first.state,
+      draft: first.state.draft === null ? null : { ...first.state.draft, recorded: true },
+    };
+    const second = questionsKeys(run, recorded, "Enter", key({ return: true }));
+    expect(second.answer).toBeUndefined();
+    expect(second.state).toEqual(recorded);
+  });
 });
 
 describe("the run is not asked", () => {
