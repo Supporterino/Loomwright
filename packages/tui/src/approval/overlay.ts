@@ -16,8 +16,11 @@ export type ApprovalActionKind = "approve" | "approve-only" | "reword" | "reappr
 export const MISSING_IDENTITY = "git user.email is not set; it records who approved";
 
 export interface ApprovalEvidence {
-  /** `git config user.email` in the AI repo; `""` when unset. */
-  readonly identity: string;
+  /**
+   * `git config user.email` in the AI repo; `""` when unset and absent when nothing was checked
+   * (replay has no workspace, so it must not claim the identity is missing).
+   */
+  readonly identity?: string;
   /** `run.specFindings.length`. */
   readonly findings: number;
   /** Only from `approval.granted`; `approval.requested` has no approver yet. */
@@ -25,7 +28,7 @@ export interface ApprovalEvidence {
 }
 
 export function approvalAvailable(evidence: ApprovalEvidence): Record<ApprovalActionKind, boolean> {
-  const identity = evidence.identity !== "";
+  const identity = evidence.identity !== undefined && evidence.identity !== "";
   return {
     approve: identity,
     "approve-only": identity,
@@ -337,7 +340,9 @@ export function approvalPanel(input: ApprovalInput): PanelView {
     granted?.approver === null || granted?.approver === undefined || granted.approver === ""
       ? `approver: ${dash(glyphs)} until approval.granted`
       : `approver: ${granted.approver}`,
-    `identity: ${evidence.identity === "" ? MISSING_IDENTITY : evidence.identity}`,
+    ...(evidence.identity === undefined
+      ? []
+      : [`identity: ${evidence.identity === "" ? MISSING_IDENTITY : evidence.identity}`]),
     ...stateLines(input, glyphs),
   ];
   return {

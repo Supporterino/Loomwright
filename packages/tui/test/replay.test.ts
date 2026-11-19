@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Factory } from "@loomwright/core/factory";
+import { MISSING_IDENTITY } from "../src/approval/overlay.ts";
 import { isReadOnly, REPLAY_READ_ONLY, replayKey, replayView, runTui } from "../src/entry.tsx";
 import type { Launcher } from "../src/launch/launcher.ts";
 import type { KeyInput } from "../src/model/keys.ts";
@@ -116,6 +117,15 @@ describe("replay shows the recorded screens", () => {
     const view = viewOf(await readReplayFile(path));
     expect(view.panel?.kind).toBe("approval");
     expect(view.panel?.lines).toContain("spec hash: unknown (older stream)");
+  });
+
+  test("a replayed approval frame does not report a missing git identity", async () => {
+    const view = viewOf(await readReplayFile(FIXTURE));
+    expect(view.panel?.kind).toBe("approval");
+    const lines = view.panel?.lines ?? [];
+    expect(lines.join("\n")).not.toContain(MISSING_IDENTITY);
+    expect(lines.some((line) => line.startsWith("identity:"))).toBe(false);
+    expect(view.panel?.notice).toContain("read-only");
   });
 });
 

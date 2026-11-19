@@ -1114,7 +1114,7 @@ export function replayView(load: ReplayLoad, options: ReplayViewOptions): ViewMo
   if (base.run === null || model.snapshot.phase !== "awaiting-approval") return base;
   const panel = approvalPanel({
     run: base.run,
-    evidence: { identity: "", findings: 0, specCommit: null },
+    evidence: { findings: 0, specCommit: null },
     state: { kind: "idle" },
     glyphs,
   });
