@@ -910,6 +910,9 @@ function Interactive({
         }
         return;
       }
+      case "clear-task":
+        setData((state) => ({ ...state, selectedTaskId: null }));
+        return;
       case "back":
         stopTail();
         eventsRef.current = [];

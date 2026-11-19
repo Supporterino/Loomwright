@@ -29,6 +29,7 @@ export type Intent =
   | { kind: "help" }
   | { kind: "open-run"; runId: string }
   | { kind: "back" }
+  | { kind: "clear-task" }
   | { kind: "next-run" }
   | { kind: "prev-run" }
   | { kind: "next-task" }
@@ -60,11 +61,12 @@ function listIntent(viewModel: ViewModel, key: string): Intent {
   }
 }
 
-function runIntent(key: string): Intent {
+function runIntent(viewModel: ViewModel, key: string): Intent {
   switch (key) {
     case "Esc":
     case "\u001b":
-      return { kind: "back" };
+      // One pane drills into the task detail; Esc steps back to the graph first.
+      return viewModel.run?.selectedTaskId == null ? { kind: "back" } : { kind: "clear-task" };
     case "Down":
     case "j":
       return { kind: "next-task" };
@@ -97,5 +99,5 @@ export function applyKey(viewModel: ViewModel, key: string): Intent {
   if (viewModel.panel !== null) return { kind: "none" };
   if (key === "q") return { kind: "quit" };
   if (key === "?") return { kind: "help" };
-  return viewModel.screen === "list" ? listIntent(viewModel, key) : runIntent(key);
+  return viewModel.screen === "list" ? listIntent(viewModel, key) : runIntent(viewModel, key);
 }

@@ -551,6 +551,14 @@ describe("applyKey", () => {
     expect(applyKey(runView, "?")).toEqual({ kind: "help" });
   });
 
+  test("two panes become one: Esc backs out of the drilled task before it leaves the run", () => {
+    const run = runState({ tasks: [taskState({ id: "first", status: "running" })] });
+    const graph = buildViewModel(runInput(run, [], { columns: 80, selectedTaskId: null }));
+    const drilled = buildViewModel(runInput(run, [], { columns: 80, selectedTaskId: "first" }));
+    expect(applyKey(graph, "Esc")).toEqual({ kind: "back" });
+    expect(applyKey(drilled, "Esc")).toEqual({ kind: "clear-task" });
+  });
+
   test("a panel owns its keys and applyKey stays inert", () => {
     const run = runState();
     const view = buildViewModel(

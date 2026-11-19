@@ -41,7 +41,8 @@ header carries the approval banner and the overlay opens over the run (see [Appr
 
 The UI renders at 80×24 and larger. At 100 columns and wider it uses two panes — the run list or the
 task graph on the left, the detail and activity on the right. Below 100 columns it is one pane:
-`Enter` drills from the list into the run, and from the task graph into the task detail.
+`Enter` drills from the list into the run, and from the task graph into the task detail; `Esc` backs
+out of the detail to the graph, then out of the run to the list.
 
 ## Keys
 
@@ -50,7 +51,7 @@ task graph on the left, the detail and activity on the right. Below 100 columns 
 | `n`       | Start a new change (text or request file)                     | Run list                                             |
 | `Tab`     | Toggle text mode and file mode                                | New-run dialog                                       |
 | `Enter`   | Open the selected run or task; confirm                        | List, task graph, a confirmation                     |
-| `Esc`     | Back out of a panel; cancel                                   | Panels and confirmations                             |
+| `Esc`     | Back out of the task detail or a panel; cancel                | Task detail, panels, confirmations                   |
 | `j` / `k` | Move the selection (arrow keys work too)                      | List, task graph, questions                          |
 | `a`       | Approve and run: record the approval and start implementation | Approval overlay, with `git user.email`              |
 | `A`       | Approve only: record the approval, implement nothing          | Approval overlay, with `git user.email`              |
