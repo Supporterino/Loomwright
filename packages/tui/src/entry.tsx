@@ -80,10 +80,12 @@ export interface TuiOptions {
   /** Tests inject NO_COLOR / TERM / LANG and whether stdout is a TTY. */
   readonly env?: NodeJS.ProcessEnv;
   readonly isTTY?: boolean;
-  /** Tests inject a factory, launcher and terminal session. */
+  /** Tests inject a factory, launcher, terminal session and the intake `open`. */
   readonly factory?: Factory;
   readonly launcher?: Launcher;
   readonly session?: TerminalSession;
+  /** Tests inject the intake `Factory.open` so its rejection can be driven. */
+  readonly open?: typeof open;
   /**
    * Print every frame instead of rewriting the previous one. Ink only writes the last frame
    * when CI is set (the gates and GitHub Actions do), so tests that read a live screen need it.
@@ -374,6 +376,7 @@ interface InteractiveProps {
   readonly workspace: string;
   readonly factory: Factory;
   readonly launcher: Launcher;
+  readonly open: typeof open;
   readonly initial: UiData;
   readonly glyphs: GlyphSet;
   readonly depth: ColorDepth;
@@ -383,6 +386,7 @@ function Interactive({
   workspace,
   factory,
   launcher,
+  open,
   initial,
   glyphs,
   depth,
@@ -584,7 +588,7 @@ function Interactive({
         });
       })();
     },
-    [launcher, workspace],
+    [launcher, open, workspace],
   );
 
   const launchApproval = useCallback(
@@ -1112,6 +1116,7 @@ export async function runTui(options: TuiOptions): Promise<number> {
             workspace={workspace}
             factory={factory}
             launcher={options.launcher ?? createLauncher({ workspace })}
+            open={options.open ?? open}
             initial={initial}
             glyphs={glyphs}
             depth={depth}

@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { EventEmitter } from "node:events";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { StatusDocument } from "@loomwright/core/factory";
+import type { Factory, StatusDocument } from "@loomwright/core/factory";
 import type { ActiveLock } from "@loomwright/core/state/active";
 import { RunState } from "@loomwright/core/state/run";
+import { runTui } from "../src/entry.tsx";
 import {
   type IntakeContext,
   type IntakeState,
@@ -15,7 +17,9 @@ import {
 } from "../src/intake/dialog.tsx";
 import { watchSpawn } from "../src/intake/follow.ts";
 import { checkRequestFile, completePath } from "../src/intake/paths.ts";
+import type { LaunchAction } from "../src/launch/launcher.ts";
 import type { KeyInput } from "../src/model/keys.ts";
+import type { TerminalSession } from "../src/session.ts";
 import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
 
 const ISO = "2026-11-18T10:00:00.000Z";
@@ -120,6 +124,97 @@ function fileMode(path: string, ctx: IntakeContext): IntakeState {
 function panelText(state: IntakeState): string {
   const panel = intakePanel(state, ASCII_GLYPHS);
   return [panel.title, ...panel.lines, panel.notice ?? ""].join("\n");
+}
+
+class FakeInput extends EventEmitter {
+  readonly isTTY = true;
+  isRaw = false;
+  readonly #chunks: string[] = [];
+
+  setRawMode(enabled: boolean): void {
+    this.isRaw = enabled;
+  }
+
+  setEncoding(): void {}
+
+  ref(): void {}
+
+  unref(): void {}
+
+  resume(): void {}
+
+  pause(): void {}
+
+  read(): string | null {
+    return this.#chunks.shift() ?? null;
+  }
+
+  press(text: string): void {
+    this.#chunks.push(text);
+    this.emit("readable");
+  }
+}
+
+class FakeOutput {
+  readonly columns = 80;
+  readonly rows = 24;
+  readonly writes: string[] = [];
+
+  write(chunk: string): boolean {
+    this.writes.push(chunk);
+    return true;
+  }
+
+  on(): void {}
+
+  off(): void {}
+
+  text(): string {
+    return this.writes.join("");
+  }
+}
+
+function fakeSession(): TerminalSession {
+  return {
+    enter: () => {},
+    leave: () => {},
+    get columns(): number {
+      return 80;
+    },
+    get rows(): number {
+      return 24;
+    },
+    onKey: () => () => {},
+    onResize: () => () => {},
+    onSignal: () => () => {},
+  };
+}
+
+/** The run list only reads; every write method fails so a stray control call is visible. */
+function readOnlyFactory(): Factory {
+  const fail = (): never => {
+    throw new Error("the run list must not write");
+  };
+  return {
+    status: async () => status(),
+    listRuns: async () => [],
+    events: async function* () {},
+    run: async () => fail(),
+    resume: async () => fail(),
+    approve: async () => fail(),
+    retry: async () => fail(),
+    abort: async () => fail(),
+    answer: async () => fail(),
+    pause: async () => fail(),
+  };
+}
+
+async function waitFor(predicate: () => boolean, what: string, timeoutMs = 15_000): Promise<void> {
+  const started = Date.now();
+  while (!predicate()) {
+    if (Date.now() - started > timeoutMs) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
 }
 
 describe("text intake", () => {
@@ -385,25 +480,85 @@ describe("an active change is called out", () => {
 });
 
 describe("the workspace is not installed", () => {
-  test("the message and init hint stay inline, and a later Enter retries after init", () => {
-    const ws = workspace();
-    const ctx = context(ws);
-    // entry.tsx writes Factory.open's rejection into the dialog state and leaves the dialog open.
-    const rejected: IntakeState = {
-      ...typeText("add a health endpoint", ctx),
-      error: "loomwright is not installed here — run `loomwright init`",
-    };
-    expect(panelText(rejected)).toContain("loomwright is not installed here");
-    expect(panelText(rejected)).toContain("loomwright init");
+  test("the rejection shows the message and init hint inline, and the UI keeps running", async () => {
+    const input = new FakeInput();
+    const output = new FakeOutput();
+    const realStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+    const realStdout = Object.getOwnPropertyDescriptor(process, "stdout");
+    const launches: LaunchAction[] = [];
+    let opens = 0;
+    let settled = false;
+    try {
+      Object.defineProperty(process, "stdin", { value: input, configurable: true });
+      Object.defineProperty(process, "stdout", { value: output, configurable: true });
+      const code = runTui({
+        workspace: "/workspace",
+        once: false,
+        ascii: true,
+        columns: 80,
+        rows: 24,
+        out: () => {},
+        env: {},
+        isTTY: false,
+        // Ink only writes the last frame when CI is set; this test reads the live screen.
+        frames: true,
+        factory: readOnlyFactory(),
+        // The first open rejects exactly as Factory.open does before `loomwright init`.
+        open: async () => {
+          opens += 1;
+          if (opens === 1) throw new Error("loomwright is not installed here");
+          return readOnlyFactory();
+        },
+        launcher: {
+          launch: async (action) => {
+            launches.push(action);
+            return {
+              pid: undefined,
+              logPath: "/workspace/.factory/logs/tui-spawn-test.log",
+              displayPath: ".factory/logs/tui-spawn-test.log",
+              exited: Promise.resolve({ code: 0, signal: null }),
+            };
+          },
+        },
+        session: fakeSession(),
+      }).then((value) => {
+        settled = true;
+        return value;
+      });
+      // A failed drive must not also surface as an unhandled rejection from the TUI.
+      void code.catch(() => {});
 
-    // Once init has run the same Enter reaches the launcher instead of repeating the stale message.
-    const retry = intakeKeys(rejected, "", key({ return: true }), ctx);
-    expect(retry.submit).toEqual({ kind: "run-text", text: "add a health endpoint" });
-    expect(retry.state.error).toBeNull();
+      await waitFor(() => input.isRaw, "raw mode");
+      await waitFor(() => output.text().includes("n new change"), "the run list");
+      input.press("n");
+      await waitFor(() => output.text().includes("New change"), "the intake dialog");
+      input.press("add a health endpoint");
+      await waitFor(
+        () => output.text().includes("request: add a health endpoint"),
+        "the typed request",
+      );
+      input.press("\r");
 
-    const toggled = intakeKeys(rejected, "", key({ tab: true }), ctx);
-    expect(toggled.state.mode).toBe("file");
-  });
+      await waitFor(
+        () => output.text().includes("loomwright is not installed here — run `loomwright init`"),
+        "the inline rejection",
+      );
+      expect(launches).toHaveLength(0);
+      expect(settled).toBe(false);
+
+      // Once init has run the same Enter reaches the launcher instead of repeating the stale message.
+      input.press("\r");
+      await waitFor(() => launches.length === 1, "the retry launch");
+      expect(launches[0]).toEqual({ kind: "run-text", text: "add a health endpoint" });
+
+      input.press("\u0003");
+      await waitFor(() => settled, "the quit");
+      expect(await code).toBe(0);
+    } finally {
+      if (realStdin !== undefined) Object.defineProperty(process, "stdin", realStdin);
+      if (realStdout !== undefined) Object.defineProperty(process, "stdout", realStdout);
+    }
+  }, 30_000);
 });
 
 describe("the spawn watch opens the run view", () => {
