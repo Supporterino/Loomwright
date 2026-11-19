@@ -25,7 +25,7 @@ emitted when design parks the change at `awaiting-approval`.
   `packages/cli/dist/tui.js` so no other command pays its startup cost.
 - Add `loomwright tui` (alias `ai-factory tui`) for the current workspace: a run list (newest
   first) and a run view with header (id, phase, elapsed, tokens, cost, lock), task list in
-  dependency order with status, a task detail pane (agent role, retries, gates, duration, live
+  tasks.md plan order with status, a task detail pane (agent role, retries, gates, duration, live
   activity tail with log references) and a key-hints footer.
 - Drive the UI from `reduce(readEvents)` plus `tailEvents`, with run existence, phase, lock and
   queue from `Factory.status()`/`listRuns()` and usage from the ledger that `status` already

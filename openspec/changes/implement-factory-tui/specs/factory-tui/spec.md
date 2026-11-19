@@ -149,8 +149,9 @@ element and is never quoted.
 The TUI SHALL show a run list ordered newest first with each run's id, phase, role (active,
 queued at its position, or idle), token and cost totals and elapsed time. Opening a run SHALL show
 a header with the run id, phase, elapsed time, token and cost totals and lock status; a task list
-in dependency order with each task's status, repo, attempt and title; a task detail pane with the
-agent role, model, retries, gate results per step, duration and a live activity tail from
+in the order the run state carries (the tasks.md plan order, not re-sorted by `deps`) with each
+task's status, repo, attempt and title; a task detail pane with the agent role, model, retries,
+gate results per step, duration and a live activity tail from
 `agent.activity` that names a `.factory/logs/` reference where the event carries one; and a footer
 listing the keys that are valid in the current state.
 
@@ -467,7 +468,8 @@ spawn), keybinding tests (approve confirm, abort confirm, quit restores the term
 
 - **WHEN** the view-model suite runs
 - **THEN** it imports no Ink or React module
-- **AND** it covers the header, task order, gates, questions and approval sections
+- **AND** it covers the header, task order (as stored, i.e. tasks.md plan order), gates, questions
+  and approval sections
 
 #### Scenario: every screen has both sizes
 
