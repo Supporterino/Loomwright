@@ -602,15 +602,21 @@ describe("a resumed child is guarded and observed", () => {
     expect(launches).toHaveLength(2);
   });
 
-  test("a non-zero resume exit is never silent: the notice names the code and the log tail", () => {
+  test("a failed child is visible: a non-zero resume exit shows the code and the last ten log lines", () => {
     const dir = mkdtempSync(join(tmpdir(), "loomwright-resume-"));
     try {
       const logPath = join(dir, "resume.log");
-      writeFileSync(logPath, ["start", "the run lock is held", "abort"].join("\n"));
+      const lines = Array.from(
+        { length: 12 },
+        (_, index) => `log line ${String(index + 1).padStart(2, "0")}`,
+      );
+      writeFileSync(logPath, lines.join("\n"));
       const data = resumeFailed(uiData(), RUN, logPath, 3);
       expect(data.approval).toBeNull();
       expect(data.notice).toContain(`resume ${RUN} exited with code 3`);
-      expect(data.notice).toContain("the run lock is held");
+      for (const line of lines.slice(-10)) expect(data.notice).toContain(line);
+      expect(data.notice).not.toContain(lines[0]);
+      expect(data.notice).not.toContain(lines[1]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

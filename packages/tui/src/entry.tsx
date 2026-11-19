@@ -396,7 +396,7 @@ export function resumeFailed(data: UiData, id: string, logPath: string, code: nu
   if (failed !== null && failed !== data.approval) return { ...data, approval: failed };
   return {
     ...data,
-    notice: [`resume ${id} exited with code ${code}`, ...tail.slice(-3)].join("\n"),
+    notice: [`resume ${id} exited with code ${code}`, ...tail].join("\n"),
   };
 }
 
