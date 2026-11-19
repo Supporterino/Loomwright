@@ -4,7 +4,7 @@
  * exactly as it would be without the UI.
  */
 import { type ChildProcess, spawn as defaultSpawn } from "node:child_process";
-import { closeSync, fstatSync, mkdirSync, openSync, readSync } from "node:fs";
+import { appendFileSync, closeSync, fstatSync, mkdirSync, openSync, readSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import process from "node:process";
 
@@ -105,12 +105,19 @@ export function createLauncher(options: LauncherOptions): Launcher {
       // The child inherited the fd; the parent can exit once it is closed here.
       if (ownsLogFd) closeSync(fd);
       child.unref();
-      const exited: Promise<ExitResult> =
-        child.pid === undefined
-          ? Promise.resolve({ code: null, signal: null })
-          : new Promise((resolve) => {
-              child.once("exit", (code, signal) => resolve({ code, signal }));
-            });
+      const exited = new Promise<ExitResult>((resolve) => {
+        // A spawn that fails asynchronously emits `error` and never `exit`; without a listener
+        // it throws outside `launch`, past every `finally` that restores the terminal.
+        child.once("error", (err: Error) => {
+          try {
+            appendFileSync(logPath, `spawn failed: ${err.message}\n`);
+          } catch {
+            // The non-zero exit below still reports the failure when the log cannot be written.
+          }
+          resolve({ code: 1, signal: null });
+        });
+        child.once("exit", (code, signal) => resolve({ code, signal }));
+      });
       return {
         pid: child.pid,
         logPath,

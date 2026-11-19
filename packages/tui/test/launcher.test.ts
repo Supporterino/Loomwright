@@ -36,15 +36,22 @@ interface FakeChild {
   readonly alive: boolean;
   unref(): void;
   kill(): boolean;
-  once(event: string, listener: (code: number | null, signal: string | null) => void): FakeChild;
+  once(event: string, listener: ExitListener | ErrorListener): FakeChild;
   emitExit(code: number | null, signal: string | null): void;
+  emitError(err: Error): void;
 }
 
-function fakeChild(pid: number | undefined = 4242): FakeChild {
+type ExitListener = (code: number | null, signal: string | null) => void;
+type ErrorListener = (err: Error) => void;
+
+function fakeChild(...args: [pid?: number]): FakeChild {
+  // An explicit `undefined` models a failed spawn; omitting the argument keeps the usual pid.
+  const pid = args.length === 0 ? 4242 : args[0];
   let unrefs = 0;
   let kills = 0;
   let alive = true;
-  const listeners: ((code: number | null, signal: string | null) => void)[] = [];
+  const exitListeners: ExitListener[] = [];
+  const errorListeners: ErrorListener[] = [];
   const child: FakeChild = {
     pid,
     get unrefs(): number {
@@ -65,11 +72,18 @@ function fakeChild(pid: number | undefined = 4242): FakeChild {
       return true;
     },
     once(event, listener): FakeChild {
-      if (event === "exit") listeners.push(listener);
+      // The launcher passes an exit or an error listener; the event name tells which it is.
+      if (event === "exit") exitListeners.push(listener as ExitListener);
+      else if (event === "error") errorListeners.push(listener as ErrorListener);
       return child;
     },
     emitExit(code, signal): void {
-      for (const listener of listeners) listener(code, signal);
+      for (const listener of exitListeners) listener(code, signal);
+    },
+    emitError(err): void {
+      // Node throws an unhandled `error` event; mirroring that proves the launcher listens.
+      if (errorListeners.length === 0) throw err;
+      for (const listener of errorListeners) listener(err);
     },
   };
   return child;
@@ -197,6 +211,20 @@ describe("a failed child is visible", () => {
     expect(tailLog(logPath)).toEqual(lines.slice(-10));
     expect(tailLog(logPath, 2)).toEqual(lines.slice(-2));
     expect(tailLog(join(ws, "missing.log"))).toEqual([]);
+  });
+
+  test("a failed spawn is visible: error resolves a non-zero exit and the tail", async () => {
+    const ws = workspace();
+    const calls: SpawnCall[] = [];
+    const child = fakeChild(undefined);
+    const launcher = launcherFor(ws, calls, child, { openLog: () => 9 });
+    const result = await launcher.launch({ kind: "approve", id: "add-health" });
+
+    expect(result.pid).toBeUndefined();
+    child.emitError(new Error("spawn EACCES"));
+
+    expect(await result.exited).toEqual({ code: 1, signal: null });
+    expect(tailLog(result.logPath)).toContain("spawn failed: spawn EACCES");
   });
 });
 
