@@ -158,7 +158,7 @@ export function replayKey(view: ViewModel, input: string, key: KeyInput): Replay
   return { quit: false, notice: null };
 }
 
-interface UiData {
+export interface UiData {
   readonly screen: Screen;
   readonly selectedRunId: string | null;
   readonly selectedTaskId: string | null;
@@ -202,12 +202,19 @@ function evidenceOf(data: UiData): ApprovalEvidence {
   };
 }
 
+/** Intake, questions, help and confirmations own the screen while they are open. */
+function panelOpen(data: UiData): boolean {
+  return data.intake !== null || data.questions !== null || data.confirmation !== null || data.help;
+}
+
 /** Opens on the phase and advances a launch from the facts the stream now carries. */
-function syncApproval(data: UiData): UiData {
+export function syncApproval(data: UiData): UiData {
   if (data.screen !== "run" || data.selectedRunId === null) return data;
   const run = selectedRunState(data);
   const phase = data.snapshot?.phase ?? run?.phase ?? null;
   if (data.approval === null) {
+    // A poll never steals an open panel; the next one opens the gate once the panel closes.
+    if (panelOpen(data)) return data;
     if (phase === null) return data;
     const opened = approvalForPhase(phase, null);
     return opened === null ? data : { ...data, approval: opened, identity: null };

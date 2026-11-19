@@ -27,6 +27,9 @@ import {
   MISSING_IDENTITY,
   shortCommit,
 } from "../src/approval/overlay.ts";
+import { initialQuestions } from "../src/controls/questions.tsx";
+import { syncApproval, type UiData } from "../src/entry.tsx";
+import { initialIntake } from "../src/intake/dialog.tsx";
 import { collectFacts } from "../src/model/facts.ts";
 import type { KeyInput } from "../src/model/keys.ts";
 import { buildViewModel, type RunDetail, type ViewModelInput } from "../src/model/view-model.ts";
@@ -235,6 +238,57 @@ describe("the overlay opens on the phase", () => {
     const confirmed = approvalKeys(pressed.state, "", key({ return: true }));
     expect(confirmed.launch).toBe("approve");
     expect(confirmed.state).toEqual({ kind: "launching", action: "approve" });
+  });
+});
+
+describe("a poll does not steal an open panel for the approval overlay", () => {
+  const run = runState();
+
+  function uiData(overrides: Partial<UiData> = {}): UiData {
+    return {
+      screen: "run",
+      selectedRunId: RUN,
+      selectedTaskId: null,
+      columns: 120,
+      rows: 40,
+      status: statusDoc(run),
+      runs: [run],
+      snapshot: null,
+      facts: collectFacts([]),
+      notice: null,
+      intake: null,
+      approval: null,
+      questions: null,
+      confirmation: null,
+      help: false,
+      identity: null,
+      ...overrides,
+    };
+  }
+
+  const panels = [
+    ["intake", { intake: initialIntake }],
+    ["questions", { questions: initialQuestions }],
+    ["confirmation", { confirmation: { kind: "abort", id: RUN } }],
+    ["help", { help: true }],
+  ] as const satisfies readonly (readonly [string, Partial<UiData>])[];
+
+  for (const [name, panel] of panels) {
+    test(`the approval overlay stays shut while the ${name} panel is open`, () => {
+      const polled = syncApproval(uiData(panel));
+      expect(polled.approval).toBeNull();
+      expect(polled).toMatchObject(panel);
+    });
+  }
+
+  test("the next poll opens the approval overlay once the open panel closes", () => {
+    const polled = syncApproval(uiData({ questions: initialQuestions }));
+    expect(polled.approval).toBeNull();
+    expect(syncApproval({ ...polled, questions: null }).approval).toEqual({ kind: "idle" });
+  });
+
+  test("with no panel open the poll opens the approval overlay on awaiting-approval", () => {
+    expect(syncApproval(uiData()).approval).toEqual({ kind: "idle" });
   });
 });
 
