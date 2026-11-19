@@ -425,7 +425,9 @@ long run.
 ### Requirement: Replay renders a recorded stream with every action disabled
 
 `tui --replay <events.jsonl>` SHALL render the same screens from a recorded stream without a
-workspace: it SHALL feed the file through `readEvents` and `reduce`, SHALL mark the run as
+workspace: it SHALL read the file with the same complete-line reader semantics as `readEvents`
+(ignore a partial trailing line and blank lines, report corrupt complete lines in `skipped` and
+keep the readable events), SHALL feed the result through `reduce`, SHALL mark the run as
 replayed, and SHALL disable every write action (intake, approve, reword, reapprove, resume, abort,
 retry, answer) and the `status()` poll. `--once` SHALL render exactly one frame through the same
 component tree into an in-memory stdout, write that text through the command's output and exit
