@@ -713,9 +713,9 @@ describe("only the short commands run in-process", () => {
     return calls;
   }
 
-  test("Factory.run, approve and resume are never driven from the UI", () => {
+  test("Factory.run, approve, resume, pause and land are never driven from the UI", () => {
     const calls = factoryCalls();
-    for (const forbidden of ["run", "approve", "resume", "pause"]) {
+    for (const forbidden of ["run", "approve", "resume", "pause", "land"]) {
       expect(calls.has(forbidden), `factory.${forbidden} must not be called in-process`).toBe(
         false,
       );
