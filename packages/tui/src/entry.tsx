@@ -209,17 +209,29 @@ function panelOpen(data: UiData): boolean {
   return data.intake !== null || data.questions !== null || data.confirmation !== null || data.help;
 }
 
-/** Opens on the phase and advances a launch from the facts the stream now carries. */
+/**
+ * Opens on the phase and advances a launch from the facts the stream now carries. Run state is
+ * canonical: a tail snapshot can lag behind a phase another process already drove.
+ */
 export function syncApproval(data: UiData): UiData {
   if (data.screen !== "run" || data.selectedRunId === null) return data;
   const run = selectedRunState(data);
-  const phase = data.snapshot?.phase ?? run?.phase ?? null;
+  const phase = run?.phase ?? data.snapshot?.phase ?? null;
   if (data.approval === null) {
     // A poll never steals an open panel; the next one opens the gate once the panel closes.
     if (panelOpen(data)) return data;
     if (phase === null) return data;
     const opened = approvalForPhase(phase, null);
     return opened === null ? data : { ...data, approval: opened, identity: null };
+  }
+  // Another process may approve while the overlay sits idle: clear it once the run leaves the
+  // gate, but keep a launch that is still waiting for its own outcome.
+  if (
+    (data.approval.kind === "idle" || data.approval.kind === "failed") &&
+    phase !== null &&
+    phase !== "awaiting-approval"
+  ) {
+    return { ...data, approval: null };
   }
   if (data.approval.kind !== "waiting") return data;
   const next = approvalProgress(data.approval, {

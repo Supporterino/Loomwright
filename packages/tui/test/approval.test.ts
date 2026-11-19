@@ -241,30 +241,30 @@ describe("the overlay opens on the phase", () => {
   });
 });
 
+function uiData(run: RunState, overrides: Partial<UiData> = {}): UiData {
+  return {
+    screen: "run",
+    selectedRunId: RUN,
+    selectedTaskId: null,
+    columns: 120,
+    rows: 40,
+    status: statusDoc(run),
+    runs: [run],
+    snapshot: null,
+    facts: collectFacts([]),
+    notice: null,
+    intake: null,
+    approval: null,
+    questions: null,
+    confirmation: null,
+    help: false,
+    identity: null,
+    ...overrides,
+  };
+}
+
 describe("a poll does not steal an open panel for the approval overlay", () => {
   const run = runState();
-
-  function uiData(overrides: Partial<UiData> = {}): UiData {
-    return {
-      screen: "run",
-      selectedRunId: RUN,
-      selectedTaskId: null,
-      columns: 120,
-      rows: 40,
-      status: statusDoc(run),
-      runs: [run],
-      snapshot: null,
-      facts: collectFacts([]),
-      notice: null,
-      intake: null,
-      approval: null,
-      questions: null,
-      confirmation: null,
-      help: false,
-      identity: null,
-      ...overrides,
-    };
-  }
 
   const panels = [
     ["intake", { intake: initialIntake }],
@@ -275,20 +275,68 @@ describe("a poll does not steal an open panel for the approval overlay", () => {
 
   for (const [name, panel] of panels) {
     test(`the approval overlay stays shut while the ${name} panel is open`, () => {
-      const polled = syncApproval(uiData(panel));
+      const polled = syncApproval(uiData(run, panel));
       expect(polled.approval).toBeNull();
       expect(polled).toMatchObject(panel);
     });
   }
 
   test("the next poll opens the approval overlay once the open panel closes", () => {
-    const polled = syncApproval(uiData({ questions: initialQuestions }));
+    const polled = syncApproval(uiData(run, { questions: initialQuestions }));
     expect(polled.approval).toBeNull();
     expect(syncApproval({ ...polled, questions: null }).approval).toEqual({ kind: "idle" });
   });
 
   test("with no panel open the poll opens the approval overlay on awaiting-approval", () => {
-    expect(syncApproval(uiData()).approval).toEqual({ kind: "idle" });
+    expect(syncApproval(uiData(run)).approval).toEqual({ kind: "idle" });
+  });
+});
+
+describe("the approval overlay follows run state, not a stale snapshot", () => {
+  function snapshotAt(phase: RunState["phase"]): ReturnType<typeof reduce> {
+    resetSeq();
+    return reduce([event("run.started", { phase })]);
+  }
+
+  test("an idle overlay clears when another process approves and status moves on", () => {
+    const queued = runState({ phase: "queued" });
+    const polled = syncApproval(
+      uiData(queued, {
+        approval: { kind: "idle" },
+        snapshot: snapshotAt("awaiting-approval"),
+      }),
+    );
+    expect(polled.approval).toBeNull();
+  });
+
+  test("a failed overlay clears when the run leaves the gate", () => {
+    const implementing = runState({ phase: "implementing" });
+    const polled = syncApproval(
+      uiData(implementing, {
+        approval: { kind: "failed", action: "approve", code: 1, tail: ["boom"] },
+      }),
+    );
+    expect(polled.approval).toBeNull();
+  });
+
+  test("a stale snapshot cannot open the overlay once status left the gate", () => {
+    const implementing = runState({ phase: "implementing" });
+    const polled = syncApproval(
+      uiData(implementing, { snapshot: snapshotAt("awaiting-approval") }),
+    );
+    expect(polled.approval).toBeNull();
+  });
+
+  test("a waiting launch stays open when the run leaves the gate without a grant", () => {
+    const queued = runState({ phase: "queued" });
+    const waiting = approvalStarted({ kind: "launching", action: "approve" });
+    const polled = syncApproval(uiData(queued, { approval: waiting }));
+    expect(polled.approval).toBe(waiting);
+  });
+
+  test("an idle overlay stays open while the run is still awaiting approval", () => {
+    const polled = syncApproval(uiData(runState(), { approval: { kind: "idle" } }));
+    expect(polled.approval).toEqual({ kind: "idle" });
   });
 });
 
