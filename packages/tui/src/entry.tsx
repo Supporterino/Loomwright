@@ -377,6 +377,8 @@ export async function performControl(
 export interface ResumeGuard {
   /** True when the id may launch; false while its child is still in flight. */
   begin(id: string): boolean;
+  /** True while that id's child is still in flight. */
+  has(id: string): boolean;
   end(id: string): void;
 }
 
@@ -387,6 +389,9 @@ export function createResumeGuard(): ResumeGuard {
       if (inFlight.has(id)) return false;
       inFlight.add(id);
       return true;
+    },
+    has(id: string): boolean {
+      return inFlight.has(id);
     },
     end(id: string): void {
       inFlight.delete(id);
@@ -528,6 +533,13 @@ export function startLand(deps: LandRun, id: string): void {
       });
     });
   })();
+}
+
+/** The land confirmation; null while that run's child is in flight, so a double tap is ignored. */
+export function landConfirmation(viewModel: ViewModel, guard: ResumeGuard): ControlAction | null {
+  const action = landFor(viewModel);
+  if (action === null || guard.has(action.id)) return null;
+  return action;
 }
 
 /** `Factory.answer` writes the command inbox and returns; the run is not waited for. */
@@ -1144,7 +1156,7 @@ function Interactive({
         return;
       }
       case "land": {
-        const action = landFor(current);
+        const action = landConfirmation(current, landGuard.current);
         if (action !== null) {
           setData((state) => ({ ...state, confirmation: action, questions: null }));
         }

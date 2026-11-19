@@ -22,6 +22,7 @@ import {
 } from "../src/controls/questions.tsx";
 import {
   createResumeGuard,
+  landConfirmation,
   landFailed,
   landSettled,
   performControl,
@@ -790,6 +791,18 @@ describe("a double-tapped land launches one child", () => {
     startLand(deps, RUN);
     await Bun.sleep(0);
     expect(launches).toHaveLength(2);
+  });
+
+  test("the second confirmation is ignored while the land child is in flight", () => {
+    const view = buildViewModel(viewInput(runState({ phase: "done" })));
+    const guard = createResumeGuard();
+    expect(landConfirmation(view, guard)).toEqual({ kind: "land", id: RUN });
+
+    expect(guard.begin(RUN)).toBe(true);
+    expect(landConfirmation(view, guard)).toBeNull();
+
+    guard.end(RUN);
+    expect(landConfirmation(view, guard)).toEqual({ kind: "land", id: RUN });
   });
 });
 
