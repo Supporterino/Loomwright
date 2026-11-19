@@ -1,0 +1,24 @@
++------------------------------------------------------------------------------+
+| Approval - add-health                                                        |
+| Add health endpoints                                                         |
+| change dir: .factory/drafts/add-health                                       |
+| spec hash: 0123456789ab                                                      |
+| spec commit: - until approval.granted                                        |
+| approver: - until approval.granted                                           |
+| identity: dev@example.com                                                    |
+| confirm approve and run:                                                     |
+| the approval is recorded, the spec is committed                              |
+| and implementation starts locally                                            |
+| Enter confirm - Esc cancel - q quit                                          |
++------------------------------------------------------------------------------+
+
+
+
+
+
+
+
+
+
+
+Enter confirm - Esc cancel - q quit

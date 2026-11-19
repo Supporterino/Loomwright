@@ -1,0 +1,40 @@
++----------------------------------------------------------------------------------------------------------------------+
+| Questions - add-health                                                                                               |
+| openspec/changes/add-health/questions.md                                                                             |
+| > o design                                                                                                           |
+|   Which endpoints should be public?                                                                                  |
+|   unanswered - Enter answers                                                                                         |
+|   answer>                                                                                                            |
+|   - design                                                                                                           |
+|   Do health checks need auth?                                                                                        |
+|   skipped                                                                                                            |
+| Enter answer - Esc close                                                                                             |
++----------------------------------------------------------------------------------------------------------------------+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Enter answer - Esc close

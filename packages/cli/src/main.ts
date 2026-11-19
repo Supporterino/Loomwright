@@ -22,6 +22,7 @@ import { refineCommand } from "./commands/refine.ts";
 import { repointCommand } from "./commands/repoint.ts";
 import { reapproveCommand, rewordCommand } from "./commands/reword.ts";
 import { abortCommand, retryCommand, statusCommand } from "./commands/state-commands.ts";
+import { tuiCommand } from "./commands/tui.ts";
 import { rollbackCommand, updateCommand } from "./commands/update.ts";
 import { usageCommand } from "./commands/usage.ts";
 import { setCompletionCommands } from "./completion/registry.ts";
@@ -43,6 +44,7 @@ export const COMMANDS: readonly Command[] = [
   reapproveCommand,
   statusCommand,
   eventsCommand,
+  tuiCommand,
   usageCommand,
   gateCommand,
   graphCommand,

@@ -2,7 +2,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { factoryScript, type ScriptedTask } from "../../../test/fixtures/factory-script.ts";
+import {
+  factoryScript,
+  type ScriptedTask,
+  tasksMd,
+} from "../../../test/fixtures/factory-script.ts";
 import { ScriptedRuntime } from "../../../test/fixtures/scripted-runtime.ts";
 import {
   createSingleRepoFixture,
@@ -401,6 +405,89 @@ describe("approval events", () => {
     } finally {
       fx.cleanup();
     }
+  });
+
+  test("design announces the gate with the hash", async () => {
+    const fx = await createSingleRepoFixture();
+    try {
+      expect((await cli(fx.root, "init")).code).toBe(ExitCode.Ok);
+      const sink = new MemorySink();
+      const p = new Pipeline(fx.root, loadConfig(fx.root).config, {
+        runtime: new ScriptedRuntime(script()),
+        out: () => {},
+        signal: new AbortController().signal,
+        events: { sink },
+        heartbeatMs: 0,
+      });
+      expect(await intake(p, "Add math helpers")).toBe(ID);
+      const result = await design(p, ID);
+      p.progress.stop();
+
+      expect(result.ok).toBe(true);
+      const pending = sink.ofType("approval.pending");
+      expect(pending).toHaveLength(1);
+      expect(pending[0]?.data.changeDir).toBe(`openspec/changes/${ID}`);
+      expect(sink.ofType("approval.requested")).toHaveLength(0);
+      expect(sink.ofType("approval.granted")).toHaveLength(0);
+
+      await approve(p, ID);
+      const approval = readApproval(fx.root, ID);
+      if (approval === undefined) throw new Error("approve did not record an approval");
+      expect(pending[0]?.data.specHash).toBe(approval.hash);
+    } finally {
+      fx.cleanup();
+    }
+  }, 120_000);
+
+  test("no gate is announced for an invalid spec", async () => {
+    const fx = await createSingleRepoFixture();
+    try {
+      expect((await cli(fx.root, "init")).code).toBe(ExitCode.Ok);
+      const base = script();
+      const runtime = new ScriptedRuntime(async (call) => {
+        if (call.agent === "architect" && call.prompt.startsWith("Write the OpenSpec change")) {
+          return {
+            edits: {
+              [`openspec/changes/${ID}/proposal.md`]: "## What Changes\n- Add math helpers\n",
+              [`openspec/changes/${ID}/tasks.md`]: tasksMd(TASKS),
+            },
+            handoff: { task: "design" },
+          };
+        }
+        return base(call);
+      });
+      const sink = new MemorySink();
+      const p = new Pipeline(fx.root, loadConfig(fx.root).config, {
+        runtime,
+        out: () => {},
+        signal: new AbortController().signal,
+        events: { sink },
+        heartbeatMs: 0,
+      });
+      expect(await intake(p, "Add math helpers")).toBe(ID);
+      const result = await design(p, ID);
+      p.progress.stop();
+
+      expect(result.ok).toBe(false);
+      expect(p.run(ID).phase).toBe("paused");
+      expect(sink.ofType("approval.pending")).toHaveLength(0);
+      expect(sink.ofType("run.paused").length).toBeGreaterThan(0);
+      expect(reduce(sink.events).pendingApproval).toBeNull();
+    } finally {
+      fx.cleanup();
+    }
+  }, 120_000);
+
+  test("the terminal output is unchanged: approval.pending prints nothing", () => {
+    const pending = RunEvent.parse({
+      v: 1,
+      runId: ID,
+      seq: 1,
+      ts: "1970-01-01T00:00:00.000Z",
+      type: "approval.pending",
+      data: { specHash: "hash", changeDir: `openspec/changes/${ID}` },
+    });
+    expect(replay([pending])).toEqual([]);
   });
 });
 

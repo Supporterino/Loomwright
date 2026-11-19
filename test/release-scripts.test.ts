@@ -64,9 +64,18 @@ describe("release workflows", () => {
 
   test("CI packs and smoke-tests the new paths: artifact uses the new dist paths", () => {
     expect(CI_WORKFLOW).toContain("packages/cli/dist/cli.js");
+    expect(CI_WORKFLOW).toContain("packages/cli/dist/tui.js");
     expect(CI_WORKFLOW).toContain("packages/cli/dist/package.json");
     expect(CI_WORKFLOW).not.toMatch(/^\s+dist\/cli\.js$/m);
     expect(CI_WORKFLOW).not.toMatch(/^\s+dist\/package\.json$/m);
+  });
+
+  test("CI packs and smoke-tests the new paths: the replay smoke runs per node", () => {
+    expect(CI_WORKFLOW).toContain("name: tui-replay");
+    expect(CI_WORKFLOW).toContain("path: test/fixtures/tui/approval-gate.jsonl");
+    expect(CI_WORKFLOW).toContain(
+      "node dist/cli.js tui --replay dist/approval-gate.jsonl --once > /dev/null",
+    );
   });
 
   test("the tarball file list matches the baseline", () => {
@@ -75,6 +84,7 @@ describe("release workflows", () => {
       expect(workflow).toContain('grep -qx "package/dist/package.json"');
       expect(workflow).toContain("^package/(src|test|scripts)/");
     }
+    expect(CI_WORKFLOW).toContain('grep -qx "package/dist/tui.js"');
   });
 
   test("the e2e workflow runs the moved runtime test", () => {

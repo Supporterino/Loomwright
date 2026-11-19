@@ -1,0 +1,24 @@
+> add-health - implementing - 8s - 12.3k tokens - $0.42 - active (pid 4242)
+Tasks
+  [>] first running app attempt 1 Health endpoint
+  [o] second pending api attempt 0 Wire client
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+x abort - ? help - q quit

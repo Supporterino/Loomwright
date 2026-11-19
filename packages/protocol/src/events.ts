@@ -159,6 +159,7 @@ export const EVENT_TYPES = [
   "install.failed",
   "question.raised",
   "question.answered",
+  "approval.pending",
   "approval.requested",
   "approval.granted",
   "usage.delta",
@@ -317,6 +318,7 @@ export const RunEvent = z.discriminatedUnion("type", [
   event("install.failed", InstallData),
   event("question.raised", QuestionData),
   event("question.answered", QuestionData),
+  event("approval.pending", z.object({ specHash: z.string(), changeDir: z.string() })),
   event("approval.requested", z.object({ specHash: z.string(), specCommit: z.string() })),
   event(
     "approval.granted",

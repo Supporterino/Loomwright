@@ -1,0 +1,24 @@
++------------------------------------------------------------------------------+
+| New change - text                                                            |
+| request: add a health endpoint                                               |
+| the change is drafted under .factory/drafts/<id> and queued after approval   |
+| Tab file mode - Ctrl-J newline - Enter start - Esc cancel                    |
++------------------------------------------------------------------------------+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Tab file mode - Ctrl-J newline - Enter start - Esc cancel

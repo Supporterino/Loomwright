@@ -17,7 +17,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun scripts/build-plugin.ts && bun build packages/cli/src/bin.ts --target=node --outfile packages/cli/dist/cli.js && bun scripts/write-dist-package.ts && bun scripts/prepare-package.ts",
+    "build": "bun scripts/build-plugin.ts && bun build packages/cli/src/bin.ts --target=node --outfile packages/cli/dist/cli.js && bun scripts/build-tui.ts && bun scripts/write-dist-package.ts && bun scripts/prepare-package.ts",
     "dev": "bun packages/cli/src/bin.ts",
     "test": "bun test --timeout 60000 --parallel",
     "test:serial": "bun test --timeout 60000",
@@ -40,6 +40,7 @@
     "@loomwright/protocol": "workspace:*",
     "@types/bun": "1.4.4",
     "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "jsonc-parser": "3.3.1",

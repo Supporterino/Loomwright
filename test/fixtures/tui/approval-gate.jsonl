@@ -1,0 +1,13 @@
+{"v":1,"runId":"add-health","seq":1,"ts":"1970-01-01T00:00:00.000Z","type":"run.started","data":{"phase":"design"}}
+{"v":1,"runId":"add-health","seq":2,"ts":"1970-01-01T00:00:00.000Z","type":"run.branches","data":{"branches":{".":{"branch":"change/add-health","base":"<sha>"}}}}
+{"v":1,"runId":"add-health","seq":3,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"  change add-health"}}
+{"v":1,"runId":"add-health","seq":4,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ explore: app"}}
+{"v":1,"runId":"add-health","seq":5,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"explore:app","agent":"explorer","model":"anthropic/claude-haiku-5-5"}}
+{"v":1,"runId":"add-health","seq":6,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"explore:app","agent":"explorer","model":"anthropic/claude-haiku-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":7,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"explore:app","role":"explorer","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":8,"ts":"1970-01-01T00:00:00.000Z","type":"progress.line","data":{"level":"always","text":"▶ design: openspec/changes/add-health"}}
+{"v":1,"runId":"add-health","seq":9,"ts":"1970-01-01T00:00:00.000Z","type":"agent.started","data":{"step":"design","agent":"architect","model":"anthropic/claude-opus-5-5"}}
+{"v":1,"runId":"add-health","seq":10,"ts":"1970-01-01T00:00:00.000Z","type":"usage.delta","data":{"step":"design","agent":"architect","model":"anthropic/claude-opus-5-5","usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01}}}
+{"v":1,"runId":"add-health","seq":11,"ts":"1970-01-01T00:00:00.000Z","type":"agent.finished","data":{"step":"design","role":"architect","outcome":"succeeded","durationMs":0,"usage":{"input":1000,"output":100,"reasoning":0,"cacheRead":600,"cacheWrite":200,"cost":0.01},"sessionId":"<session>"}}
+{"v":1,"runId":"add-health","seq":12,"ts":"1970-01-01T00:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"awaiting-approval"}}
+{"v":1,"runId":"add-health","seq":13,"ts":"1970-01-01T00:00:00.000Z","type":"approval.pending","data":{"specHash":"<sha>","changeDir":"openspec/changes/add-health"}}

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { specHash } from "../approval/approval.ts";
 import { allInstructionPaths } from "../config/instructions.ts";
 import { gitOk } from "../exec.ts";
 import { branchAiRepo } from "../git/branching.ts";
@@ -332,5 +333,12 @@ export async function design(p: Pipeline, id: string): Promise<{ ok: boolean; is
   });
   if (updated.phase === "paused" && updated.pausedReason !== undefined)
     p.emit("run.paused", { reason: updated.pausedReason });
+  if (updated.phase === "awaiting-approval") {
+    p.emit("approval.pending", {
+      specHash: specHash(dir, id),
+      changeDir:
+        run.draft === undefined ? `openspec/changes/${id}` : `${run.draft}/openspec/changes/${id}`,
+    });
+  }
   return { ok: issues.length === 0, issues };
 }

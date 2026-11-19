@@ -302,6 +302,7 @@ export class TerminalSink implements EventSink {
       case "phase.changed":
       case "question.raised":
       case "question.answered":
+      case "approval.pending":
       case "approval.requested":
       case "approval.granted":
       case "usage.delta":

@@ -27,6 +27,7 @@ test("the initial snapshot is empty", () => {
     tasks: {},
     questions: [],
     approval: null,
+    pendingApproval: null,
     usage: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
     gates: {},
   });
@@ -185,6 +186,48 @@ test("approval events record hash, commit and approver", () => {
   expect(granted.approval).toEqual({ specHash: "hash", specCommit: "commit", approver: "lars" });
 });
 
+test("reduce exposes the pending gate: approval.pending sets it and approval.granted clears it", () => {
+  const pending = reduce([
+    started(),
+    transition(2, "approval.pending", {
+      specHash: "hash",
+      changeDir: "openspec/changes/add-health",
+    }),
+  ]);
+  expect(pending.pendingApproval).toEqual({
+    specHash: "hash",
+    changeDir: "openspec/changes/add-health",
+  });
+  expect(pending.approval).toBeNull();
+  const granted = reduce([
+    started(),
+    transition(2, "approval.pending", {
+      specHash: "hash",
+      changeDir: "openspec/changes/add-health",
+    }),
+    transition(3, "approval.granted", {
+      approver: "lars",
+      specHash: "hash",
+      specCommit: "commit",
+    }),
+  ]);
+  expect(granted.pendingApproval).toBeNull();
+  expect(granted.approval).toEqual({ specHash: "hash", specCommit: "commit", approver: "lars" });
+});
+
+test("the event is additive: a stream without approval.pending leaves pendingApproval null", () => {
+  const snapshot = reduce([
+    started(),
+    transition(2, "phase.changed", { from: "design", to: "awaiting-approval" }),
+    transition(3, "approval.granted", {
+      approver: "lars",
+      specHash: "hash",
+      specCommit: "commit",
+    }),
+  ]);
+  expect(snapshot.pendingApproval).toBeNull();
+});
+
 test("gate.finished upserts the last gate result", () => {
   const snapshot = reduce([
     transition(1, "gate.finished", {
@@ -262,6 +305,42 @@ test("the reducer is pure", () => {
   const second = reduce(events);
   expect(second).toEqual(first);
   expect(events).toEqual(before);
+});
+
+test("reduce resumes from a prior snapshot without touching it", () => {
+  const task = { id: "2.1", repo: "loomwright" };
+  const first = reduce([
+    started(),
+    transition(2, "task.started", { task, attempt: 1 }),
+    transition(3, "usage.delta", {
+      step: "implement",
+      usage: { input: 1, output: 2, reasoning: 3, cacheRead: 4, cacheWrite: 5, cost: 6 },
+    }),
+  ]);
+  const before = structuredClone(first);
+  const rest = [
+    transition(4, "task.failed", { task, reason: "gate" }),
+    transition(5, "usage.delta", {
+      step: "implement",
+      usage: { input: 10, output: 20, reasoning: 30, cacheRead: 40, cacheWrite: 50, cost: 60 },
+    }),
+  ];
+  const resumed = reduce(rest, first);
+
+  expect(first).toEqual(before);
+  expect(resumed).toEqual(
+    reduce([
+      started(),
+      transition(2, "task.started", { task, attempt: 1 }),
+      transition(3, "usage.delta", {
+        step: "implement",
+        usage: { input: 1, output: 2, reasoning: 3, cacheRead: 4, cacheWrite: 5, cost: 6 },
+      }),
+      ...rest,
+    ]),
+  );
+  expect(resumed.lastSeq).toBe(5);
+  expect(resumed.runId).toBe("add-health");
 });
 
 test("an unknown event type is skipped by reduce", () => {

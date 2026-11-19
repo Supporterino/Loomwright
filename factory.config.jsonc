@@ -7,7 +7,21 @@
 
   // Repos are matched by path. "languages" selects the stacked standards per implementer.
   "repos": [
-    {"name":"loomwright","path":".","role":"code","languages":["typescript"],"defaultBranch":"main"}
+    {"name":"loomwright","path":".","role":"code","languages":[
+        "typescript",
+        "react"
+      ],
+      "defaultBranch": "main",
+      "subPaths": [
+        {
+          "path": "packages/tui",
+          "languages": [
+            "typescript",
+            "react"
+          ]
+        }
+      ]
+    }
   ],
 
   // opencode model ids ("provider/model") per role. contractReviewer defaults to reviewer.
@@ -49,7 +63,7 @@
   "parallel": { "maxAgents": 6, "maxGateProcesses": 3, "withinRepo": "worktrees" },
   // Per agent turn wall-clock limit in minutes; a timed-out turn is retried.
   "runtime": { "turnTimeoutMinutes": 120 },
-  "tokens": { "mode": "report", "contextPackMaxTokens": 8000, "gateOutputMaxLines": 80 },
+  "tokens": { "mode": "report", "contextPackMaxTokens": 32000, "gateOutputMaxLines": 160 },
   "addons": {
     "ponytail": {
       "enabled": true,
@@ -76,7 +90,7 @@
   "commits": { "style": "gitmoji", "scopes": false },
   // Agent-raised clarification during design, the reviewer loop and the no-spec quick task.
   // reviewRounds > 1 re-reviews every touched repo after a fix round until a pass is clean.
-  "workflow": { "refine": true, "clarifyRounds": 2, "reviewRounds": 6, "quick": { "enabled": true, "branchPrefix": "task/" } },
+  "workflow": { "refine": true, "clarifyRounds": 2, "reviewRounds": 10, "quick": { "enabled": true, "branchPrefix": "task/" } },
   // Detect release-please, goreleaser, changesets and forge CI (read-only).
   "release": { "detect": true },
 

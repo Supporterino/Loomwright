@@ -362,6 +362,7 @@ test("the published CLI identity is unchanged", () => {
   expect(pkg.publishConfig).toEqual({ access: "public" });
   expect(pkg.dependencies?.["@loomwright/core"]).toBeUndefined();
   expect(pkg.dependencies?.["@loomwright/protocol"]).toBeUndefined();
+  expect(pkg.dependencies?.["@loomwright/tui"]).toBeUndefined();
 });
 
 test("Changesets sees package changes", () => {

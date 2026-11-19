@@ -1,0 +1,40 @@
++----------------------------------------------------------------------------------------------------------------------+
+| Approval - add-health                                                                                                |
+| Add health endpoints                                                                                                 |
+| change dir: .factory/drafts/add-health                                                                               |
+| spec hash: 0123456789ab                                                                                              |
+| spec commit: - until approval.granted                                                                                |
+| approver: - until approval.granted                                                                                   |
+| identity: dev@example.com                                                                                            |
+| a approve and run - A approve only - q quit                                                                          |
++----------------------------------------------------------------------------------------------------------------------+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+a approve and run - A approve only - q quit

@@ -78,6 +78,7 @@ jobs:
             echo "unexpected source files in the tarball" >&2
             exit 1
           fi
+          grep -qx "package/dist/tui.js" "$RUNNER_TEMP/pack-files.txt"
           tar -tzf "$TARBALL" | sed -n '1,20p'
       - name: Install the tarball
         run: |
@@ -90,7 +91,13 @@ jobs:
           name: cli-dist
           path: |
             packages/cli/dist/cli.js
+            packages/cli/dist/tui.js
             packages/cli/dist/package.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tui-replay
+          path: test/fixtures/tui/approval-gate.jsonl
           if-no-files-found: error
 
   node-smoke:
@@ -109,6 +116,10 @@ jobs:
         with:
           name: cli-dist
           path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: tui-replay
+          path: dist
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
@@ -117,3 +128,4 @@ jobs:
           node --version
           node dist/cli.js --version
           node dist/cli.js --help > /dev/null
+          node dist/cli.js tui --replay dist/approval-gate.jsonl --once > /dev/null

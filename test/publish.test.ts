@@ -6,15 +6,17 @@ import {
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   readlinkSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { FACTORY_VERSION } from "@loomwright/core/version";
 import { bundlePlugin } from "../scripts/build-plugin.ts";
+import { buildTui } from "../scripts/build-tui.ts";
 import { preparePackage } from "../scripts/prepare-package.ts";
 import { syncVersion } from "../scripts/sync-version.ts";
 import { writeDistPackage } from "../scripts/write-dist-package.ts";
@@ -28,6 +30,7 @@ const BASELINE_TARBALL = [
   "package/README.md",
   "package/dist/cli.js",
   "package/dist/package.json",
+  "package/dist/tui.js",
   "package/package.json",
   "package/templates/addons/ponytail/LICENSE",
 ];
@@ -103,6 +106,7 @@ describe("published package", () => {
     copyFileSync(join(CLI, "CHANGELOG.md"), join(root, "packages/cli/CHANGELOG.md"));
     write(root, "packages/cli/dist/cli.js", "// bundle\n");
     write(root, "packages/cli/dist/package.json", '{ "type": "module" }\n');
+    write(root, "packages/cli/dist/tui.js", "// tui bundle\n");
     preparePackage(root);
 
     const pack = spawnSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
@@ -210,6 +214,10 @@ describe("published package", () => {
     expect(build.startsWith("bun scripts/build-plugin.ts")).toBe(true);
     expect(build).toContain("bun build packages/cli/src/bin.ts --target=node");
     expect(build).toContain("--outfile packages/cli/dist/cli.js");
+    expect(build).toContain("bun scripts/build-tui.ts");
+    expect(build.indexOf("bun scripts/build-tui.ts")).toBeLessThan(
+      build.indexOf("bun scripts/write-dist-package.ts"),
+    );
     expect(build).toContain("bun scripts/write-dist-package.ts");
     expect(build.endsWith("bun scripts/prepare-package.ts")).toBe(true);
     expect(root.scripts.prepack).toBeUndefined();
@@ -292,5 +300,86 @@ describe("published package", () => {
     expect(lstatSync(link).isSymbolicLink()).toBe(true);
     expect(readlinkSync(link)).toBe("packages/cli/CHANGELOG.md");
     expect(readFileSync(link, "utf8")).toBe(read(ROOT, "packages/cli/CHANGELOG.md"));
+  });
+
+  test("the second entry exists and is lazy", async () => {
+    const dir = tempRoot();
+    const build = await Bun.build({
+      entrypoints: [join(CLI, "src", "bin.ts")],
+      target: "node",
+      outdir: dir,
+      naming: "cli.js",
+    });
+    if (!build.success || build.outputs[0] === undefined) {
+      throw new Error(`CLI build failed:\n${build.logs.join("\n")}`);
+    }
+    write(dir, "package.json", '{ "type": "module" }\n');
+    write(dir, "tui.js", 'throw new Error("tui loaded");\n');
+
+    const run = spawnSync(process.execPath, [join(dir, "cli.js"), "--version"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+    expect(run.status).toBe(0);
+    expect(run.stdout.trim()).toBe(FACTORY_VERSION);
+
+    // The CLI bundle must not carry the Ink graph: those modules live only in tui.js.
+    const cliText = readFileSync(join(dir, "cli.js"), "utf8");
+    expect(cliText).not.toContain("react-reconciler");
+    expect(cliText).not.toContain("yoga-layout");
+  });
+
+  test("no command other than tui imports the TUI entry", () => {
+    const sourceRoot = join(CLI, "src");
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) files.push(full);
+      }
+    };
+    walk(sourceRoot);
+
+    const referencing = files
+      .filter((file) => readFileSync(file, "utf8").includes("@loomwright/tui/entry"))
+      .map((file) => relative(sourceRoot, file).split("\\").join("/"));
+    expect(referencing).toEqual(["commands/tui.ts"]);
+
+    // The entry is reached with a dynamic import only, so no other command pays its startup cost.
+    for (const file of files) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(
+        /from\s+["']@loomwright\/tui\/entry["']/,
+      );
+    }
+  });
+
+  test("the build's second entry runs without the source tree", async () => {
+    const dir = tempRoot();
+    const cli = await Bun.build({
+      entrypoints: [join(CLI, "src", "bin.ts")],
+      target: "node",
+      outdir: dir,
+      naming: "cli.js",
+    });
+    if (!cli.success) throw new Error(`CLI build failed:\n${cli.logs.join("\n")}`);
+    await buildTui(ROOT, dir);
+    write(dir, "package.json", '{ "type": "module" }\n');
+
+    expect(existsSync(join(dir, "cli.js"))).toBe(true);
+    expect(existsSync(join(dir, "tui.js"))).toBe(true);
+
+    const replay = join(ROOT, "test", "fixtures", "tui", "approval-gate.jsonl");
+    const run = spawnSync(
+      process.execPath,
+      [join(dir, "cli.js"), "tui", "--replay", replay, "--once"],
+      { cwd: dir, encoding: "utf8", timeout: 60_000 },
+    );
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain("add-health");
+    expect(run.stdout).toContain("Approval");
+    expect(run.stdout).toContain("replay: read-only");
+    expect(run.stdout).not.toContain("\u001b[");
   });
 });
