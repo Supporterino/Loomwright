@@ -2,7 +2,7 @@
 schema: spec-driven
 context: |
   Workspace layout: single. Code repos (task `repo` values):
-  - loomwright (.): typescript
+  - loomwright (.): typescript, react
 
   Contracts: none configured.
 
@@ -15,6 +15,14 @@ context: |
   - Throw only `Error` subclasses with `cause`; catch as `unknown`; never leave a promise floating or unawaited in `try`.
   - Validate untrusted input at the boundary with the repo's schema library; never build shell or SQL from strings; never log secrets.
   - Tests go only in test files; every spec scenario has a test whose name mentions that scenario.
+  React:
+  - Keep rendering pure: same props, state and context give the same JSX; side effects go in event handlers, effects only as last resort.
+  - Never mutate props, state, hook arguments or values already used in JSX; build new objects and update through the state setter.
+  - Call hooks only at the top level of components and custom hooks; keep `react-hooks` lint clean and never suppress `exhaustive-deps`.
+  - Derive values during render; use effects only to sync with external systems, with cleanup and every reactive dependency listed.
+  - Keep state minimal with one owner: no redundant, duplicated or contradictory state; lift to the closest common parent; reset with `key`.
+  - Keep the repo's structure, state library, styling and data layer; no untrusted `dangerouslySetInnerHTML`; no secrets in client code.
+  - Test visible behaviour with Testing Library: `getByRole` first, `user-event` interactions, at least one test named after each spec scenario.
 rules:
   proposal:
     - Name the affected repos and contracts under Impact.

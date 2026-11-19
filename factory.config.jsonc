@@ -7,7 +7,21 @@
 
   // Repos are matched by path. "languages" selects the stacked standards per implementer.
   "repos": [
-    {"name":"loomwright","path":".","role":"code","languages":["typescript"],"defaultBranch":"main"}
+    {"name":"loomwright","path":".","role":"code","languages":[
+        "typescript",
+        "react"
+      ],
+      "defaultBranch": "main",
+      "subPaths": [
+        {
+          "path": "packages/tui",
+          "languages": [
+            "typescript",
+            "react"
+          ]
+        }
+      ]
+    }
   ],
 
   // opencode model ids ("provider/model") per role. contractReviewer defaults to reviewer.

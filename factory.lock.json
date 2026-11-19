@@ -121,8 +121,8 @@
       "template": "agents/implementer",
       "templateVersion": "1.1.0",
       "mode": "file",
-      "sha256": "ba7b29c2c95ddf677080d5d4742d5c8eb8d97a0d1dd95936676a8f127591493f",
-      "blob": "881a622ad87b7d2ff98197b124907ace2ad81914"
+      "sha256": "a34e1b36047b158d2cad5748f8b0809c615b407123b5a790efe73b13b119b112",
+      "blob": "34200c60cc3604ceb0636865444b41c171f6e1b1"
     },
     ".opencode/agents/orchestrator.md": {
       "template": "agents/orchestrator",
@@ -317,15 +317,15 @@
       "template": "agents-md",
       "templateVersion": "1.1.0",
       "mode": "block",
-      "sha256": "6e81c677fb68c6d49e861ae0e98ea633e1a6e3b8f45158e1940f95ca20ddf388",
-      "blob": "ef495f3e30c762f8e5aa219edc6057e22ef495b9"
+      "sha256": "cfcb6dbfa2da0bee6d9f1caa4e8ad90b840f0288aca1aa7638d6b4a82fc5a21d",
+      "blob": "604fea98911fe2ce36f2e212f2e64f4f99be5dfb"
     },
     "openspec/config.yaml": {
       "template": "openspec-config",
       "templateVersion": "1.1.0",
       "mode": "file",
-      "sha256": "64ec23f0ce6472f84a6223c368c7bc7343b49db9188714d90f590cdb3b2bf050",
-      "blob": "9672027e771e52db0c582453091a0ff625c1b8ae"
+      "sha256": "9168557c30a530abec7a0070436bd82e3b09a957d08273e66cbc95fd99331d53",
+      "blob": "9526725a1a0ee7a3f89a639d6bc9d5dd8fec0c05"
     }
   }
 }
