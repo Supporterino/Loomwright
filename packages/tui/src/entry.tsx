@@ -645,7 +645,7 @@ function Interactive({
         setData((current) =>
           current.approval === null
             ? current
-            : { ...current, approval: approvalStarted(current.approval) },
+            : { ...current, approval: approvalStarted(current.approval, result.displayPath) },
         );
         void result.exited.then(({ code }) => {
           if (code === null || code === 0) return;

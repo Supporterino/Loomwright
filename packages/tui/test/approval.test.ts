@@ -40,6 +40,7 @@ const ISO = "2026-11-18T10:00:00.000Z";
 const RUN = "add-health";
 const SPEC_HASH = "0123456789abcdef0123456789abcdef";
 const SPEC_COMMIT = "abcdef1234567890abcdef1234567890abcdef12";
+const LOG = ".factory/logs/tui-spawn-test.log";
 
 let seq = 0;
 
@@ -329,7 +330,7 @@ describe("the approval overlay follows run state, not a stale snapshot", () => {
 
   test("a waiting launch stays open when the run leaves the gate without a grant", () => {
     const queued = runState({ phase: "queued" });
-    const waiting = approvalStarted({ kind: "launching", action: "approve" });
+    const waiting = approvalStarted({ kind: "launching", action: "approve" }, LOG);
     const polled = syncApproval(uiData(queued, { approval: waiting }));
     expect(polled.approval).toBe(waiting);
   });
@@ -391,13 +392,14 @@ describe("approve only changes what the overlay says", () => {
 
     const confirmed = approvalKeys(confirming.state, "", key({ return: true }));
     expect(confirmed.launch).toBe("approve-only");
-    const waiting = approvalStarted(confirmed.state);
+    const waiting = approvalStarted(confirmed.state, LOG);
     expect(waiting).toEqual({
       kind: "waiting",
       action: "approve-only",
       waitingFor: ["queued"],
       sawGranted: false,
       grantedNeeded: true,
+      logPath: LOG,
     });
 
     const text = panelText(detail(run, pendingEvents()), waiting);
@@ -408,7 +410,7 @@ describe("approve only changes what the overlay says", () => {
   });
 
   test("the waiting overlay is read-only: the other action keys and Enter are ignored", () => {
-    const waiting = approvalStarted({ kind: "launching", action: "approve-only" });
+    const waiting = approvalStarted({ kind: "launching", action: "approve-only" }, LOG);
     for (const [input, overrides] of [
       ["a", {}],
       ["A", {}],
@@ -422,11 +424,11 @@ describe("approve only changes what the overlay says", () => {
   });
 
   test("approve only changes what the overlay says: r launches resume through the launcher", () => {
-    const waiting = approvalStarted({ kind: "launching", action: "approve-only" });
+    const waiting = approvalStarted({ kind: "launching", action: "approve-only" }, LOG);
     expect(approvalKeys(waiting, "r", key())).toEqual({ state: waiting, resume: true });
 
     // Only the approve-only wait resumes: the approve wait added nothing to resume.
-    const approving = approvalStarted({ kind: "launching", action: "approve" });
+    const approving = approvalStarted({ kind: "launching", action: "approve" }, LOG);
     expect(approvalKeys(approving, "r", key())).toEqual({ state: approving });
 
     // During the spawn the approval is still being recorded; `r` would race it.
@@ -472,7 +474,7 @@ describe("q quits from the gate", () => {
       { kind: "idle" },
       { kind: "confirming", action: "approve" },
       { kind: "launching", action: "approve" },
-      approvalStarted({ kind: "launching", action: "approve-only" }),
+      approvalStarted({ kind: "launching", action: "approve-only" }, LOG),
       { kind: "failed", action: "approve", code: 1, tail: [] },
       { kind: "done" },
     ];
@@ -551,7 +553,7 @@ describe("the overlay closes on the outcome", () => {
       reapprove: ["awaiting-approval", "queued"],
     } as const;
     for (const action of ["approve", "approve-only", "reword", "reapprove"] as const) {
-      const waiting = approvalStarted({ kind: "launching", action });
+      const waiting = approvalStarted({ kind: "launching", action }, LOG);
       expect(waiting.kind).toBe("waiting");
       if (waiting.kind !== "waiting") return;
       expect(waiting.waitingFor).toEqual(expected[action]);
@@ -559,7 +561,7 @@ describe("the overlay closes on the outcome", () => {
   });
 
   test("approval.granted then the next phase closes approve and run", () => {
-    const waiting = approvalStarted({ kind: "launching", action: "approve" });
+    const waiting = approvalStarted({ kind: "launching", action: "approve" }, LOG);
     const granted = approvalProgress(waiting, { phase: "awaiting-approval", granted: true });
     expect(granted.kind).toBe("waiting");
     const closed = approvalProgress(granted, { phase: "queued", granted: true });
@@ -567,18 +569,18 @@ describe("the overlay closes on the outcome", () => {
   });
 
   test("a phase without a grant keeps approve and run open", () => {
-    const waiting = approvalStarted({ kind: "launching", action: "approve" });
+    const waiting = approvalStarted({ kind: "launching", action: "approve" }, LOG);
     expect(approvalProgress(waiting, { phase: "queued", granted: false })).toEqual(waiting);
   });
 
   test("reword closes on the next phase without a grant", () => {
-    const waiting = approvalStarted({ kind: "launching", action: "reword" });
+    const waiting = approvalStarted({ kind: "launching", action: "reword" }, LOG);
     expect(approvalProgress(waiting, { phase: "design", granted: false })).toEqual({
       kind: "done",
     });
   });
   test("approve only closes once the grant and queued phase are both known", () => {
-    const waiting = approvalStarted({ kind: "launching", action: "approve-only" });
+    const waiting = approvalStarted({ kind: "launching", action: "approve-only" }, LOG);
     const granted = approvalProgress(waiting, { phase: "awaiting-approval", granted: true });
     expect(approvalProgress(granted, { phase: "queued", granted: true })).toEqual({ kind: "done" });
   });
@@ -587,13 +589,14 @@ describe("the overlay closes on the outcome", () => {
 describe("a non-zero child exit restores the actionable overlay", () => {
   test("failed shows the exit code and ten log lines and the keys work again", () => {
     const tail = Array.from({ length: 12 }, (_, index) => `line ${index + 1}`);
-    const waiting = approvalStarted({ kind: "launching", action: "approve" });
+    const waiting = approvalStarted({ kind: "launching", action: "approve" }, LOG);
     const failed = approvalExited(waiting, 3, tail);
     expect(failed).toEqual({
       kind: "failed",
       action: "approve",
       code: 3,
       tail: tail.slice(-10),
+      logPath: LOG,
     });
 
     const text = panelText(detail(runState(), pendingEvents()), failed);
@@ -602,6 +605,34 @@ describe("a non-zero child exit restores the actionable overlay", () => {
 
     const pressed = approvalKeys(failed, "a", key());
     expect(pressed.state).toEqual({ kind: "confirming", action: "approve" });
+  });
+
+  test("the child is detached and logged: the waiting overlay shows the spawn log before any failure", () => {
+    const waiting = approvalStarted({ kind: "launching", action: "approve" }, LOG);
+    const text = panelText(detail(runState(), pendingEvents()), waiting);
+    expect(text).toContain(`spawn log: ${LOG}`);
+    expect(text).toContain("waiting for queued, implementing - read-only");
+  });
+
+  test("a failed child keeps the spawn log path above its tail", () => {
+    const failed = approvalExited(
+      approvalStarted({ kind: "launching", action: "reword" }, LOG),
+      2,
+      ["boom"],
+    );
+    const text = panelText(detail(runState(), pendingEvents()), failed);
+    expect(text.indexOf(`spawn log: ${LOG}`)).toBeLessThan(text.indexOf("log tail:"));
+    expect(text).toContain("boom");
+  });
+
+  test("a launch that threw before a child existed shows no spawn log line", () => {
+    const text = panelText(detail(runState(), pendingEvents()), {
+      kind: "failed",
+      action: "approve",
+      code: 1,
+      tail: ["spawn failed"],
+    });
+    expect(text).not.toContain("spawn log:");
   });
 
   test("failed lists the action hints for the available actions", () => {

@@ -45,12 +45,16 @@ export type ApprovalState =
       readonly waitingFor: readonly Phase[];
       readonly sawGranted: boolean;
       readonly grantedNeeded: boolean;
+      /** The child's stdout/stderr log, shown so the user can find it without a failure. */
+      readonly logPath: string;
     }
   | {
       readonly kind: "failed";
       readonly action: ApprovalActionKind;
       readonly code: number;
       readonly tail: readonly string[];
+      /** Absent when the launch threw before a child (and its log) existed. */
+      readonly logPath?: string;
     }
   | { readonly kind: "done" };
 
@@ -116,7 +120,7 @@ export function approvalProgress(state: ApprovalState, progress: ApprovalProgres
   return sawGranted === state.sawGranted ? state : { ...state, sawGranted };
 }
 
-export function approvalStarted(state: ApprovalState): ApprovalState {
+export function approvalStarted(state: ApprovalState, logPath: string): ApprovalState {
   if (state.kind !== "launching") return state;
   return {
     kind: "waiting",
@@ -124,6 +128,7 @@ export function approvalStarted(state: ApprovalState): ApprovalState {
     waitingFor: WAITING_FOR[state.action],
     sawGranted: false,
     grantedNeeded: GRANTED_NEEDED[state.action],
+    logPath,
   };
 }
 
@@ -133,7 +138,13 @@ export function approvalExited(
   tail: readonly string[],
 ): ApprovalState {
   if (state.kind !== "waiting" && state.kind !== "launching") return state;
-  return { kind: "failed", action: state.action, code, tail: tail.slice(-10) };
+  return {
+    kind: "failed",
+    action: state.action,
+    code,
+    tail: tail.slice(-10),
+    ...(state.kind === "waiting" ? { logPath: state.logPath } : {}),
+  };
 }
 
 /** The coral token belongs to (and is only used by) the approval gate. */
@@ -252,7 +263,7 @@ function waitingLines(input: ApprovalInput, glyphs: GlyphSet): string[] {
   const { state, run } = input;
   if (state.kind !== "waiting") return [];
   const phases = state.waitingFor.map((phase) => LABELS[phase]).join(", ");
-  const lines = [`waiting for ${phases} ${dash(glyphs)} read-only`];
+  const lines = [`waiting for ${phases} ${dash(glyphs)} read-only`, `spawn log: ${state.logPath}`];
   if (state.action === "approve-only") {
     lines.push("nothing is implemented");
     lines.push(`press r to resume, or run \`loomwright approve ${run.id}\``);
@@ -274,6 +285,7 @@ function stateLines(input: ApprovalInput, glyphs: GlyphSet): string[] {
     case "failed":
       return [
         `exited with code ${state.code}; the overlay is actionable again`,
+        ...(state.logPath === undefined ? [] : [`spawn log: ${state.logPath}`]),
         "log tail:",
         ...state.tail.map((line) => `  ${line}`),
       ];
