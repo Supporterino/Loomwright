@@ -89,12 +89,16 @@ function usageSummary(tokens: number, cost: number): UsageSummary {
 
 function statusDoc(
   entries: readonly StatusRun[],
-  extras: { readonly active?: ActiveLock | null; readonly queue?: readonly string[] } = {},
+  extras: {
+    readonly active?: ActiveLock | null;
+    readonly queue?: readonly string[];
+    readonly driverAlive?: boolean;
+  } = {},
 ): StatusDocument {
   const active = extras.active ?? null;
   return {
     active,
-    driverAlive: active !== null,
+    driverAlive: extras.driverAlive ?? active !== null,
     queue: [...(extras.queue ?? [])],
     corrupt: [],
     runs: entries.map(({ run, tokens, cost }) => ({
@@ -219,6 +223,21 @@ describe("buildViewModel", () => {
     expect(roleLabel(view.list[2]?.role ?? { kind: "idle" })).toBe("idle");
     expect(view.list.filter((item) => item.selected).map((item) => item.id)).toEqual(["oldest"]);
     expect(view.footer.map((hint) => hint.key)).toEqual(["n", "?", "q", "Enter"]);
+  });
+
+  test("the list is ordered and labelled: a stale lock reads idle until a driver is alive", () => {
+    const stale = runState({ id: "stale" });
+    const lock: ActiveLock = { changeId: "stale", pid: 4242, host: "host", since: ISO };
+    const status = statusDoc([{ run: stale, tokens: 0, cost: 0 }], {
+      active: lock,
+      driverAlive: false,
+    });
+    const view = buildViewModel(
+      vmInput({ screen: "list", status, runs: [stale], selectedRunId: "stale" }),
+    );
+    expect(view.list[0]?.role).toEqual({ kind: "idle" });
+    expect(roleLabel(view.list[0]?.role ?? { kind: "idle" })).toBe("idle");
+    expect(view.run?.lock).toEqual({ kind: "idle" });
   });
 
   test("a replay source is read-only and says so", () => {

@@ -163,7 +163,9 @@ function elapsedSince(createdAt: string, now: number): number {
 }
 
 function roleOf(id: string, status: StatusDocument): RunRole {
-  if (status.active?.changeId === id) return { kind: "active", pid: status.active.pid ?? 0 };
+  // A lock left by a crashed driver is stale: only status()'s liveness makes it active.
+  if (status.driverAlive && status.active?.changeId === id)
+    return { kind: "active", pid: status.active.pid ?? 0 };
   const index = status.queue.indexOf(id);
   if (index !== -1) return { kind: "queued", position: index + 1 };
   return { kind: "idle" };
