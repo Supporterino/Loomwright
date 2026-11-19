@@ -596,13 +596,18 @@ function Interactive({
     [appendTail, factory, stopTail],
   );
 
+  /** Set before `open`, so two Enter events in one frame cannot both start a run. */
+  const submitting = useRef(false);
+
   const submitAction = useCallback(
     (action: LaunchAction): void => {
-      if (isReadOnly(viewRef.current)) return;
+      if (isReadOnly(viewRef.current) || submitting.current) return;
+      submitting.current = true;
       void (async () => {
         try {
           await open(workspace);
         } catch (err: unknown) {
+          submitting.current = false;
           const message = err instanceof Error ? err.message : String(err);
           setData((current) =>
             current.intake === null
@@ -623,6 +628,7 @@ function Interactive({
         try {
           result = await launcher.launch(action);
         } catch (err: unknown) {
+          submitting.current = false;
           const message = err instanceof Error ? err.message : String(err);
           setData((current) =>
             current.intake === null
@@ -660,6 +666,7 @@ function Interactive({
         void result.exited.then(({ code }) => {
           if (code === null || code === 0) return;
           spawnBaseline.current = null;
+          submitting.current = false;
           setData((current) =>
             current.intake === null
               ? current
@@ -965,6 +972,7 @@ function Interactive({
       return;
     }
     if (!key.ctrl && input === "n") {
+      submitting.current = false;
       setData((current) => ({ ...current, intake: initialIntake }));
       return;
     }

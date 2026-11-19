@@ -217,6 +217,11 @@ async function waitFor(predicate: () => boolean, what: string, timeoutMs = 15_00
   }
 }
 
+/** Frames accumulate in the fake output, so a marker's count says how often it was rendered. */
+function occurrences(text: string, marker: string): number {
+  return text.split(marker).length - 1;
+}
+
 describe("text intake", () => {
   test("typed text submits one run-text action and the panel shows the spawn log", () => {
     const ws = workspace();
@@ -451,6 +456,98 @@ describe("no double submit", () => {
     expect(second.submit).toBeUndefined();
     expect(second.state.submitting).toBe(true);
   });
+
+  test("two Enter events in one frame start one run, and a fresh dialog starts another", async () => {
+    const input = new FakeInput();
+    const output = new FakeOutput();
+    const realStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+    const realStdout = Object.getOwnPropertyDescriptor(process, "stdout");
+    const launches: LaunchAction[] = [];
+    let opens = 0;
+    let settled = false;
+    try {
+      Object.defineProperty(process, "stdin", { value: input, configurable: true });
+      Object.defineProperty(process, "stdout", { value: output, configurable: true });
+      const code = runTui({
+        workspace: "/workspace",
+        once: false,
+        ascii: true,
+        columns: 80,
+        rows: 24,
+        out: () => {},
+        env: {},
+        isTTY: false,
+        frames: true,
+        factory: readOnlyFactory(),
+        open: async () => {
+          opens += 1;
+          return readOnlyFactory();
+        },
+        launcher: {
+          launch: async (action) => {
+            launches.push(action);
+            return {
+              pid: undefined,
+              logPath: "/workspace/.factory/logs/tui-spawn-test.log",
+              displayPath: ".factory/logs/tui-spawn-test.log",
+              exited: Promise.resolve({ code: 0, signal: null }),
+            };
+          },
+        },
+        session: fakeSession(),
+      }).then((value) => {
+        settled = true;
+        return value;
+      });
+      // A failed drive must not also surface as an unhandled rejection from the TUI.
+      void code.catch(() => {});
+
+      await waitFor(() => input.isRaw, "raw mode");
+      await waitFor(() => output.text().includes("n new change"), "the run list");
+      input.press("n");
+      await waitFor(() => output.text().includes("New change"), "the intake dialog");
+      input.press("add a health endpoint");
+      await waitFor(
+        () => output.text().includes("request: add a health endpoint"),
+        "the typed request",
+      );
+
+      // Both key events run before React commits `submitting: true`, so the dialog state alone
+      // cannot stop the second launch.
+      input.press("\r");
+      input.press("\r");
+      await waitFor(() => launches.length >= 1, "the launch");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(launches).toHaveLength(1);
+      expect(opens).toBe(1);
+
+      // Closing the dialog releases the guard, so the next request starts its own run.
+      const closed = occurrences(output.text(), "n new change");
+      input.press("\u001b");
+      await waitFor(() => occurrences(output.text(), "n new change") > closed, "the closed dialog");
+      input.press("n");
+      const dialogs = occurrences(output.text(), "New change");
+      await waitFor(
+        () => occurrences(output.text(), "New change") > dialogs,
+        "the second intake dialog",
+      );
+      input.press("add a second endpoint");
+      await waitFor(
+        () => output.text().includes("request: add a second endpoint"),
+        "the second request",
+      );
+      input.press("\r");
+      await waitFor(() => launches.length === 2, "the second launch");
+      expect(opens).toBe(2);
+
+      input.press("\u0003");
+      await waitFor(() => settled, "the quit");
+      expect(await code).toBe(0);
+    } finally {
+      if (realStdin !== undefined) Object.defineProperty(process, "stdin", realStdin);
+      if (realStdout !== undefined) Object.defineProperty(process, "stdout", realStdout);
+    }
+  }, 30_000);
 });
 
 describe("an active change is called out", () => {
