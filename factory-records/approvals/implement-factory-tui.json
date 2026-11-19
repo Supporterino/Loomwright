@@ -1,0 +1,33 @@
+{
+  "changeId": "implement-factory-tui",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "35e969b376805493bb6e2434f5181bda2aafa2c5",
+  "hash": "97e26f41e74d79d925df6376589e4a49726e941fe36178241cd47b1dfce55afe",
+  "approvedAt": "2026-11-19T09:41:55.230Z",
+  "history": [
+    {
+      "hash": "daa7e3ca55c5c4e41e16ffb2ba30acb5106dffb0ec64c760503e6125c2c5cc2c",
+      "specCommit": "1201d8f10211be43fec0bc1ecfd67a6e43f86cf9",
+      "at": "2026-11-18T11:21:45.985Z",
+      "reason": "reword: review findings applied"
+    },
+    {
+      "hash": "94dbb32809b18bcf58045e953f0154625e6d177753644bf7b5ce913926a5c395",
+      "specCommit": "6ac66fc7de4e4069976a1682863edc18eef1fe79",
+      "at": "2026-11-18T14:50:08.004Z",
+      "reason": "reword: review findings applied"
+    },
+    {
+      "hash": "afe588ddc4aa0353508803d3023269e9648d05fc715bc785549213fc7bf31555",
+      "specCommit": "9d3a605ef14aa8a449323c75d9630737729f8c14",
+      "at": "2026-11-18T19:14:57.315Z",
+      "reason": "reword: review findings applied"
+    },
+    {
+      "hash": "e4faa3d9c6001594666b474bf02b5eef97802e0f51543c7d0fbc2369a891bf17",
+      "specCommit": "24e21d751526cce7c65adf3d4799e9ee4f1353b2",
+      "at": "2026-11-19T08:23:37.150Z",
+      "reason": "reword: review findings applied"
+    }
+  ]
+}
