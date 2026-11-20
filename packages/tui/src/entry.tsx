@@ -46,6 +46,7 @@ import {
   questionsKeys,
   questionsPanel,
   recordAnswerInState,
+  withRecordedAnswer,
 } from "./controls/questions.tsx";
 import { openReword, type RewordState, rewordKeys, rewordPanel } from "./controls/reword.ts";
 import { helpKeys, helpPanel } from "./help.ts";
@@ -1223,6 +1224,8 @@ function Interactive({
   }, [factory, openRun, stopTail]);
 
   const answering = useRef(false);
+  /** Answers already sent, per run, so a re-opened pane still reports them as recorded. */
+  const recordedAnswers = useRef(new Map<string, ReadonlySet<string>>());
 
   /** Records the answer, then waits only for the short command write, never for the run. */
   const submitAnswer = useCallback(
@@ -1232,6 +1235,10 @@ function Interactive({
       void (async () => {
         try {
           await recordAnswer(factory, id, answer, question);
+          recordedAnswers.current.set(
+            id,
+            withRecordedAnswer(recordedAnswers.current.get(id) ?? new Set(), step, question),
+          );
           const run = viewRef.current.run;
           setData((current) => {
             if (current.questions === null || run === null) return current;
@@ -1540,7 +1547,10 @@ function Interactive({
         return;
       case "open-questions": {
         const run = current.run;
-        const questions = run === null ? null : openQuestions(run);
+        const questions =
+          run === null
+            ? null
+            : openQuestions(run, recordedAnswers.current.get(run.id) ?? new Set());
         if (questions !== null) {
           setData((state) => ({ ...state, questions, confirmation: null }));
         }

@@ -473,6 +473,44 @@ describe("answer then advance keeps the pane open", () => {
   });
 });
 
+describe("a re-opened questions pane keeps what it already recorded", () => {
+  test("answer a record, close the pane and press Q: the row stays recorded and Enter emits no second answer", () => {
+    const run = askRun([
+      { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
+      { step: "design", question: "Do health checks need auth?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "public /health");
+    const emitted = questionsKeys(run, typed, "Enter", key({ return: true }));
+    if (emitted.answer === undefined) throw new Error("the answer did not emit");
+    const recorded = recordAnswerInState(
+      run,
+      emitted.state,
+      "design",
+      "Which endpoints should be public?",
+    );
+
+    // Esc closes the pane; Q re-opens it over the same run.
+    const closed = questionsKeys(run, recorded, "", key({ escape: true }));
+    expect(closed.close).toBe(true);
+    const reopened = openQuestions(run, recorded.recorded);
+    if (reopened === null) throw new Error("the pane did not reopen");
+
+    const panel = questionsPanel({ run, state: reopened, glyphs: UNICODE_GLYPHS });
+    const answeredBlock = panel.lines.slice(1, 4).join("\n");
+    expect(answeredBlock).toContain(answerRecorded);
+    expect(answeredBlock).not.toContain("unanswered");
+    expect(panel.keys.map((hint) => hint.key)).toEqual(["j/k", "Esc"]);
+
+    const enter = questionsKeys(run, reopened, "Enter", key({ return: true }));
+    expect(enter.state).toEqual(reopened);
+    expect(enter.answer).toBeUndefined();
+    expect(enter.state.focus).toBe("record");
+  });
+});
+
 describe("Ctrl-J inserts a newline", () => {
   test("first, Ctrl-J, second emits one answer with a newline and the composer shows two lines", () => {
     const run = askRun([

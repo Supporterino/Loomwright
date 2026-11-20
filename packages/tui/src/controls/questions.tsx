@@ -71,11 +71,28 @@ function recordAt(run: RunDetail, index: number): QuestionRow | undefined {
   return run.questions[index];
 }
 
-/** `Q` opens the pane only when the run asked something; the first unanswered record is selected. */
-export function openQuestions(run: RunDetail): QuestionsState | null {
+/**
+ * `Q` opens the pane only when the run asked something; the first unanswered record is selected.
+ * `recorded` carries the answers already sent in earlier openings so their rows stay recorded.
+ */
+export function openQuestions(
+  run: RunDetail,
+  recorded: ReadonlySet<string> = initialQuestions.recorded,
+): QuestionsState | null {
   if (run.questions.length === 0) return null;
   const index = run.questions.findIndex((record) => record.status === "unanswered");
-  return { ...initialQuestions, selected: index === -1 ? 0 : index };
+  return { ...initialQuestions, selected: index === -1 ? 0 : index, recorded };
+}
+
+/** The recorded set plus one record; the caller keeps it for the next pane opening. */
+export function withRecordedAnswer(
+  recorded: ReadonlySet<string>,
+  step: string,
+  question: string,
+): ReadonlySet<string> {
+  const next = new Set(recorded);
+  next.add(recordKey(step, question));
+  return next;
 }
 
 /** The offset that keeps `selected` inside the pane's record window. */
@@ -161,6 +178,8 @@ export function questionsKeys(
     }
     if (key.return) {
       if (record === undefined || record.status !== "unanswered") return { state };
+      // Already sent to `Factory.answer`; a re-opened pane must not compose a second answer.
+      if (state.recorded.has(recordKey(record.step, record.question))) return { state };
       const offset =
         rows === undefined
           ? state.offset
@@ -199,8 +218,7 @@ export function recordAnswerInState(
   question: string,
   rows?: number,
 ): QuestionsState {
-  const recorded = new Set(state.recorded);
-  recorded.add(recordKey(step, question));
+  const recorded = withRecordedAnswer(state.recorded, step, question);
   const next = run.questions.findIndex(
     (record, index) => index > state.selected && record.status === "unanswered",
   );
@@ -290,7 +308,13 @@ function footerKeys(run: RunDetail, state: QuestionsState): PanelView["keys"] {
     ];
   }
   const keys: PanelView["keys"][number][] = [keyHint("j/k", "navigate")];
-  if (run.questions[state.selected]?.status === "unanswered") keys.push(keyHint("Enter", "answer"));
+  const record = run.questions[state.selected];
+  if (
+    record?.status === "unanswered" &&
+    !state.recorded.has(recordKey(record.step, record.question))
+  ) {
+    keys.push(keyHint("Enter", "answer"));
+  }
   keys.push(keyHint("Esc", "close"));
   return keys;
 }
