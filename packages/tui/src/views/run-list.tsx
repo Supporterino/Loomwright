@@ -6,7 +6,7 @@ import { sliceWindow, windowTitle } from "../model/viewport.ts";
 import { findingsCount, LABELS } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
-import { colorProps, joinFields, phaseGlyph, phaseToken } from "./style.ts";
+import { clip, colorProps, phaseGlyph, phaseToken } from "./style.ts";
 
 export interface RunListProps {
   readonly viewModel: ViewModel;
@@ -14,25 +14,29 @@ export interface RunListProps {
   readonly depth: ColorDepth;
 }
 
-/** id, summary and the findings marker; two spaces keep the summary off the bullet list. */
-function headOf(item: RunListItem, glyphs: GlyphSet): string {
-  const head = [item.id, item.summary];
-  if (item.findings > 0) head.push(`${glyphs.blocked} ${findingsCount(item.findings)}`);
-  return head.join("  ");
+/** id and summary; two spaces keep the summary off the bullet list. */
+function headOf(item: RunListItem): string {
+  return `${item.id}  ${item.summary}`;
+}
+
+/** The findings marker: the gate glyph and label, never the coral approval hue. */
+function markerOf(item: RunListItem, glyphs: GlyphSet): string {
+  return item.findings > 0 ? `  ${glyphs.blocked} ${findingsCount(item.findings)}` : "";
+}
+
+function metaOf(item: RunListItem): readonly string[] {
+  return [
+    LABELS[item.phase],
+    roleLabel(item.role),
+    `${formatTokensShort(item.tokens)} tokens`,
+    `$${item.cost.toFixed(2)}`,
+    formatElapsed(item.elapsedMs),
+  ];
 }
 
 /** The pane's cells: a two-pane list takes the left half of the frame. */
 function paneWidth(viewModel: ViewModel): number {
   return viewModel.twoPane ? Math.floor(viewModel.columns / 2) : viewModel.columns;
-}
-
-/** Cuts to `room` cells with the frame's ellipsis; Ink's own is always `…`, even in ASCII. */
-function clip(text: string, room: number, glyphs: GlyphSet): string {
-  if (room <= 0) return "";
-  if (text.length <= room) return text;
-  const mark = glyphs.bullet === "-" ? "..." : "…";
-  if (room <= mark.length) return mark.slice(0, room);
-  return `${text.slice(0, room - mark.length)}${mark}`;
 }
 
 export function RunList({ viewModel, glyphs, depth }: RunListProps): ReactElement {
@@ -48,29 +52,43 @@ export function RunList({ viewModel, glyphs, depth }: RunListProps): ReactElemen
         )}
       </Text>
       {sliceWindow(viewModel.list, viewModel.listWindow).map((item) => {
-        const head = clip(headOf(item, glyphs), cells, glyphs);
-        const meta = clip(
-          joinFields(glyphs, [
-            LABELS[item.phase],
-            roleLabel(item.role),
-            `${formatTokensShort(item.tokens)} tokens`,
-            `$${item.cost.toFixed(2)}`,
-            formatElapsed(item.elapsedMs),
-          ]),
-          cells - head.length,
-          glyphs,
-        );
+        const headFull = `${headOf(item)}${markerOf(item, glyphs)}`;
+        const head = clip(headFull, cells, glyphs);
+        const meta = metaOf(item);
+        const metaFull = meta.join(` ${glyphs.bullet} `);
+        const clippedMeta = clip(metaFull, cells - head.length, glyphs);
+        const selected = item.selected;
         return (
-          <Text key={item.id} wrap="truncate">
-            <Text {...(item.selected ? colorProps("focus", depth) : {})}>
-              {item.selected ? glyphs.focus : " "}
+          <Text key={item.id} wrap="truncate" {...(selected ? { bold: true } : {})}>
+            <Text {...(selected ? colorProps("focus", depth) : {})}>
+              {selected ? glyphs.focus : " "}
             </Text>{" "}
             <Text {...colorProps(phaseToken(item.phase), depth)}>
               {phaseGlyph(item.phase, glyphs)}
             </Text>{" "}
-            {head}
+            {head === headFull ? (
+              <>
+                {headOf(item)}
+                <Text bold>{markerOf(item, glyphs)}</Text>
+              </>
+            ) : (
+              head
+            )}
             {"  "}
-            {glyphs.bullet} {meta}
+            {glyphs.bullet}{" "}
+            {clippedMeta === metaFull ? (
+              <>
+                <Text>{meta[0] ?? ""}</Text>
+                {` ${glyphs.bullet} `}
+                <Text>{meta[1] ?? ""}</Text>
+                {` ${glyphs.bullet} `}
+                <Text {...colorProps("muted", depth)}>
+                  {`${meta[2] ?? ""} ${glyphs.bullet} ${meta[3] ?? ""} ${glyphs.bullet} ${meta[4] ?? ""}`}
+                </Text>
+              </>
+            ) : (
+              <Text {...colorProps("muted", depth)}>{clippedMeta}</Text>
+            )}
           </Text>
         );
       })}

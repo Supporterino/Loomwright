@@ -28,7 +28,7 @@ export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
     <Box flexDirection="column" width={viewModel.columns} height={viewModel.rows}>
       <Box flexDirection="column" flexGrow={1}>
         {viewModel.panel !== null ? (
-          <PanelBox panel={viewModel.panel} glyphs={glyphs} depth={depth} />
+          <PanelBox panel={viewModel.panel} glyphs={glyphs} depth={depth} rows={viewModel.rows} />
         ) : viewModel.screen === "list" ? (
           viewModel.twoPane && run !== null ? (
             <Box flexDirection="row">
@@ -57,7 +57,12 @@ export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
           />
         )}
       </Box>
-      <KeyFooter hints={viewModel.footer} glyphs={glyphs} depth={depth} />
+      <KeyFooter
+        hints={viewModel.footer}
+        glyphs={glyphs}
+        depth={depth}
+        columns={viewModel.columns}
+      />
     </Box>
   );
 }

@@ -1,11 +1,13 @@
 import { Box, Text } from "ink";
 import type { ReactElement } from "react";
 import {
+  type ActivityLine,
   singlePaneTailRows,
   taskDetailTailRows,
   twoPaneTailRows,
   type ViewModel,
 } from "../model/view-model.ts";
+import { nextOffset, type Window } from "../model/viewport.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
 import { ActivityTail } from "./activity.tsx";
@@ -23,13 +25,66 @@ export interface RunViewProps {
   readonly twoPane: boolean;
 }
 
+interface SinglePaneBudget {
+  readonly window: Window;
+  readonly tailRows: number;
+}
+
+/**
+ * The restyle adds a blank line and an `Activity` title the view-model budget does not know about.
+ * When the tail would overflow, the graph gives up the rows instead: the tail keeps its floor.
+ */
+function singlePaneBudget(viewModel: ViewModel): SinglePaneBudget {
+  const window = viewModel.taskWindow;
+  const run = viewModel.run;
+  const budget = singlePaneTailRows(viewModel);
+  if (run === null) return { window, tailRows: budget };
+  const chrome = 2;
+  const shownTasks = Math.min(run.tasks.length, window.size);
+  const overflow = Math.max(0, run.activity.length - Math.max(0, budget - chrome));
+  const removed = Math.min(chrome, shownTasks, overflow);
+  const size = Math.max(0, window.size - removed);
+  const index = run.tasks.findIndex((task) => task.selected);
+  return {
+    window: {
+      offset: nextOffset(window.offset, index, window.total, size),
+      size,
+      total: window.total,
+    },
+    tailRows: Math.max(0, budget - chrome + removed),
+  };
+}
+
+function ActivitySection({
+  lines,
+  glyphs,
+  depth,
+  maxLines,
+  spaced,
+}: {
+  readonly lines: readonly ActivityLine[];
+  readonly glyphs: GlyphSet;
+  readonly depth: ColorDepth;
+  readonly maxLines: number;
+  readonly spaced: boolean;
+}): ReactElement {
+  return (
+    <>
+      {spaced ? <Text> </Text> : null}
+      <Text bold>Activity</Text>
+      <ActivityTail lines={lines} glyphs={glyphs} depth={depth} maxLines={maxLines} />
+    </>
+  );
+}
+
 export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): ReactElement {
   const run = viewModel.run;
   if (run === null) {
     return <Text>No run selected.</Text>;
   }
+  const single = singlePaneBudget(viewModel);
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" paddingX={1}>
       <RunHeader run={run} glyphs={glyphs} depth={depth} />
       {viewModel.notice === null ? null : (
         <Text {...colorProps("muted", depth)} wrap="truncate">
@@ -38,7 +93,10 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
       )}
       {twoPane ? (
         <Box flexDirection="row">
-          <Box flexDirection="column" width={Math.floor(viewModel.columns / 2)}>
+          <Box
+            flexDirection="column"
+            width={Math.max(0, Math.floor((viewModel.columns - 2) / 2) - 1)}
+          >
             <TaskGraph
               tasks={run.tasks}
               window={viewModel.taskWindow}
@@ -48,11 +106,12 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
           </Box>
           <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
             {run.detail === null ? (
-              <ActivityTail
+              <ActivitySection
                 lines={run.activity}
                 glyphs={glyphs}
                 depth={depth}
-                maxLines={twoPaneTailRows(viewModel)}
+                maxLines={Math.max(0, twoPaneTailRows(viewModel) - 2)}
+                spaced={true}
               />
             ) : (
               <TaskDetail
@@ -66,17 +125,13 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
         </Box>
       ) : run.detail === null ? (
         <Box flexDirection="column">
-          <TaskGraph
-            tasks={run.tasks}
-            window={viewModel.taskWindow}
-            glyphs={glyphs}
-            depth={depth}
-          />
-          <ActivityTail
+          <TaskGraph tasks={run.tasks} window={single.window} glyphs={glyphs} depth={depth} />
+          <ActivitySection
             lines={run.activity}
             glyphs={glyphs}
             depth={depth}
-            maxLines={singlePaneTailRows(viewModel)}
+            maxLines={single.tailRows}
+            spaced={true}
           />
         </Box>
       ) : (

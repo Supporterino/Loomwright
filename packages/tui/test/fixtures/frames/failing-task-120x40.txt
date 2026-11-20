@@ -1,24 +1,24 @@
-> add-health - implementing - 8s - 12.3k tokens - $0.42 - idle
-Tasks                                                        first - Health endpoint
-> [x] first failed app attempt 2 Health endpoint             status failed - repo app - attempt 2
-  [o] second pending api attempt 0 Wire client               agent implementer - model claude-5 - duration 2m05s
-                                                             retries 1
-                                                             Gates
-                                                             x lint fail 1s
-                                                             + test pass 3s
-                                                             Activity
-                                                             first - task - started (attempt 2)
-                                                             first - agent - implementer started on claude-5
-                                                             first - gate - lint fail in 1.2s
-                                                             first - gate - test pass in 3.4s
-                                                             first - task - failed: gate failed
-                                                             first - agent - implementer failed in 125.0s
-                                                             first - agent - retry
-                                                             first - tool - > .factory/logs/f.log test failed
-
-
-
-
+ > add-health implementing 8s - 12.3k tokens - $0.42 - idle
+ Tasks                                                      task     first - Health endpoint
+ > [x] first failed app attempt 2 Health endpoint           status   failed
+   [o] second pending api attempt 0 Wire client             repo     app
+                                                            attempt  2
+                                                            retries  1
+                                                            agent    implementer
+                                                            model    claude-5
+                                                            duration 2m05s
+                                                            Gates
+                                                            x lint fail 1s
+                                                            + test pass 3s
+                                                            Activity
+                                                            first - task - started (attempt 2)
+                                                            first - agent - implementer started on claude-5
+                                                            first - gate - lint fail in 1.2s
+                                                            first - gate - test pass in 3.4s
+                                                            first - task - failed: gate failed
+                                                            first - agent - implementer failed in 125.0s
+                                                            first - agent - retry
+                                                            first - tool - > .factory/logs/f.log test failed
 
 
 

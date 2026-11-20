@@ -1,12 +1,12 @@
-> add-health - design - 8s - 0 tokens - $0.00 - idle
-Tasks
-run - run - started in design
-run - phase - intake -> design
-loomwright - install - install started
-loomwright - install - install finished in 1.2s: bun install
-run - log - design: 3 capabilities planned
+ > add-health design 8s - 0 tokens - $0.00 - idle
+ Tasks
 
-
+ Activity
+ run - run - started in design
+ run - phase - intake -> design
+ loomwright - install - install started
+ loomwright - install - install finished in 1.2s: bun install
+ run - log - design: 3 capabilities planned
 
 
 

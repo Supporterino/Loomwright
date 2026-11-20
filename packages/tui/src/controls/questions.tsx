@@ -8,6 +8,7 @@ import type { PanelView, QuestionRow, RunDetail } from "../model/view-model.ts";
 import { clampOffset, nextOffset, sliceWindow, window as windowOf } from "../model/viewport.ts";
 import { answerRecorded, keyHint } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
+import { dash } from "../views/style.ts";
 
 export type QuestionsFocus = "record" | "composer";
 
@@ -215,11 +216,6 @@ export function recordAnswerInState(
     recorded,
     notice: null,
   };
-}
-
-function dash(glyphs: GlyphSet): string {
-  // The ASCII frame must stay printable ASCII, like the intake and approval titles.
-  return glyphs.bullet === "-" ? "-" : "—";
 }
 
 function recordedLabel(glyphs: GlyphSet): string {

@@ -1,10 +1,10 @@
-+ add-health - done - 8s - 54.3k tokens - $1.23 - idle
-Tasks                                                        first - task - merged abc123
-  [+] first merged app attempt 0 Health endpoint             first - gate - test pass in 4.0s
-  [+] second merged api attempt 0 Wire client                second - task - merged def456
-                                                             second - step-done - merge complete
-
-
+ + add-health done 8s - 54.3k tokens - $1.23 - idle
+ Tasks
+   [+] first merged app attempt 0 Health endpoint           Activity
+   [+] second merged api attempt 0 Wire client              first - task - merged abc123
+                                                            first - gate - test pass in 4.0s
+                                                            second - task - merged def456
+                                                            second - step-done - merge complete
 
 
 

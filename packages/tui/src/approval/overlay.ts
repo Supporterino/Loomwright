@@ -9,6 +9,7 @@ import type { PanelView, RunDetail } from "../model/view-model.ts";
 import { keyHint, LABELS } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import { type ColorDepth, colorFor, TOKENS } from "../theme/tokens.ts";
+import { dash } from "../views/style.ts";
 
 export type ApprovalActionKind = "approve" | "approve-only" | "reapprove";
 
@@ -202,11 +203,6 @@ export function approvalKeys(
   const action = actionForKey(input);
   if (action === null || !available[action]) return { state };
   return { state: { kind: "confirming", action } };
-}
-
-function dash(glyphs: GlyphSet): string {
-  // The ASCII frame must stay printable ASCII, like the intake title.
-  return glyphs.bullet === "-" ? "-" : "—";
 }
 
 function actionLabel(action: ApprovalActionKind): string {

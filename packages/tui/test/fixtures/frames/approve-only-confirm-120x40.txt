@@ -8,6 +8,7 @@
 | identity: dev@example.com                                                                                            |
 | confirm approve only: nothing is implemented                                                                         |
 | press r (resume) later or run `loomwright approve add-health`                                                        |
+|                                                                                                                      |
 | Enter confirm - n cancel - Esc waits for the action - q quit                                                         |
 +----------------------------------------------------------------------------------------------------------------------+
 
@@ -36,5 +37,4 @@
 
 
 
-
-Enter confirm - n cancel - q quit
+Enter confirm - n cancel - q quit - Esc waits for the action - press Enter or n

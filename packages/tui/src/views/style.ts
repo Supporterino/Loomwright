@@ -18,6 +18,40 @@ export function joinFields(glyphs: GlyphSet, fields: readonly string[]): string 
   return fields.join(` ${glyphs.bullet} `);
 }
 
+/** The frame's dash: an en dash in Unicode, a plain hyphen so the ASCII frame stays printable. */
+export function dash(glyphs: GlyphSet): string {
+  return glyphs.bullet === "-" ? "-" : "—";
+}
+
+export interface ColumnWidths {
+  readonly name: number;
+  readonly status: number;
+}
+
+/** `name status duration` in fixed columns; the caller renders the status glyph in its token. */
+export function gateLine(
+  name: string,
+  status: string,
+  duration: string,
+  widths: ColumnWidths,
+): string {
+  return `${name.padEnd(widths.name)} ${status.padEnd(widths.status)} ${duration}`;
+}
+
+/** One row of the two-column fact block: a label padded to `width`, then its value. */
+export function factLine(label: string, value: string, width: number): string {
+  return `${label.padEnd(width)} ${value}`;
+}
+
+/** Cuts to `room` cells with the frame's ellipsis; Ink's own is always `…`, even in ASCII. */
+export function clip(text: string, room: number, glyphs: GlyphSet): string {
+  if (room <= 0) return "";
+  if (text.length <= room) return text;
+  const mark = glyphs.bullet === "-" ? "..." : "…";
+  if (room <= mark.length) return mark.slice(0, room);
+  return `${text.slice(0, room - mark.length)}${mark}`;
+}
+
 export function statusGlyph(status: string, glyphs: GlyphSet): string {
   switch (status) {
     case "merged":

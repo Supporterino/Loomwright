@@ -5,17 +5,12 @@ import { type RunDetail, roleLabel } from "../model/view-model.ts";
 import { LABELS, pausedFindings } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
-import { colorProps, joinFields, phaseGlyph, phaseToken } from "./style.ts";
+import { colorProps, dash, joinFields, phaseGlyph, phaseToken } from "./style.ts";
 
 export interface RunHeaderProps {
   readonly run: RunDetail;
   readonly glyphs: GlyphSet;
   readonly depth: ColorDepth;
-}
-
-function dash(glyphs: GlyphSet): string {
-  // The ASCII frame must stay printable ASCII, like the intake and approval titles.
-  return glyphs.bullet === "-" ? "-" : "—";
 }
 
 export function RunHeader({ run, glyphs, depth }: RunHeaderProps): ReactElement {
@@ -24,14 +19,15 @@ export function RunHeader({ run, glyphs, depth }: RunHeaderProps): ReactElement 
     <Box flexDirection="column">
       <Text wrap="truncate">
         <Text {...colorProps(phaseToken(run.phase), depth)}>{phaseGlyph(run.phase, glyphs)}</Text>{" "}
-        {joinFields(glyphs, [
-          run.id,
-          LABELS[run.phase],
-          formatElapsed(run.elapsedMs),
-          `${formatTokensShort(run.tokens)} tokens`,
-          `$${run.cost.toFixed(2)}`,
-          roleLabel(run.lock),
-        ])}
+        <Text bold>{`${run.id} ${LABELS[run.phase]}`}</Text>{" "}
+        <Text {...colorProps("muted", depth)}>
+          {joinFields(glyphs, [
+            formatElapsed(run.elapsedMs),
+            `${formatTokensShort(run.tokens)} tokens`,
+            `$${run.cost.toFixed(2)}`,
+            roleLabel(run.lock),
+          ])}
+        </Text>
       </Text>
       {run.phase === "awaiting-approval" ? (
         <Text {...colorProps("approval", depth)} wrap="truncate">

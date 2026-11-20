@@ -9,7 +9,7 @@ import type { EventFacts } from "../src/model/facts.ts";
 import { buildViewModel, type GateRow, type ViewModel } from "../src/model/view-model.ts";
 import { detectColorDepth, type TerminalEnv } from "../src/theme/env.ts";
 import { ASCII_GLYPHS, glyphsFor, UNICODE_GLYPHS } from "../src/theme/glyphs.ts";
-import { colorFor } from "../src/theme/tokens.ts";
+import { colorFor, TOKENS } from "../src/theme/tokens.ts";
 import { statusGlyph } from "../src/views/style.ts";
 import { SIZES, STATES } from "./frame-states.ts";
 
@@ -128,6 +128,46 @@ function statusView(): ViewModel {
     screen: "run",
     columns: 120,
     rows: 40,
+    now: Date.parse(ISO),
+    snapshot: null,
+    facts,
+    status: statusDoc(run),
+    runs: [run],
+    selectedRunId: run.id,
+    selectedTaskId: "first",
+    panel: null,
+    notice: null,
+  });
+}
+
+/** A selected task with no gate rows and no activity, for the muted empty states. */
+function emptyDetailView(): ViewModel {
+  const run = RunState.parse({
+    version: 1,
+    id: "add-health",
+    factoryVersion: "0.0.0",
+    request: "Add health endpoints",
+    createdAt: ISO,
+    updatedAt: ISO,
+    phase: "implementing",
+    summary: "Add health endpoints",
+    tasks: [
+      TaskState.parse({
+        id: "first",
+        title: "One",
+        repo: "app",
+        deps: [],
+        touches: [],
+        status: "pending",
+      }),
+    ],
+  });
+  const facts: EventFacts = { gates: {}, agents: {}, retries: {}, activity: [] };
+  return buildViewModel({
+    source: "live",
+    screen: "run",
+    columns: 80,
+    rows: 24,
     now: Date.parse(ISO),
     snapshot: null,
     facts,
@@ -351,5 +391,113 @@ describe("colour depth detection", () => {
   test("an unset locale counts as UTF-8; an explicit non-UTF-8 one does not", () => {
     const env: TerminalEnv = {};
     expect(glyphsFor({ ascii: false, env })).toBe(UNICODE_GLYPHS);
+  });
+});
+
+describe("the styling pass", () => {
+  test("the run view is structured", async () => {
+    const view = STATES["running-graph"]({ columns: 120, rows: 40 });
+    const raw = await renderAnsiFrame(
+      view,
+      { columns: 120, rows: 40 },
+      { ascii: true, env: {}, depth: "truecolor" },
+    );
+    const lines = raw.split("\n");
+    const header = lines.find((line) => stripAnsi(line).includes("add-health"));
+    expect(header).toBeDefined();
+    const muted = colorFor("muted", "truecolor");
+    if (muted === undefined) throw new Error("the muted token has no truecolor form");
+    expect(header).toContain(muted);
+    expect(stripAnsi(header ?? "")).toContain("add-health implementing");
+    expect(stripAnsi(raw)).toContain("Tasks");
+    expect(stripAnsi(raw)).toContain("Activity");
+    // One column of padding before the body.
+    expect(stripAnsi(lines[0] ?? "")).toMatch(/^ /u);
+
+    // In the single-column run view the two sections are separated by a blank line.
+    const single = await renderFrame(
+      STATES["running-graph"]({ columns: 80, rows: 24 }),
+      { columns: 80, rows: 24 },
+      { ascii: true },
+    );
+    const rows = single.split("\n");
+    const activityAt = rows.findIndex((line) => line.trim() === "Activity");
+    expect(activityAt).toBeGreaterThan(-1);
+    expect(rows[activityAt - 1]?.trim()).toBe("");
+  });
+
+  test("the selected row is marked without colour", async () => {
+    const text = await renderFrame(
+      STATES["failing-task"]({ columns: 120, rows: 40 }),
+      { columns: 120, rows: 40 },
+      { ascii: true, env: { NO_COLOR: "" } },
+    );
+    expect(text.includes("\u001b[")).toBe(false);
+    const row = text.split("\n").find((line) => line.includes("first failed"));
+    expect(row?.trimStart()).toMatch(/^> \[x\] first failed/u);
+  });
+
+  test("gates and facts align", async () => {
+    const text = await renderFrame(
+      STATES["failing-task"]({ columns: 80, rows: 24 }),
+      { columns: 80, rows: 24 },
+      { ascii: true },
+    );
+    const lines = text.split("\n").map((line) => line.trimEnd());
+
+    const gates = lines.filter((line) =>
+      /^\S+ (lint|test) +(fail|pass) \S+$/u.test(line.trimStart()),
+    );
+    expect(gates).toHaveLength(2);
+    const gateNames = gates.map((line) => line.search(/lint|test/u));
+    const gateStatuses = gates.map((line) => line.search(/ (fail|pass) /u));
+    expect(new Set(gateNames).size).toBe(1);
+    expect(new Set(gateStatuses).size).toBe(1);
+
+    const labels = ["task", "status", "repo", "attempt", "retries", "agent", "model", "duration"];
+    const width = Math.max(...labels.map((label) => label.length));
+    const facts = lines.filter((line) =>
+      labels.some((label) => line.trimStart().startsWith(`${label} `)),
+    );
+    expect(facts).toHaveLength(labels.length);
+    const valueColumns = facts.map((line) => {
+      const label = labels.find((candidate) => line.trimStart().startsWith(`${candidate} `)) ?? "";
+      return line.indexOf(label) + width + 1;
+    });
+    expect(new Set(valueColumns).size).toBe(1);
+  });
+
+  test("empty states stay muted", async () => {
+    const raw = await renderAnsiFrame(
+      emptyDetailView(),
+      { columns: 80, rows: 24 },
+      { ascii: true, env: {}, depth: "truecolor" },
+    );
+    const muted = colorFor("muted", "truecolor");
+    if (muted === undefined) throw new Error("the muted token has no truecolor form");
+    for (const empty of ["no gate results", "no activity yet"]) {
+      const line = raw.split("\n").find((candidate) => stripAnsi(candidate).includes(empty));
+      expect(line).toBeDefined();
+      expect(line).toContain(muted);
+    }
+  });
+
+  test("no new colour is introduced", async () => {
+    const raw = await renderAnsiFrame(
+      STATES["failing-task"]({ columns: 120, rows: 40 }),
+      { columns: 120, rows: 40 },
+      { ascii: true, env: {}, depth: "truecolor" },
+    );
+    const allowed = new Set(
+      Object.values(TOKENS).map((token) => {
+        const value = Number.parseInt(token.hex.slice(1), 16);
+        return `\x1b[38;2;${(value >> 16) & 0xff};${(value >> 8) & 0xff};${value & 0xff}m`;
+      }),
+    );
+    const used = raw.match(new RegExp(`${ESC}\\[38;2;\\d+;\\d+;\\d+m`, "gu")) ?? [];
+    expect(used.length).toBeGreaterThan(0);
+    for (const sequence of used) expect(allowed.has(sequence)).toBe(true);
+    expect(raw).not.toMatch(BACKGROUND_SGR);
+    expect(raw).not.toMatch(REVERSE_SGR);
   });
 });

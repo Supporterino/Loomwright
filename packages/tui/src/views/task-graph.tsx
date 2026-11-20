@@ -25,7 +25,7 @@ export function TaskGraph({ tasks, window, glyphs, depth }: TaskGraphProps): Rea
         )}
       </Text>
       {sliceWindow(tasks, window).map((task) => (
-        <Text key={task.id} wrap="truncate">
+        <Text key={task.id} wrap="truncate" {...(task.selected ? { bold: true } : {})}>
           <Text {...(task.selected ? colorProps("focus", depth) : {})}>
             {task.selected ? glyphs.focus : " "}
           </Text>{" "}

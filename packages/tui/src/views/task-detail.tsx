@@ -5,7 +5,7 @@ import type { TaskDetail as TaskDetailView } from "../model/view-model.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
 import { ActivityTail } from "./activity.tsx";
-import { colorProps, joinFields, statusGlyph, statusToken } from "./style.ts";
+import { colorProps, gateLine, statusGlyph, statusToken } from "./style.ts";
 
 export interface TaskDetailProps {
   readonly detail: TaskDetailView;
@@ -15,30 +15,68 @@ export interface TaskDetailProps {
   readonly maxLines: number;
 }
 
+/** The fact labels; the widest one sets the column the values line up in. */
+const FACT_LABELS = [
+  "task",
+  "status",
+  "repo",
+  "attempt",
+  "retries",
+  "agent",
+  "model",
+  "duration",
+] as const;
+
+/** The row budget counts four fact rows; the two-column block spends four more. */
+const EXTRA_FACT_ROWS = FACT_LABELS.length - 4;
+
+interface Fact {
+  readonly label: string;
+  readonly value: string;
+  readonly bold: boolean;
+}
+
+function factsOf(detail: TaskDetailView, glyphs: GlyphSet): readonly Fact[] {
+  const { task, agent, retries } = detail;
+  return [
+    {
+      label: "task",
+      value: `${task.id} ${glyphs.bullet} ${truncate(task.title, 56)}`,
+      bold: true,
+    },
+    { label: "status", value: task.status, bold: false },
+    { label: "repo", value: task.repo, bold: false },
+    { label: "attempt", value: String(task.attempt), bold: false },
+    { label: "retries", value: String(retries), bold: false },
+    { label: "agent", value: agent === null ? "(none)" : agent.role, bold: false },
+    {
+      label: "model",
+      value: agent === null || agent.model === "" ? "unknown" : agent.model,
+      bold: false,
+    },
+    {
+      label: "duration",
+      value: agent === null || agent.durationMs === null ? "-" : formatElapsed(agent.durationMs),
+      bold: false,
+    },
+  ];
+}
+
 export function TaskDetail({ detail, glyphs, depth, maxLines }: TaskDetailProps): ReactElement {
-  const { task, agent, retries, gates, activity } = detail;
-  const agentLine =
-    agent === null
-      ? "agent (none)"
-      : joinFields(glyphs, [
-          `agent ${agent.role}`,
-          `model ${agent.model === "" ? "unknown" : agent.model}`,
-          `duration ${agent.durationMs === null ? "-" : formatElapsed(agent.durationMs)}`,
-        ]);
+  const { gates, activity } = detail;
+  const facts = factsOf(detail, glyphs);
+  const labelWidth = Math.max(...FACT_LABELS.map((label) => label.length));
+  const nameWidth = gates.reduce((width, gate) => Math.max(width, gate.name.length), 0);
+  const statusWidth = gates.reduce((width, gate) => Math.max(width, gate.status.length), 0);
+  const widths = { name: nameWidth, status: statusWidth };
   return (
     <Box flexDirection="column">
-      <Text bold wrap="truncate">
-        {task.id} {glyphs.bullet} {truncate(task.title, 56)}
-      </Text>
-      <Text wrap="truncate">
-        {joinFields(glyphs, [
-          `status ${task.status}`,
-          `repo ${task.repo}`,
-          `attempt ${task.attempt}`,
-        ])}
-      </Text>
-      <Text wrap="truncate">{agentLine}</Text>
-      <Text>{`retries ${retries}`}</Text>
+      {facts.map((fact) => (
+        <Text key={fact.label} wrap="truncate">
+          <Text {...colorProps("muted", depth)}>{fact.label.padEnd(labelWidth)}</Text>{" "}
+          <Text {...(fact.bold ? { bold: true } : {})}>{fact.value}</Text>
+        </Text>
+      ))}
       <Text bold>Gates</Text>
       {gates.length === 0 ? (
         <Text {...colorProps("muted", depth)}>no gate results</Text>
@@ -48,12 +86,17 @@ export function TaskDetail({ detail, glyphs, depth, maxLines }: TaskDetailProps)
             <Text {...colorProps(statusToken(gate.status), depth)}>
               {statusGlyph(gate.status, glyphs)}
             </Text>{" "}
-            {gate.name} {gate.status} {formatElapsed(gate.durationMs)}
+            {gateLine(gate.name, gate.status, formatElapsed(gate.durationMs), widths)}
           </Text>
         ))
       )}
       <Text bold>Activity</Text>
-      <ActivityTail lines={activity} glyphs={glyphs} depth={depth} maxLines={maxLines} />
+      <ActivityTail
+        lines={activity}
+        glyphs={glyphs}
+        depth={depth}
+        maxLines={Math.max(0, maxLines - EXTRA_FACT_ROWS)}
+      />
     </Box>
   );
 }

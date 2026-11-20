@@ -9,15 +9,53 @@ export interface PanelBoxProps {
   readonly panel: PanelView;
   readonly glyphs: GlyphSet;
   readonly depth: ColorDepth;
+  /** The frame's rows, so the blank line before the keys still leaves the footer a row. */
+  readonly rows: number;
+}
+
+const STATUS_LINE = /^ {2}(?:answered|skipped|unanswered|recorded)(?:\s|$)/u;
+
+/** The questions pane's structured body: a muted file line and statuses, a focused marker. */
+function questionLine(
+  line: string,
+  isFile: boolean,
+  key: string,
+  glyphs: GlyphSet,
+  depth: ColorDepth,
+): ReactElement {
+  if (isFile || STATUS_LINE.test(line)) {
+    return (
+      <Text key={key} wrap="truncate" {...colorProps("muted", depth)}>
+        {line}
+      </Text>
+    );
+  }
+  if (line.startsWith(`${glyphs.focus} `)) {
+    return (
+      <Text key={key} wrap="truncate" bold>
+        <Text {...colorProps("focus", depth)}>{line.slice(0, glyphs.focus.length)}</Text>
+        {line.slice(glyphs.focus.length)}
+      </Text>
+    );
+  }
+  return (
+    <Text key={key} wrap="truncate">
+      {line}
+    </Text>
+  );
 }
 
 /** The generic bordered box 1.5-1.7 fill with a `PanelView`; it owns no panel-specific content. */
-export function PanelBox({ panel, glyphs, depth }: PanelBoxProps): ReactElement {
+export function PanelBox({ panel, glyphs, depth, rows }: PanelBoxProps): ReactElement {
   // Coral belongs to the approval gate alone; every other panel is lilac.
   const token = panel.kind === "approval" ? "approval" : "focus";
   const borderColor = inkColor(token, depth);
   // Lines repeat (blank preview rows, log tails), so a key pairs each line with its occurrence.
   const occurrences = new Map<string, number>();
+  // Two borders, the title and the keys row, plus the frame footer: a full-height panel gets no
+  // blank line, because the frame may never grow past its rows.
+  const bodyRows = panel.lines.length + (panel.notice === null ? 0 : 1);
+  const spaced = bodyRows + 6 <= rows;
   return (
     <Box
       flexDirection="column"
@@ -28,11 +66,14 @@ export function PanelBox({ panel, glyphs, depth }: PanelBoxProps): ReactElement 
       <Text bold {...colorProps(token, depth)}>
         {panel.title}
       </Text>
-      {panel.lines.map((line) => {
+      {panel.lines.map((line, index) => {
         const count = (occurrences.get(line) ?? 0) + 1;
         occurrences.set(line, count);
-        return (
-          <Text key={`${line}#${count}`} wrap="truncate">
+        const key = `${line}#${count}`;
+        return panel.kind === "questions" ? (
+          questionLine(line, index === 0, key, glyphs, depth)
+        ) : (
+          <Text key={key} wrap="truncate">
             {line}
           </Text>
         );
@@ -42,6 +83,7 @@ export function PanelBox({ panel, glyphs, depth }: PanelBoxProps): ReactElement 
           {panel.notice}
         </Text>
       )}
+      {spaced ? <Text> </Text> : null}
       <Text {...colorProps("muted", depth)} wrap="truncate">
         {panel.keys.map((hint) => `${hint.key} ${hint.label}`).join(` ${glyphs.bullet} `)}
       </Text>

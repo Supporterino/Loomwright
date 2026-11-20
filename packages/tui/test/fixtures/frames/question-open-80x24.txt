@@ -7,9 +7,9 @@
 |   - design                                                                   |
 |   Do health checks need auth?                                                |
 |   skipped                                                                    |
+|                                                                              |
 | j/k navigate - Enter answer - Esc close                                      |
 +------------------------------------------------------------------------------+
-
 
 
 

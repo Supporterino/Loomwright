@@ -302,7 +302,7 @@ describe("run view layout", () => {
       24,
       true,
     );
-    expect(drilled).toContain("attempt 0");
+    expect(drilled.replace(/\s+/gu, " ")).toContain("attempt 0");
     expect(drilled).not.toContain("Repo");
 
     const wide = await frame(
@@ -324,7 +324,7 @@ describe("run view layout", () => {
     );
     const sideBySide = wide
       .split("\n")
-      .some((line) => line.includes("second") && line.includes("agent"));
+      .some((line) => line.includes("Tasks") && line.includes("task"));
     expect(sideBySide).toBe(true);
     expect(graph.run?.tasks).toHaveLength(2);
 
@@ -610,8 +610,9 @@ describe("task detail", () => {
     expect(text).toContain("implementer");
     expect(text).toContain("claude-5");
     expect(text).toContain("2m05s");
-    expect(text).toContain("attempt 2");
-    expect(text).toContain("retries 1");
+    const spaced = text.replace(/\s+/gu, " ");
+    expect(spaced).toContain("attempt 2");
+    expect(spaced).toContain("retries 1");
     const lint = text.indexOf("lint fail");
     const testGate = text.indexOf("test pass");
     expect(lint).toBeGreaterThan(-1);
