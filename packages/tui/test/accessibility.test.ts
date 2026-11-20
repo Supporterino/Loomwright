@@ -323,6 +323,10 @@ describe("layout, keyboard and accessibility", () => {
       "design-activity",
       "land-confirm",
       "no-runs",
+      "paused-findings",
+      "tasks-12",
+      "task-detail-gates",
+      "log-follow",
     ] as const) {
       const raw = await renderAnsiFrame(
         STATES[state]({ columns: 120, rows: 40 }),
@@ -364,6 +368,30 @@ describe("layout, keyboard and accessibility", () => {
     const overlay = overlayFrame.split("\n").find((line) => stripAnsi(line).includes("Approval"));
     expect(overlay).toBeDefined();
     expect(overlay).toContain(coral);
+
+    // The collapsed gate keeps the coral banner, with the commit's R hint, and no overlay.
+    const collapsedFrame = await renderAnsiFrame(
+      STATES["approval-banner"]({ columns: 120, rows: 40 }),
+      { columns: 120, rows: 40 },
+      { ascii: true, env: {}, depth: "truecolor" },
+    );
+    const collapsed = collapsedFrame.split("\n").find((line) => {
+      const text = stripAnsi(line);
+      return text.includes("awaiting approval") && text.includes("R reapprove");
+    });
+    expect(collapsed).toBeDefined();
+    expect(collapsed).toContain(coral);
+
+    // Reopening restores the same coral overlay.
+    const reopenedFrame = await renderAnsiFrame(
+      STATES["approval-reopened"]({ columns: 120, rows: 40 }),
+      { columns: 120, rows: 40 },
+      { ascii: true, env: {}, depth: "truecolor" },
+    );
+    expect(reopenedFrame).toContain(coral);
+    const reopened = reopenedFrame.split("\n").find((line) => stripAnsi(line).includes("Approval"));
+    expect(reopened).toBeDefined();
+    expect(reopened).toContain(coral);
   });
 
   test("the token module is still the only source of SGR and hex colours", () => {

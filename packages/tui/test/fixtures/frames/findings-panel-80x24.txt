@@ -1,0 +1,24 @@
++------------------------------------------------------------------------------+
+| Reword - add-health                                                          |
+| 1. must  packages/tui/src/views/header.tsx:42                                |
+|    problem: a paused run looks like a generic pause                          |
+|    fix: name the findings in words                                           |
+| 2. should  packages/tui/src/views/run-list.tsx:24                            |
+|    problem: findings are invisible in the list                               |
+|    fix: render the finding count                                             |
+| 3. nice  packages/tui/src/views/panel.tsx:16                                 |
+|    problem: the same words take two rows                                     |
+|    fix: drop the repeated heading                                            |
+| prompt>                                                                      |
+| reword add-health --prompt <text>                                            |
+|                                                                              |
++------------------------------------------------------------------------------+
+
+
+
+
+
+
+
+
+Ctrl-J newline - Enter confirm - Esc back - Up/Down PgUp/PgDn scroll - q quit

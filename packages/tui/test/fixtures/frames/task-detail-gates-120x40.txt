@@ -1,0 +1,40 @@
+ > add-health implementing 8s - 0 tokens - $0.00 - idle
+ Tasks                                                      task     first - Health endpoint
+ > [>] first running app attempt 0 Health endpoint          status   running
+                                                            repo     app
+                                                            attempt  0
+                                                            retries  0
+                                                            agent    (none)
+                                                            model    unknown
+                                                            duration -
+                                                            Gates
+                                                            x lint-1          fail 0s
+                                                            + format-2        pass 0s
+                                                            + types-3         pass 0s
+                                                            + test-4          pass 0s
+                                                            x testAffected-5  fail 0s
+                                                            + lint-6          pass 0s
+                                                            + format-7        pass 0s
+                                                            + types-8         pass 0s
+                                                            x test-9          fail 0s
+                                                            + testAffected-10 pass 0s
+                                                            + lint-11         pass 0s
+                                                            + format-12       pass 0s
+                                                            x types-13        fail 0s
+                                                            + test-14         pass 0s
+                                                            + testAffected-15 pass 0s
+                                                            + lint-16         pass 0s
+                                                            x format-17       fail 0s
+                                                            + types-18        pass 0s
+                                                            + test-19         pass 1s
+                                                            + testAffected-20 pass 1s
+                                                            Activity
+                                                            first - tool - activity line 13
+                                                            first - tool - activity line 14
+                                                            first - tool - activity line 15
+                                                            first - tool - activity line 16
+                                                            first - tool - activity line 17
+                                                            first - tool - activity line 18
+                                                            first - tool - activity line 19
+                                                            first - tool - activity line 20
+w reword - x abort - ? help - q quit

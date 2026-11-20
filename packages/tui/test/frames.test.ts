@@ -142,6 +142,20 @@ describe("every screen has both sizes", () => {
   }
 });
 
+describe("the frame budget is pinned", () => {
+  for (const [state, size] of [
+    ["long-list-bottom", { columns: 80, rows: 24 }],
+    ["tasks-12", { columns: 80, rows: 24 }],
+  ] as const) {
+    test(`${state} at 80x24 fits ${size.rows} lines with the footer last`, async () => {
+      const text = await renderFrame(STATES[state](size), size, { ascii: true });
+      const lines = text.split("\n");
+      expect(lines.length).toBeLessThanOrEqual(size.rows);
+      expect(lines.at(-1)).toContain("q quit");
+    });
+  }
+});
+
 describe("an empty workspace frame", () => {
   test("says no changes exist and names n", async () => {
     const text = await renderFrame(

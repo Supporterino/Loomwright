@@ -1,0 +1,24 @@
+Runs - runs 1-22/60
+> > run-59  run 59  - implementing - idle - 59.0k tokens - $0.59 - 0s
+  > run-58  run 58  - implementing - idle - 58.0k tokens - $0.58 - 0s
+  > run-57  run 57  - implementing - idle - 57.0k tokens - $0.57 - 0s
+  > run-56  run 56  - implementing - idle - 56.0k tokens - $0.56 - 0s
+  > run-55  run 55  - implementing - idle - 55.0k tokens - $0.55 - 0s
+  > run-54  run 54  - implementing - idle - 54.0k tokens - $0.54 - 0s
+  > run-53  run 53  - implementing - idle - 53.0k tokens - $0.53 - 0s
+  > run-52  run 52  - implementing - idle - 52.0k tokens - $0.52 - 0s
+  > run-51  run 51  - implementing - idle - 51.0k tokens - $0.51 - 0s
+  > run-50  run 50  - implementing - idle - 50.0k tokens - $0.50 - 0s
+  > run-49  run 49  - implementing - idle - 49.0k tokens - $0.49 - 0s
+  > run-48  run 48  - implementing - idle - 48.0k tokens - $0.48 - 0s
+  > run-47  run 47  - implementing - idle - 47.0k tokens - $0.47 - 0s
+  > run-46  run 46  - implementing - idle - 46.0k tokens - $0.46 - 0s
+  > run-45  run 45  - implementing - idle - 45.0k tokens - $0.45 - 0s
+  > run-44  run 44  - implementing - idle - 44.0k tokens - $0.44 - 0s
+  > run-43  run 43  - implementing - idle - 43.0k tokens - $0.43 - 0s
+  > run-42  run 42  - implementing - idle - 42.0k tokens - $0.42 - 0s
+  > run-41  run 41  - implementing - idle - 41.0k tokens - $0.41 - 0s
+  > run-40  run 40  - implementing - idle - 40.0k tokens - $0.40 - 0s
+  > run-39  run 39  - implementing - idle - 39.0k tokens - $0.39 - 0s
+  > run-38  run 38  - implementing - idle - 38.0k tokens - $0.38 - 0s
+n new change - ? help - q quit - Enter open run

@@ -1,0 +1,24 @@
++------------------------------------------------------------------------------+
+| Activity - run                                                               |
+| run - log - run line 6                                                       |
+| run - log - run line 7                                                       |
+| run - log - run line 8                                                       |
+| run - log - run line 9                                                       |
+| run - log - run line 10                                                      |
+| run - log - run line 11                                                      |
+| run - log - run line 12                                                      |
+| run - log - run line 13                                                      |
+| run - log - run line 14                                                      |
+| run - log - run line 15                                                      |
+| run - log - run line 16                                                      |
+| run - log - run line 17                                                      |
+| run - log - run line 18                                                      |
+| run - log - run line 19                                                      |
+| run - log - run line 20                                                      |
+| run - log - run line 21                                                      |
+| run - log - run line 22                                                      |
+| run - log - run line 23                                                      |
+| run - log - run line 24                                                      |
+| j/k scroll - PgUp/PgDn page - g/G ends - f follow on - Tab scope - Esc back  |
++------------------------------------------------------------------------------+
+j/k scroll - PgUp/PgDn page - g/G ends - f follow on - Tab scope - Esc back

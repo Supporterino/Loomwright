@@ -1,0 +1,40 @@
+ ! add-health paused 8s - 12.3k tokens - $0.42 - idle
+ ! paused - 3 spec findings need reword
+ Tasks
+   [>] first running app attempt 1 Health endpoint          Activity
+                                                            first - task - started (attempt 1)
+                                                            first - tool - edited src/health.ts
+                                                            run - run - paused: 3 spec findings need reword
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+r resume - w reword - x abort - ? help - q quit

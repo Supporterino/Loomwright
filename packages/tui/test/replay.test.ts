@@ -6,8 +6,14 @@ import { fileURLToPath } from "node:url";
 import type { Factory } from "@loomwright/core/factory";
 import { MISSING_IDENTITY } from "../src/approval/overlay.ts";
 import {
+  activityPaneBodyRows,
+  activityPaneKeys,
+  openActivityPane,
+} from "../src/controls/activity-pane.ts";
+import {
   isReadOnly,
   REPLAY_READ_ONLY,
+  replayActivityView,
   replayHelpView,
   replayKey,
   replayView,
@@ -18,6 +24,7 @@ import type { KeyInput } from "../src/model/keys.ts";
 import { renderOnceFrame } from "../src/replay/once.ts";
 import { readReplayFile, replayModel } from "../src/replay/replay.ts";
 import { replayNotice } from "../src/strings.ts";
+import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
 
 const FIXTURE = fileURLToPath(
   new URL("../../../test/fixtures/tui/approval-gate.jsonl", import.meta.url),
@@ -355,6 +362,42 @@ describe("replay is read-only", () => {
     const tab = replayKey(view, "", key({ tab: true }));
     expect(tab.quit).toBe(false);
     expect(tab.notice).toBeNull();
+  });
+
+  test("L opens and scrolls the pane with no notice, and the frame stays inside rows", async () => {
+    const view = viewOf(await readReplayFile(FIXTURE));
+    const opened = replayKey(view, "L", key());
+    expect(opened.notice).toBeNull();
+    expect(opened.help).toBeNull();
+    expect(opened.quit).toBe(false);
+
+    const run = view.run;
+    if (run === null) throw new Error("the replay fixture has no run");
+    // The fixture is short; a longer stream proves the pane scrolls and still fits.
+    const activity = Array.from({ length: 40 }, (_, index) => ({
+      seq: index + 1,
+      step: "run",
+      kind: "log",
+      text: `recorded line ${index + 1}`,
+    }));
+    const longer = { ...view, run: { ...run, activity } };
+    const pane = openActivityPane(longer.run);
+    const scrolled = activityPaneKeys(
+      longer.run,
+      pane,
+      "k",
+      key(),
+      activityPaneBodyRows(SIZE.rows),
+    );
+    expect(scrolled.state.follow).toBe(false);
+    expect(scrolled.state.offset).toBeGreaterThan(0);
+
+    const frame = await renderOnceFrame(
+      replayActivityView(longer, scrolled.state, ASCII_GLYPHS),
+      SIZE,
+    );
+    expect(frame).toContain("Activity");
+    expect(frame.split("\n").length).toBeLessThanOrEqual(SIZE.rows);
   });
 
   test("? opens the help panel in replay and Esc closes it", async () => {
