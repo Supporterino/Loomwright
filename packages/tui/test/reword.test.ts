@@ -476,6 +476,32 @@ describe("the prompt is a multi-line text field", () => {
   });
 });
 
+describe("typing scrolls the prompt into view", () => {
+  const findings = Array.from({ length: 6 }, (_, index) =>
+    finding({
+      file: `src/f${index}.ts`,
+      line: index + 1,
+      // Two problem rows per finding at 80 columns, so the prompt starts past the 19-row body.
+      problem: "x".repeat(80),
+    }),
+  );
+
+  test("typing with six findings at 80x24 scrolls the prompt line into view", () => {
+    const run = detail({ specFindings: findings });
+    const opened = openReword(run);
+    if (opened === null) throw new Error("the reword panel did not open");
+    expect(opened.offset).toBe(0);
+    expect(panel(run, opened).lines.join("\n")).not.toContain("prompt>");
+
+    const typed = rewordKeys(run, opened, "a", key(), 24, 80).state;
+    expect(typed.text).toBe("a");
+    expect(typed.offset).toBeGreaterThan(0);
+    const lines = panel(run, typed).lines;
+    expect(lines.join("\n")).toContain("prompt> a");
+    expect(lines.at(-1)).toBe(`reword ${RUN} --prompt a`);
+  });
+});
+
 describe("the confirm line names the exact argv", () => {
   test("rewordArgvLine is the template when empty and the typed prompt once set", () => {
     const run = detail({ specFindings: [finding()] });

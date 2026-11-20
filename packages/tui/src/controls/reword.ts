@@ -6,7 +6,13 @@
 import { stripControls } from "../model/format.ts";
 import { deletesLast, type KeyInput } from "../model/keys.ts";
 import type { PanelView, RunDetail, SpecFindingRow } from "../model/view-model.ts";
-import { clampOffset, pageSize, sliceWindow, window as windowOf } from "../model/viewport.ts";
+import {
+  clampOffset,
+  lastOffset,
+  pageSize,
+  sliceWindow,
+  window as windowOf,
+} from "../model/viewport.ts";
 import { keyHint } from "../strings.ts";
 import { type GlyphSet, UNICODE_GLYPHS } from "../theme/glyphs.ts";
 
@@ -162,6 +168,21 @@ function removeLast(state: RewordState): RewordState {
 }
 
 /**
+ * Typing must land on screen: the prompt is append-only, so the caret is its last line. Scroll
+ * to the body's last window, which keeps that line and the argv line visible below verbose findings.
+ */
+function followPrompt(
+  run: RunDetail,
+  state: RewordState,
+  rows: number,
+  columns: number,
+): RewordState {
+  const length = bodyLines(run, state, columns).length;
+  const offset = lastOffset(length, bodyRows(rows, state));
+  return offset === state.offset ? state : { ...state, offset };
+}
+
+/**
  * One keypress against the panel; effects never happen here. Scrolling is non-printable only
  * (arrows, PgUp/PgDn): bare `j` and `k` must type into the prompt, unlike the log pane.
  */
@@ -193,15 +214,19 @@ export function rewordKeys(
   }
 
   if (key.ctrl && (input === "j" || input === "\n")) {
-    return { state: { ...state, text: `${state.text}\n`, notice: null } };
+    return {
+      state: followPrompt(run, { ...state, text: `${state.text}\n`, notice: null }, rows, columns),
+    };
   }
-  if (deletesLast(key)) return { state: removeLast(state) };
+  if (deletesLast(key)) return { state: followPrompt(run, removeLast(state), rows, columns) };
   // Other chords, tabs and editing keys stay inert; every other printable key types.
   if (key.ctrl || key.meta || key.tab) return { state };
   // A paste arrives as one string; its embedded controls must never reach the terminal.
   const typed = stripControls(input);
   if (typed.length === 0) return { state };
-  return { state: { ...state, text: state.text + typed, notice: null } };
+  return {
+    state: followPrompt(run, { ...state, text: state.text + typed, notice: null }, rows, columns),
+  };
 }
 
 function dash(glyphs: GlyphSet): string {
