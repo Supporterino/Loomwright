@@ -1,5 +1,6 @@
 import type { RunEvent } from "@loomwright/protocol";
 import { ActivityRing } from "./activity.ts";
+import { flat } from "./format.ts";
 import type { ActivityLine, AgentFact, GateRow } from "./view-model.ts";
 
 export { ACTIVITY_LIMIT, ActivityRing } from "./activity.ts";
@@ -27,18 +28,6 @@ function sourceOf(step: string | undefined): string {
 
 function attemptText(attempt: number | undefined): string {
   return attempt === undefined ? "" : ` (attempt ${attempt})`;
-}
-
-/**
- * Readable text stays one line and carries no terminal controls: a payload's newlines never split
- * an activity row, and its escape sequences never reach the terminal (an `ESC[2J` or `OSC 52`
- * would clear the screen, write the clipboard or draw a fake prompt).
- */
-function flat(text: string): string {
-  return text
-    .replace(/[^\P{Cc}\t\n]/gu, "")
-    .replace(/\s*[\r\n]+\s*/g, " ")
-    .trim();
 }
 
 function isRef(value: unknown): value is { readonly path: string } {
@@ -92,7 +81,7 @@ export function appendFacts(prior: EventFacts, events: readonly RunEvent[]): Eve
         const step = flat(event.data.step ?? "");
         const row: GateRow = {
           step,
-          name: event.data.name,
+          name: flat(event.data.name),
           type: event.data.type,
           status: event.data.status,
           durationMs: event.data.durationMs,
@@ -117,9 +106,9 @@ export function appendFacts(prior: EventFacts, events: readonly RunEvent[]): Eve
         break;
       }
       case "agent.started":
-        agents[event.data.step] = {
-          role: event.data.agent,
-          model: event.data.model,
+        agents[flat(event.data.step)] = {
+          role: flat(event.data.agent),
+          model: flat(event.data.model),
           durationMs: null,
         };
         activity.push(
@@ -132,10 +121,10 @@ export function appendFacts(prior: EventFacts, events: readonly RunEvent[]): Eve
         );
         break;
       case "agent.finished": {
-        const step = event.data.step;
+        const step = flat(event.data.step);
         const priorAgent = agents[step];
         agents[step] = {
-          role: event.data.role,
+          role: flat(event.data.role),
           model: priorAgent?.model ?? "",
           durationMs: event.data.durationMs,
         };
@@ -150,7 +139,7 @@ export function appendFacts(prior: EventFacts, events: readonly RunEvent[]): Eve
         break;
       }
       case "agent.retry":
-        bump(event.data.step);
+        bump(flat(event.data.step));
         activity.push(
           line(
             event,
@@ -161,7 +150,7 @@ export function appendFacts(prior: EventFacts, events: readonly RunEvent[]): Eve
         );
         break;
       case "task.retried":
-        bump(event.data.task.id);
+        bump(flat(event.data.task.id));
         activity.push(
           line(
             event,

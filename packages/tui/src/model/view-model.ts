@@ -9,6 +9,7 @@ import { totalTokens } from "@loomwright/core/usage/usage";
 import type { Phase, RunSnapshot, TaskStatus } from "@loomwright/protocol";
 import { emptyWorkspace, keyHint, replayNotice } from "../strings.ts";
 import type { EventFacts } from "./facts.ts";
+import { flat } from "./format.ts";
 
 export type Source = "live" | "replay";
 export type Screen = "list" | "run";
@@ -204,15 +205,16 @@ function taskRow(
   selectedTaskId: string | null,
 ): TaskRow {
   const seen = snapshot?.tasks[task.id];
+  const id = flat(task.id);
   return {
-    id: task.id,
-    title: task.title,
-    repo: task.repo,
+    id,
+    title: flat(task.title),
+    repo: flat(task.repo),
     status: seen?.status ?? task.status,
     attempt: seen?.attempt ?? 0,
     failures: task.failures,
     deps: task.deps,
-    selected: task.id === selectedTaskId,
+    selected: id === selectedTaskId,
   };
 }
 
@@ -224,10 +226,10 @@ function questionRows(run: RunState, snapshot: RunSnapshot | null): QuestionRow[
   // The snapshot carries `question.answered`, so rows flip without waiting for the next status poll.
   const records = snapshot?.questions ?? run.clarifications;
   return records.map((question) => ({
-    step: question.step,
-    question: question.question,
+    step: flat(question.step),
+    question: flat(question.question),
     status: question.status,
-    ...(question.answer === undefined ? {} : { answer: question.answer }),
+    ...(question.answer === undefined ? {} : { answer: flat(question.answer) }),
     questionsFile,
   }));
 }
@@ -236,14 +238,17 @@ function approvalView(run: RunState, snapshot: RunSnapshot | null): ApprovalView
   const pending = snapshot?.pendingApproval ?? null;
   const granted = snapshot?.approval ?? null;
   if (pending === null && granted === null && run.phase !== "awaiting-approval") return null;
+  const specHash = pending?.specHash ?? granted?.specHash ?? null;
+  const specCommit = granted !== null && granted.approver !== "" ? granted.specCommit : null;
+  const approver = granted !== null && granted.approver !== "" ? granted.approver : null;
   return {
     changeId: run.id,
     summary: run.summary,
-    changeDir: pending?.changeDir ?? null,
-    specHash: pending?.specHash ?? granted?.specHash ?? null,
+    changeDir: pending === null ? null : flat(pending.changeDir),
+    specHash: specHash === null ? null : flat(specHash),
     // `approval.requested` sets `approver: ""`; only `approval.granted` names a commit and person.
-    specCommit: granted !== null && granted.approver !== "" ? granted.specCommit : null,
-    approver: granted !== null && granted.approver !== "" ? granted.approver : null,
+    specCommit: specCommit === null ? null : flat(specCommit),
+    approver: approver === null ? null : flat(approver),
   };
 }
 

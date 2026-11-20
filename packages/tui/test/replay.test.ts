@@ -39,6 +39,20 @@ function tempFile(name: string, text: string): string {
   return path;
 }
 
+/** One valid event per object, JSON-escaped as the writer would have written it. */
+function replayLines(events: readonly { readonly type: string; readonly data: unknown }[]): string {
+  const lines = events.map((entry, index) =>
+    JSON.stringify({
+      v: 1,
+      runId: "add-health",
+      seq: index + 1,
+      ts: "2026-11-18T10:00:00.000Z",
+      ...entry,
+    }),
+  );
+  return `${lines.join("\n")}\n`;
+}
+
 function key(overrides: Partial<KeyInput> = {}): KeyInput {
   return {
     upArrow: false,
@@ -221,6 +235,69 @@ describe("once prints one frame", () => {
     expect(frames).toHaveLength(1);
     expect(frames[0]).not.toContain("\u001b[");
     expect(frames[0]).toContain("add-health");
+  });
+
+  test("a crafted --replay file cannot inject terminal controls", async () => {
+    const taskPath = tempFile(
+      "crafted-task.jsonl",
+      replayLines([
+        { type: "run.started", data: { phase: "implementing" } },
+        {
+          type: "task.queued",
+          data: {
+            task: { id: "\u001b[2Jtask", repo: "rep\u001b]52;c;o\u0007" },
+            attempt: 1,
+          },
+        },
+        {
+          type: "task.started",
+          data: {
+            task: { id: "\u001b[2Jtask", repo: "rep\u001b]52;c;o\u0007" },
+            attempt: 1,
+          },
+        },
+        {
+          type: "agent.started",
+          data: {
+            step: "\u001b[2Jtask",
+            agent: "\u001b[2Jimpl",
+            model: "model\u001b]52;c;x\u0007",
+          },
+        },
+        {
+          type: "gate.finished",
+          data: {
+            name: "\u001b[2Jlint",
+            type: "lint",
+            status: "pass",
+            durationMs: 5,
+            step: "\u001b[2Jtask",
+          },
+        },
+      ]),
+    );
+    const taskText = await renderOnceFrame(viewOf(await readReplayFile(taskPath)), SIZE);
+    expect(taskText).toContain("[2Jtask");
+    expect(taskText).toContain("[2Jlint");
+    expect(taskText).not.toContain("\u001b]");
+    expect(taskText).not.toContain("\u0007");
+
+    const approvalPath = tempFile(
+      "crafted-approval.jsonl",
+      replayLines([
+        { type: "run.started", data: { phase: "design" } },
+        { type: "phase.changed", data: { from: "design", to: "awaiting-approval" } },
+        {
+          type: "approval.pending",
+          data: { specHash: "\u001b]52;c;h\u0007", changeDir: "\u001b[2Jdir" },
+        },
+      ]),
+    );
+    const panelText = await renderOnceFrame(viewOf(await readReplayFile(approvalPath)), SIZE);
+    expect(panelText).toContain("[2Jdir");
+    expect(panelText).toContain("]52;c;h");
+    expect(panelText).not.toContain("\u001b]");
+    expect(panelText).not.toContain("\u0007");
   });
 });
 

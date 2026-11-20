@@ -25,6 +25,18 @@ export function formatPercent(part: number, whole: number): string {
   return `${Math.round((part / whole) * 100)}%`;
 }
 
+/**
+ * Readable text stays one line and carries no terminal controls: a payload's newlines never split
+ * a row, and its escape sequences never reach the terminal (an `ESC[2J` or `OSC 52` would clear
+ * the screen, write the clipboard or draw a fake prompt).
+ */
+export function flat(text: string): string {
+  return text
+    .replace(/[^\P{Cc}\t\n]/gu, "")
+    .replace(/\s*[\r\n]+\s*/g, " ")
+    .trim();
+}
+
 /** Cuts text to `width` cells, ending in an ellipsis when anything was dropped. */
 export function truncate(text: string, width: number): string {
   if (width <= 0) return "";

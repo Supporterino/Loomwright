@@ -331,6 +331,37 @@ describe("every run event folds into the activity facts", () => {
     expect(facts.gates["[2J1.1"]?.[0]?.step).toBe("[2J1.1");
   });
 
+  test("control characters are stripped from the agent and gate facts too", () => {
+    const facts = collectFacts([
+      event(1, "agent.started", {
+        step: "\u001b[2J1.1\u0007",
+        agent: "\u001b[2Jimplementer\u0007",
+        model: "claude\u001b]52;c;SGVsbG8=\u0007",
+      }),
+      event(2, "agent.finished", {
+        step: "\u001b[2J1.1\u0007",
+        role: "\u001b]52;c;role\u0007",
+        outcome: "succeeded",
+        durationMs: 5,
+        usage: USAGE,
+        sessionId: "session",
+      }),
+      event(3, "gate.finished", {
+        name: "\u001b[2Jlint\u0007",
+        type: "lint",
+        status: "pass",
+        durationMs: 10,
+        step: "\u001b[2J1.1\u0007",
+      }),
+    ]);
+
+    const agent = facts.agents["[2J1.1"];
+    expect(agent?.role).toBe("]52;c;role");
+    expect(agent?.model).toBe("claude]52;c;SGVsbG8=");
+    const gate = facts.gates["[2J1.1"]?.[0];
+    expect(gate?.name).toBe("[2Jlint");
+  });
+
   test("the task detail stays task-scoped: only its source lines, while the run tail keeps both", () => {
     const run = RunState.parse({
       version: 1,

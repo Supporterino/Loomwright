@@ -353,6 +353,68 @@ describe("buildViewModel", () => {
     expect(view.run?.detail?.retries).toBe(2);
   });
 
+  test("control characters are stripped from task rows, questions and approval evidence", () => {
+    const task = taskState({
+      id: "\u001b[2Jtask",
+      title: "\u001b]52;c;title\u0007",
+      repo: "rep\u001b[2Jo",
+    });
+    const run = runState({ phase: "awaiting-approval", tasks: [task] });
+    resetSeq();
+    const view = buildViewModel(
+      runInput(
+        run,
+        [
+          event("task.started", {
+            task: { id: "\u001b[2Jtask", repo: "rep\u001b[2Jo" },
+            attempt: 1,
+          }),
+          event("agent.started", {
+            step: "\u001b[2Jtask",
+            agent: "\u001b[2Jimpl",
+            model: "model\u001b]52;c;x\u0007",
+          }),
+          event("question.raised", {
+            step: "\u001b[2Jintake",
+            question: "\u001b]52;c;q\u0007",
+            status: "unanswered",
+          }),
+          event("approval.pending", {
+            specHash: "\u001b]52;c;hash\u0007",
+            changeDir: "\u001b[2Jdir",
+          }),
+        ],
+        { selectedTaskId: "[2Jtask" },
+      ),
+    );
+
+    const row = view.run?.tasks[0];
+    expect(row?.id).toBe("[2Jtask");
+    expect(row?.title).toBe("]52;c;title");
+    expect(row?.repo).toBe("rep[2Jo");
+    expect(row?.selected).toBe(true);
+    expect(view.run?.detail?.agent?.role).toBe("[2Jimpl");
+    expect(view.run?.detail?.agent?.model).toBe("model]52;c;x");
+    expect(view.run?.questions[0]?.step).toBe("[2Jintake");
+    expect(view.run?.questions[0]?.question).toBe("]52;c;q");
+    expect(view.run?.approval?.specHash).toBe("]52;c;hash");
+    expect(view.run?.approval?.changeDir).toBe("[2Jdir");
+
+    resetSeq();
+    const granted = buildViewModel(
+      runInput(run, [
+        event("approval.granted", {
+          approver: "\u001b[2Jdev\u0007",
+          specHash: "\u001b]52;c;h\u0007",
+          specCommit: "\u001b[2Jabc\u0007",
+        }),
+      ]),
+    ).run?.approval;
+    expect(granted?.specHash).toBe("]52;c;h");
+    expect(granted?.specCommit).toBe("[2Jabc");
+    expect(granted?.approver).toBe("[2Jdev");
+  });
+
   test("question.answered flips the snapshot row to answered and keeps the questions file", () => {
     const run = runState({ draft: ".factory/drafts/add-health" });
     resetSeq();
