@@ -14,7 +14,7 @@ first - gate - test pass in 3.4s
 first - task - failed: gate failed
 first - agent - implementer failed in 125.0s
 first - agent - retry
-first - tool - test failed > .factory/logs/f.log
+first - tool - > .factory/logs/f.log test failed
 
 
 

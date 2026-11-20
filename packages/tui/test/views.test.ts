@@ -411,6 +411,23 @@ describe("run view layout", () => {
     }
   });
 
+  test("a log reference is named: an 80x24 frame keeps it visible on a long progress line", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = [
+      event("progress.line", {
+        level: "normal",
+        text: "implementer finished the task and the rest of this long line is cut by the pane width",
+        ref: { path: ".factory/logs/add-health/2026-11-19.jsonl", offset: 0, bytes: 42 },
+      }),
+    ];
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null }));
+    const text = await frame(view, 80, 24, true);
+    expect(text).toContain(".factory/logs/add-health/2026-11-19.jsonl");
+  });
+
   test("the activity tail appears in one pane: graph then tail, selecting a task replaces both", async () => {
     const run = runState({
       tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],

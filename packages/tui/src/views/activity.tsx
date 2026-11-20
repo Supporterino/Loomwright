@@ -28,12 +28,16 @@ export function ActivityTail({
   const shown = lines.slice(Math.max(0, lines.length - count));
   return (
     <Box flexDirection="column">
-      {shown.map((line) => (
-        <Text key={line.seq} wrap="truncate">
-          {line.step} {glyphs.bullet} {line.kind} {glyphs.bullet} {line.text}
-          {line.logRef === undefined ? "" : ` ${glyphs.arrow} ${line.logRef}`}
-        </Text>
-      ))}
+      {shown.map((line) => {
+        // The ref goes before the text: the text is already capped, so a trailing ref is what Ink truncates away.
+        const ref = line.logRef === undefined ? "" : `${glyphs.arrow} ${line.logRef} `;
+        return (
+          <Text key={line.seq} wrap="truncate">
+            {line.step} {glyphs.bullet} {line.kind} {glyphs.bullet} {ref}
+            {line.text}
+          </Text>
+        );
+      })}
     </Box>
   );
 }
