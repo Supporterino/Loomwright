@@ -52,11 +52,24 @@ export function RunList({ viewModel, glyphs, depth }: RunListProps): ReactElemen
         )}
       </Text>
       {sliceWindow(viewModel.list, viewModel.listWindow).map((item) => {
-        const headFull = `${headOf(item)}${markerOf(item, glyphs)}`;
-        const head = clip(headFull, cells, glyphs);
         const meta = metaOf(item);
         const metaFull = meta.join(` ${glyphs.bullet} `);
-        const clippedMeta = clip(metaFull, cells - head.length, glyphs);
+        const marker = clip(markerOf(item, glyphs), cells, glyphs);
+        // The marker is always reserved. The full-width list then reserves every metadata field
+        // before the head, so a long summary cannot hide the finding count or cut the fields each
+        // row carries. The half-width two-pane list keeps the identifying head instead.
+        const markerRoom = Math.max(0, cells - marker.length);
+        const headFirst = viewModel.twoPane;
+        const head = clip(
+          headOf(item),
+          headFirst ? markerRoom : Math.max(0, markerRoom - metaFull.length),
+          glyphs,
+        );
+        const clippedMeta = clip(
+          metaFull,
+          Math.max(0, markerRoom - (headFirst ? head.length : 0)),
+          glyphs,
+        );
         const selected = item.selected;
         return (
           <Text key={item.id} wrap="truncate" {...(selected ? { bold: true } : {})}>
@@ -66,16 +79,14 @@ export function RunList({ viewModel, glyphs, depth }: RunListProps): ReactElemen
             <Text {...colorProps(phaseToken(item.phase), depth)}>
               {phaseGlyph(item.phase, glyphs)}
             </Text>{" "}
-            {head === headFull ? (
+            {head}
+            {marker === "" ? null : <Text bold>{marker}</Text>}
+            {clippedMeta === "" ? null : (
               <>
-                {headOf(item)}
-                <Text bold>{markerOf(item, glyphs)}</Text>
+                {"  "}
+                {glyphs.bullet}{" "}
               </>
-            ) : (
-              head
             )}
-            {"  "}
-            {glyphs.bullet}{" "}
             {clippedMeta === metaFull ? (
               <>
                 <Text>{meta[0] ?? ""}</Text>

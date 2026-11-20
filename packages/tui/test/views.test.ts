@@ -232,7 +232,7 @@ describe("run list", () => {
         selectedRunId: "oldest",
       }),
     );
-    const text = await frame(view, 90, 24, true);
+    const text = await frame(view, 80, 24, true);
     const lines = text.split("\n");
     expect(lines.some((line) => line.startsWith("> > oldest  Oldest"))).toBe(true);
     expect(text).toContain("Queued");
@@ -279,17 +279,54 @@ describe("run list", () => {
         selectedRunId: marked.id,
       }),
     );
-    const text = await frame(view, 120, 40, true);
-    const markedRow = text.split("\n").find((line) => line.includes("Paused change"));
+    const text = await frame(view, 80, 24, true);
+    const markedRow = text.split("\n").find((line) => line.includes("2 findings"));
     expect(markedRow).toBeDefined();
-    expect(markedRow).toContain("paused-run  Paused change");
-    expect(markedRow).toContain("2 findings");
+    expect(markedRow).toContain("paused-run  Pa");
     // The gate glyph and label, not the coral approval hue.
     expect(markedRow).toContain("! 2 findings");
 
     const cleanRow = text.split("\n").find((line) => line.includes("Clean change"));
     expect(cleanRow).toBeDefined();
     expect(cleanRow).not.toContain("findings");
+  });
+
+  test("a long summary keeps the findings marker and every metadata field at 80x24", async () => {
+    const finding = {
+      severity: "must",
+      file: "packages/tui/src/views/run-list.tsx",
+      line: 56,
+      what: "the marker is cut off",
+      problem: "a long summary eats the row",
+      fix: "reserve the marker and the metadata first",
+      impact: "the finding count is invisible",
+    };
+    const run = runState({
+      id: "fix-tui-findings-log-styling",
+      summary: "Fix the findings marker and the log styling across the run list and the run view",
+      phase: "paused",
+      specFindings: [finding, { ...finding, line: 97 }],
+    });
+    const view = buildViewModel(
+      vmInput({
+        screen: "list",
+        status: statusDoc([{ run, tokens: 1_234, cost: 0.42 }]),
+        runs: [run],
+        selectedRunId: run.id,
+      }),
+    );
+    const text = await frame(view, 80, 24, true);
+    const row = text.split("\n").find((line) => line.includes("2 findings"));
+    expect(row).toBeDefined();
+    expect(row).toContain("! 2 findings");
+    expect(row).toContain("paused - idle - 1.2k tokens - $0.42 - 8s");
+    expect(row?.length).toBeLessThanOrEqual(80);
+
+    // The narrower two-pane list still reserves the marker ahead of the long head.
+    const wide = await frame(view, 120, 40, true);
+    const wideRow = wide.split("\n").find((line) => line.includes("2 findings"));
+    expect(wideRow).toBeDefined();
+    expect(wideRow).toContain("! 2 findings");
   });
 
   test("every run row carries its phase glyph beside the phase label", async () => {
@@ -395,7 +432,7 @@ describe("run view layout", () => {
     const wideList = await frame(buildViewModel(listInput), 120, 40, true);
     const sharedRow = wideList
       .split("\n")
-      .find((line) => line.includes(`> ${RUN}`) && line.includes("edited src/health.ts"));
+      .find((line) => line.startsWith("> > ") && line.includes("edited src/health.ts"));
     expect(sharedRow).toBeDefined();
     const narrowList = await frame(buildViewModel(listInput), 80, 24, true);
     expect(narrowList).toContain(`> ${RUN}`);
