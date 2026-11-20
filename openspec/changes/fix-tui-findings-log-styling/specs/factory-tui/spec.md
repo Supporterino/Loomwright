@@ -625,7 +625,7 @@ The view model SHALL carry a scroll offset per scrolling region — run list, ta
 activity log — and SHALL clamp it to `[0, max(0, length - size)]` when the data changes and when the
 terminal is resized, and so that the selected row is inside the window. `j`/`k` and the arrow keys
 SHALL move one row, `PgUp`/`PgDn` a page and `g`/`G` the first and last row on the focused list. A
-section title SHALL show its window (`runs 3-9/12`) only when the list overflows. Every rendered frame
+section title SHALL show its window (`runs 3-11/12`) only when the list overflows. Every rendered frame
 SHALL have at most `rows` lines, with the footer last; the two-pane list preview and the task graph
 SHALL be clipped to the same budget as the run tail. The TUI MUST NOT use Ink-side scrolling or
 mouse input.
@@ -645,7 +645,7 @@ mouse input.
 #### Scenario: the title names the window only when needed
 
 - **WHEN** the list has 12 runs and 9 fit
-- **THEN** the title reads `runs 3-9/12` while the selection is in that window
+- **THEN** the title reads `runs 3-11/12` while the selection is in that window
 - **AND** a list that fits shows no window
 
 #### Scenario: a page move keeps the selection in the window
