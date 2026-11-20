@@ -26,6 +26,15 @@ export function singlePaneTailRows(viewModel: ViewModel): number {
   return Math.max(0, viewModel.rows - headerRows - noticeRows - graphRows - 1);
 }
 
+/** Rows left for the two-pane run tail: header, notice, footer. */
+export function twoPaneTailRows(viewModel: ViewModel): number {
+  const run = viewModel.run;
+  if (run === null) return 0;
+  const headerRows = run.phase === "awaiting-approval" ? 2 : 1;
+  const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
+  return Math.max(0, viewModel.rows - headerRows - noticeRows - 1);
+}
+
 /** Rows left for the detail tail: header, notice, task facts, gate rows, footer. */
 export function taskDetailTailRows(viewModel: ViewModel): number {
   const run = viewModel.run;
@@ -61,7 +70,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
                 lines={run.activity}
                 glyphs={glyphs}
                 depth={depth}
-                maxLines={Math.max(0, viewModel.rows - 6)}
+                maxLines={twoPaneTailRows(viewModel)}
               />
             ) : (
               <TaskDetail
