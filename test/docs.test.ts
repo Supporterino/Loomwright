@@ -508,6 +508,11 @@ describe("terminal UI documentation", () => {
       for (const part of key.split("/")) expect(tui).toContain(`\`${part}\``);
     expect(tui).toContain("`L`");
 
+    // `q` quits from the list, the run view, help and the approval overlay; an open panel or a
+    // text field owns the key, so the table must not promise "Everywhere".
+    const quitRow = tui.split("\n").find((line) => line.startsWith("| `q`"));
+    expect(quitRow).toContain("Run list, run view, help and the approval overlay");
+
     // The footer is built from these pure hints, so checking them covers the rendered footer.
     const sources = [
       read("packages/tui/src/model/view-model.ts"),

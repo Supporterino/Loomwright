@@ -123,7 +123,7 @@ detail; `Esc` backs out of the detail to the graph, then out of the run to the l
 | `Q`             | Open the questions pane                                                                 | Only when the run has questions                        |
 | `Ctrl-J`        | Insert a newline                                                                        | Intake text, answer composer, reword prompt            |
 | `?`             | Help                                                                                    | Everywhere                                             |
-| `q`             | Quit                                                                                    | Everywhere                                             |
+| `q`             | Quit                                                                                    | Run list, run view, help and the approval overlay      |
 
 The approval keys are conditional: `a`, `A` and `R` act on the overlay or its collapsed banner, and
 `R` only appears after an approval was recorded. `w` appears only when the CLI accepts a reword, `t`
