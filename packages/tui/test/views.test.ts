@@ -541,6 +541,27 @@ describe("run view layout", () => {
     expect(text).not.toContain("no activity yet");
   });
 
+  test("an 80x24 frame keeps its four-row tail by shrinking the graph", async () => {
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    resetSeq();
+    const events = Array.from({ length: 6 }, (_, index) =>
+      event("progress.line", { level: "normal", text: `activity-${index + 1}` }),
+    );
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, rows: 24 }));
+    expect(singlePaneTailRows(view)).toBe(4);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("activity-6");
+    expect(text).toContain("activity-3");
+    expect(text).not.toContain("activity-2");
+    expect(text).not.toContain("no activity yet");
+  });
+
   test("the tail renders nothing rather than no activity when zero rows are left", async () => {
     const tasks = Array.from({ length: 24 }, (_, index) =>
       taskState({ id: `task-${index}`, title: `Task ${index}` }),
@@ -548,12 +569,14 @@ describe("run view layout", () => {
     const run = runState({ tasks });
     resetSeq();
     const events = [event("progress.line", { level: "normal", text: "hidden line" })];
-    const text = await frame(
-      buildViewModel(runInput(run, events, { selectedTaskId: null })),
-      80,
-      24,
-      true,
-    );
+    const notice = Array.from({ length: 19 }, (_, index) => `notice line ${index + 1}`).join("\n");
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, notice, rows: 24 }));
+    // 24 rows - header - 19 notice rows - graph title - activity chrome - footer leaves no tail.
+    expect(singlePaneTailRows(view)).toBe(2);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBe(24);
+    expect(lines.at(-1)).toContain("q quit");
     expect(text).not.toContain("hidden line");
     expect(text).not.toContain("no activity yet");
   });
