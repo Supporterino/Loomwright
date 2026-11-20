@@ -158,7 +158,7 @@ sized to the rows left; a selected task's detail SHALL replace both.
 `x` SHALL abort the selected run only after a confirmation that names the change id, and SHALL
 call `Factory.abort`; the UI SHALL then show the phase from run state. `t` SHALL retry the
 selected failed task through `Factory.retry` and SHALL be available only for a failed task. `r`
-SHALL resume a paused, aborted or interrupted run by launching the detached `resume <id>` child.
+SHALL resume a paused, aborted or queued run by launching the detached `resume <id>` child.
 `l` SHALL land the selected run only when its phase is `done` and SHALL first show a confirmation
 that names the change id, says the change branches are merged into their base branches locally,
 deleted once merged, its worktrees and run state removed, and that nothing is pushed. Confirming
