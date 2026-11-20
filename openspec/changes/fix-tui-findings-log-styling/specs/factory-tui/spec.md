@@ -94,7 +94,7 @@ the rows left; a selected task's detail SHALL replace both.
 
 #### Scenario: the tail keeps its floor on a short terminal
 
-- **WHEN** a run with 12 tasks renders at 80×24 with no task selected
+- **WHEN** a run's task graph needs more rows than remain at 80×24 with no task selected
 - **THEN** the activity tail has four rows
 - **AND** the task graph shows fewer rows and scrolls to the selection
 
@@ -609,7 +609,7 @@ heartbeat and horizontal truncation, and the TUI MUST NOT read the referenced fi
 
 #### Scenario: the overview never loses the tail
 
-- **WHEN** a 12-task run renders at 80×24 and the graph overflows
+- **WHEN** a run's task graph needs more rows than remain at 80×24
 - **THEN** the compact tail keeps four rows
 - **AND** the graph window scrolls with the selection
 

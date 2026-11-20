@@ -118,9 +118,9 @@ line, non-follow leaves it alone as data arrives. `Esc` returns to the view it w
 
 The overview keeps a compact tail with a **four-row floor**; the task graph and the two-pane preview
 are the regions that shrink and scroll. Rejected: removing the overview tail entirely (the request
-keeps a compact tail) and letting the graph keep every row (that is the current bug: a 12-task run
-gets zero tail rows). The panes own no Ink-side scrolling and no mouse; the offsets are numbers in
-the view-model, so a frame test can assert them.
+keeps a compact tail) and letting the graph keep every row (that is the current bug: a long enough
+task list, 21 tasks at 80×24, gets zero tail rows). The panes own no Ink-side scrolling and no
+mouse; the offsets are numbers in the view-model, so a frame test can assert them.
 
 ### 5. Scroll is view state and the frame is sliced, not clipped
 
