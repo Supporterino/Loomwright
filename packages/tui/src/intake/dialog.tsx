@@ -4,6 +4,7 @@
  */
 import type { StatusDocument } from "@loomwright/core/factory";
 import type { LaunchAction } from "../launch/launcher.ts";
+import { stripControls } from "../model/format.ts";
 import type { KeyInput } from "../model/keys.ts";
 import type { PanelView } from "../model/view-model.ts";
 import { keyHint } from "../strings.ts";
@@ -129,10 +130,13 @@ export function intakeKeys(
       : { state };
   }
   if (key.backspace) return { state: removeLast(state, ctx) };
-  if (key.escape || input.length === 0) return { state };
+  if (key.escape) return { state };
+  // A paste arrives as one string; its embedded controls must never reach the terminal.
+  const typed = stripControls(input);
+  if (typed.length === 0) return { state };
   return state.mode === "text"
-    ? { state: { ...state, text: state.text + input, error: null } }
-    : { state: editFile(state, input, ctx) };
+    ? { state: { ...state, text: state.text + typed, error: null } }
+    : { state: editFile(state, typed, ctx) };
 }
 
 function title(state: IntakeState, glyphs: GlyphSet): string {

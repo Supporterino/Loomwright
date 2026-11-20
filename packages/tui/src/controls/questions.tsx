@@ -3,6 +3,7 @@
  * factory; an answer is returned to `entry.tsx`, which records it through `Factory.answer` and
  * only labels it "answered" once the run state carries the answer.
  */
+import { stripControls } from "../model/format.ts";
 import type { KeyInput } from "../model/keys.ts";
 import type { PanelView, QuestionRow, RunDetail } from "../model/view-model.ts";
 import { clampOffset, nextOffset, sliceWindow, window as windowOf } from "../model/viewport.ts";
@@ -203,8 +204,10 @@ export function questionsKeys(
   if (key.backspace) return { state: removeLast(state) };
   // Navigation stays inert while composing, even when the terminal reports a raw sequence.
   if (key.upArrow || key.downArrow || key.pageUp || key.pageDown) return { state };
-  if (key.tab || key.ctrl || key.meta || input.length === 0) return { state };
-  return { state: append(state, input) };
+  // A paste arrives as one string; its embedded controls must never reach the terminal.
+  const typed = stripControls(input);
+  if (key.tab || key.ctrl || key.meta || typed.length === 0) return { state };
+  return { state: append(state, typed) };
 }
 
 /**

@@ -274,7 +274,7 @@ function approvalView(run: RunState, snapshot: RunSnapshot | null): ApprovalView
   const approver = granted !== null && granted.approver !== "" ? granted.approver : null;
   return {
     changeId: run.id,
-    summary: run.summary,
+    summary: flat(run.summary),
     changeDir: pending === null ? null : flat(pending.changeDir),
     specHash: specHash === null ? null : flat(specHash),
     // `approval.requested` sets `approver: ""`; only `approval.granted` names a commit and person.
@@ -345,7 +345,7 @@ function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
   const selected = tasks.find((task) => task.id === input.selectedTaskId) ?? null;
   return {
     id: run.id,
-    summary: run.summary,
+    summary: flat(run.summary),
     phase: run.phase,
     elapsedMs: elapsedSince(run.createdAt, input.now),
     tokens: entry.tokens,
@@ -522,7 +522,7 @@ export function buildViewModel(input: ViewModelInput): ViewModel {
   );
   const list: RunListItem[] = ordered.map(({ run, tokens, cost }) => ({
     id: run.id,
-    summary: run.summary,
+    summary: flat(run.summary),
     phase: run.phase,
     role: roleOf(run.id, input.status),
     tokens,

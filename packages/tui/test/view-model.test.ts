@@ -191,6 +191,18 @@ describe("format", () => {
 });
 
 describe("buildViewModel", () => {
+  test("a run summary with controls and newlines is flattened before any pane renders it", () => {
+    const run = runState({
+      phase: "awaiting-approval",
+      summary: "Add\u001b[2J health\nendpoints",
+    });
+    const status = statusDoc([{ run, tokens: 0, cost: 0 }]);
+    const view = buildViewModel(vmInput({ status, runs: [run], selectedRunId: RUN }));
+    expect(view.list[0]?.summary).toBe("Add[2J health endpoints");
+    expect(view.run?.summary).toBe("Add[2J health endpoints");
+    expect(view.run?.approval?.summary).toBe("Add[2J health endpoints");
+  });
+
   test("header: id, phase label, elapsed, tokens, cost and lock role", () => {
     const run = runState({ phase: "awaiting-approval" });
     const status = statusDoc([{ run, tokens: 12_345, cost: 0.42 }]);

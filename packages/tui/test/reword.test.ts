@@ -436,6 +436,19 @@ describe("the prompt is a multi-line text field", () => {
     expect(state.text).toBe("apply finding 2\nsecond lin");
   });
 
+  test("a paste with an embedded ESC is stripped before the prompt launches", () => {
+    const pasted = rewordKeys(
+      run,
+      opening({ specFindings: [finding()] }),
+      "prefix\u001b[2J",
+      key(),
+      24,
+      80,
+    ).state;
+    expect(pasted.text).not.toContain("\u001b");
+    expect(pasted.text).toBe("prefix[2J");
+  });
+
   test("Esc closes and discards the text without launching", () => {
     const typed = typeText(run, opening({ specFindings: [finding()] }), "draft");
     const closed = rewordKeys(run, typed, "", key({ escape: true }), 24, 80);

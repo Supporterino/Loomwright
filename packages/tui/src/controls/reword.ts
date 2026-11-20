@@ -3,6 +3,7 @@
  * factory or spawns a child; `entry.tsx` turns the emitted launch into a detached launcher call.
  * Availability is never re-derived here: `run.reword` is the single predicate.
  */
+import { stripControls } from "../model/format.ts";
 import type { KeyInput } from "../model/keys.ts";
 import type { PanelView, RunDetail, SpecFindingRow } from "../model/view-model.ts";
 import { clampOffset, pageSize, sliceWindow, window as windowOf } from "../model/viewport.ts";
@@ -197,8 +198,10 @@ export function rewordKeys(
   if (key.backspace) return { state: removeLast(state) };
   // Other chords, tabs and editing keys stay inert; every other printable key types.
   if (key.ctrl || key.meta || key.tab || key.delete) return { state };
-  if (input.length === 0) return { state };
-  return { state: { ...state, text: state.text + input, notice: null } };
+  // A paste arrives as one string; its embedded controls must never reach the terminal.
+  const typed = stripControls(input);
+  if (typed.length === 0) return { state };
+  return { state: { ...state, text: state.text + typed, notice: null } };
 }
 
 function dash(glyphs: GlyphSet): string {

@@ -655,6 +655,16 @@ describe("printable keys append in the composer", () => {
     expect(typed.text).toBe("j");
     expect(typed.selected).toBe(0);
   });
+
+  test("a paste with an embedded ESC is stripped before the composer renders it", () => {
+    const run = askRun([{ step: "design", question: "First?", status: "unanswered" }]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const pasted = questionsKeys(run, composing, "prefix\u001b]52;c;aGFjaw==", key()).state;
+    expect(pasted.text).not.toContain("\u001b");
+    expect(pasted.text).toBe("prefix]52;c;aGFjaw==");
+  });
 });
 
 describe("the run is not asked", () => {

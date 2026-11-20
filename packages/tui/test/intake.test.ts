@@ -250,6 +250,19 @@ describe("text intake", () => {
     const newline = intakeKeys(typed, "j", key({ ctrl: true }), ctx).state;
     expect(newline.text).toBe("first\nsecond\n");
   });
+
+  test("a paste with an embedded ESC is stripped in the text and path fields", () => {
+    const ws = workspace();
+    const ctx = context(ws);
+    const typed = intakeKeys(initialIntake, "prefix\u001b[2J", key(), ctx).state;
+    expect(typed.text).not.toContain("\u001b");
+    expect(typed.text).toBe("prefix[2J");
+
+    const fileMode = intakeKeys(initialIntake, "", key({ tab: true }), ctx).state;
+    const path = intakeKeys(fileMode, "a\u001b]52;c;x", key(), ctx).state;
+    expect(path.path).not.toContain("\u001b");
+    expect(path.path).toBe("a]52;c;x");
+  });
 });
 
 describe("a blank request is rejected", () => {
