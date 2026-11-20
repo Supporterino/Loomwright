@@ -506,9 +506,11 @@ code and the log tail. Replay SHALL refuse the key with the read-only notice and
 #### Scenario: a driven run explains why w is inert
 
 - **WHEN** the selected run is implementing and its driver is alive with pid 4242
-- **THEN** the footer shows `w` as unavailable with the CLI's reason,
-  `add-health is being driven by pid 4242; stop it first`
-- **AND** pressing `w` opens no panel and launches nothing
+- **THEN** the footer shows `w` as unavailable
+- **AND** pressing `w` shows the CLI's reason as a notice,
+  `add-health is being driven by pid 4242; stop it first`, and launches nothing
+- **AND** at 120 columns the footer names the same reason; at 80 columns it clips to the room the
+  enabled keys leave, so `q` and `?` stay visible
 
 #### Scenario: phases the CLI refuses offer no reword
 
