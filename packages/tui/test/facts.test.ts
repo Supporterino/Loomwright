@@ -295,6 +295,42 @@ describe("every run event folds into the activity facts", () => {
     expect(facts.activity[2]?.text).toBe("tab\tkept (unanswered)");
   });
 
+  test("control characters are stripped from the step and the log reference too", () => {
+    const ref = (path: string): unknown => ({ path, offset: 0, bytes: 1 });
+    const facts = collectFacts([
+      event(1, "progress.line", {
+        level: "normal",
+        text: "rendering progress",
+        ref: ref("\u001b]52;c;SGVsbG8=\u0007clip"),
+      }),
+      event(2, "agent.activity", {
+        step: "\u001b[2J1.1\u0007",
+        detail: "edited src/health.ts",
+        kind: "tool",
+        ref: ref("\u001b[2Jlog\u0007"),
+      }),
+      event(3, "gate.finished", {
+        name: "lint",
+        type: "lint",
+        status: "pass",
+        durationMs: 10,
+        step: "\u001b[2J1.1\u0007",
+      }),
+    ]);
+
+    const isControl = (character: string): boolean =>
+      /\p{Cc}/u.test(character) && character !== "\t" && character !== "\n";
+    for (const line of facts.activity) {
+      for (const value of [line.step, line.logRef ?? ""]) {
+        expect([...value].some(isControl)).toBe(false);
+      }
+    }
+    expect(facts.activity[0]?.logRef).toBe("]52;c;SGVsbG8=clip");
+    expect(facts.activity[1]?.step).toBe("[2J1.1");
+    expect(facts.activity[1]?.logRef).toBe("[2Jlog");
+    expect(facts.gates["[2J1.1"]?.[0]?.step).toBe("[2J1.1");
+  });
+
   test("the task detail stays task-scoped: only its source lines, while the run tail keeps both", () => {
     const run = RunState.parse({
       version: 1,

@@ -64,10 +64,10 @@ function line(event: RunEvent, step: string, kind: string, text: string): Activi
   const logRef = refOf(event.data);
   return {
     seq: event.seq,
-    step,
+    step: flat(step),
     kind,
     text: flat(text),
-    ...(logRef === undefined ? {} : { logRef }),
+    ...(logRef === undefined ? {} : { logRef: flat(logRef) }),
   };
 }
 
@@ -89,7 +89,7 @@ export function appendFacts(prior: EventFacts, events: readonly RunEvent[]): Eve
   for (const event of events) {
     switch (event.type) {
       case "gate.finished": {
-        const step = event.data.step ?? "";
+        const step = flat(event.data.step ?? "");
         const row: GateRow = {
           step,
           name: event.data.name,
@@ -175,10 +175,10 @@ export function appendFacts(prior: EventFacts, events: readonly RunEvent[]): Eve
         const ref = event.data.ref?.path;
         activity.push({
           seq: event.seq,
-          step: event.data.step,
+          step: flat(event.data.step),
           kind: event.data.kind,
           text: flat(event.data.detail),
-          ...(ref === undefined ? {} : { logRef: ref }),
+          ...(ref === undefined ? {} : { logRef: flat(ref) }),
         });
         break;
       }
