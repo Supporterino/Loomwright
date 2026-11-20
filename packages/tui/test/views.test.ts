@@ -655,12 +655,46 @@ describe("task detail", () => {
       ),
     ];
     const view = buildViewModel(runInput(run, events, { selectedTaskId: "first", rows: 24 }));
-    // 24 rows - header - detail facts - two gate rows - footer.
-    expect(taskDetailTailRows(view)).toBe(14);
+    // 24 rows - header - eight facts - two gate rows - two titles - footer.
+    expect(taskDetailTailRows(view)).toBe(10);
     const text = await frame(view, 80, 24, true);
     expect(text).toContain("activity-20");
     expect(text).toContain(".factory/logs/last.log");
     expect(text).not.toContain("activity-1\n");
+  });
+
+  test("a task detail with 20 gates and a scrolling tail windows the gates at 80x24", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "running" })],
+    });
+    resetSeq();
+    const gates = Array.from({ length: 20 }, (_, index) =>
+      event("gate.finished", {
+        name: `gate-${index + 1}`,
+        type: "test",
+        status: index % 4 === 0 ? "fail" : "pass",
+        durationMs: 100 + index * 50,
+        step: "first",
+      }),
+    );
+    const activity = Array.from({ length: 20 }, (_, index) =>
+      event("agent.activity", {
+        step: "first",
+        detail: `activity-${index + 1}`,
+        kind: "tool",
+      }),
+    );
+    const view = buildViewModel(
+      runInput(run, [...gates, ...activity], { selectedTaskId: "first", rows: 24 }),
+    );
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("gate-7");
+    expect(text).not.toContain("gate-8");
+    expect(text).toContain("13 more gates");
+    expect(text).toContain("activity-20");
   });
 });
 

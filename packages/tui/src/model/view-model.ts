@@ -449,15 +449,34 @@ export function twoPaneTailRows(viewModel: ViewModel): number {
   return Math.max(0, viewModel.rows - headerRows - noticeRows - 1);
 }
 
-/** Rows left for the detail tail: header, notice, task facts, gate rows, footer. */
+/** The detail rows that are never windowed: eight facts plus the `Gates` and `Activity` titles. */
+const DETAIL_FIXED_ROWS = 10;
+
+/** The detail tail keeps this many rows; the gate list may only grow into the ones above. */
+const DETAIL_TAIL_FLOOR = 4;
+
+/** Rows left for the detail body: header, notice and footer removed. */
+function detailBodyRows(viewModel: ViewModel, run: RunDetail): number {
+  const headerRows = run.phase === "awaiting-approval" ? 2 : 1;
+  const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
+  return Math.max(0, viewModel.rows - headerRows - noticeRows - 1);
+}
+
+/** Rows the gate list may render, the last one counting the hidden gates; the tail keeps its floor. */
+export function taskDetailGateRows(viewModel: ViewModel): number {
+  const run = viewModel.run;
+  if (run === null || run.detail === null) return 0;
+  return Math.max(0, detailBodyRows(viewModel, run) - DETAIL_FIXED_ROWS - DETAIL_TAIL_FLOOR);
+}
+
+/** Rows left for the detail tail: the body minus the fixed rows and the gates that fit. */
 export function taskDetailTailRows(viewModel: ViewModel): number {
   const run = viewModel.run;
   if (run === null || run.detail === null) return 0;
-  const headerRows = run.phase === "awaiting-approval" ? 2 : 1;
-  const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
-  // Title, status, agent, retries, Gates heading, gate rows, Activity heading.
-  const detailRows = 6 + Math.max(1, run.detail.gates.length);
-  return Math.max(0, viewModel.rows - headerRows - noticeRows - detailRows - 1);
+  const gates = run.detail.gates.length;
+  // An empty gate list still renders its `no gate results` row.
+  const gateRows = gates === 0 ? 1 : Math.min(gates, taskDetailGateRows(viewModel));
+  return Math.max(0, detailBodyRows(viewModel, run) - DETAIL_FIXED_ROWS - gateRows);
 }
 
 export function buildViewModel(input: ViewModelInput): ViewModel {

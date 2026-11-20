@@ -8,14 +8,14 @@
  model    unknown
  duration -
  Gates
- x lint-1         fail 0s
- + format-2       pass 0s
- + types-3        pass 0s
- + test-4         pass 0s
- x testAffected-5 fail 0s
- + lint-6         pass 0s
- + format-7       pass 0s
- + types-8        pass 0s
+ x lint-1          fail 0s
+ + format-2        pass 0s
+ + types-3         pass 0s
+ + test-4          pass 0s
+ x testAffected-5  fail 0s
+ + lint-6          pass 0s
+ + format-7        pass 0s
+ 13 more gates
  Activity
  first - tool - activity line 17
  first - tool - activity line 18

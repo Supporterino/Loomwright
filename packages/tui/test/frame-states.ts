@@ -621,9 +621,8 @@ function taskDetailGates(size: FrameSize): ViewModel {
     tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "running" })],
   });
   resetSeq();
-  // shortcut: the detail has no gate scroller, so the short terminal shows 8 of the 20 gates;
-  // add a gate window when a run can have more gates than the terminal rows.
-  const gateCount = size.rows <= 24 ? 8 : 20;
+  // The spec's snapshot is a full 20-gate run at both sizes; the 80x24 detail windows the list.
+  const gateCount = 20;
   const gates = Array.from({ length: gateCount }, (_, index) => {
     const type = GATE_TYPES[index % GATE_TYPES.length] ?? "lint";
     return event("gate.finished", {

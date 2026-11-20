@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 import type { ReactElement } from "react";
 import { formatElapsed, truncate } from "../model/format.ts";
-import type { TaskDetail as TaskDetailView } from "../model/view-model.ts";
+import type { GateRow, TaskDetail as TaskDetailView } from "../model/view-model.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
 import { ActivityTail } from "./activity.tsx";
@@ -13,6 +13,8 @@ export interface TaskDetailProps {
   readonly depth: ColorDepth;
   /** Rows left for the activity tail, so the newest lines fit inside the frame. */
   readonly maxLines: number;
+  /** Rows the gate list may use; the last one counts the gates it hides. */
+  readonly gateRows: number;
 }
 
 /** The fact labels; the widest one sets the column the values line up in. */
@@ -27,8 +29,21 @@ const FACT_LABELS = [
   "duration",
 ] as const;
 
-/** The row budget counts four fact rows; the two-column block spends four more. */
-const EXTRA_FACT_ROWS = FACT_LABELS.length - 4;
+interface GateWindow {
+  readonly shown: readonly GateRow[];
+  readonly more: number;
+}
+
+/**
+ * The rows that fit, cutting the tail of the list; the final row counts what it hides so a gate
+ * result is never silently dropped.
+ */
+function windowGates(gates: readonly GateRow[], rows: number): GateWindow {
+  if (rows <= 0) return { shown: [], more: 0 };
+  if (gates.length <= rows) return { shown: gates, more: 0 };
+  const shown = gates.slice(0, rows - 1);
+  return { shown, more: gates.length - shown.length };
+}
 
 interface Fact {
   readonly label: string;
@@ -62,13 +77,20 @@ function factsOf(detail: TaskDetailView, glyphs: GlyphSet): readonly Fact[] {
   ];
 }
 
-export function TaskDetail({ detail, glyphs, depth, maxLines }: TaskDetailProps): ReactElement {
+export function TaskDetail({
+  detail,
+  glyphs,
+  depth,
+  maxLines,
+  gateRows,
+}: TaskDetailProps): ReactElement {
   const { gates, activity } = detail;
   const facts = factsOf(detail, glyphs);
   const labelWidth = Math.max(...FACT_LABELS.map((label) => label.length));
   const nameWidth = gates.reduce((width, gate) => Math.max(width, gate.name.length), 0);
   const statusWidth = gates.reduce((width, gate) => Math.max(width, gate.status.length), 0);
   const widths = { name: nameWidth, status: statusWidth };
+  const gateWindow = windowGates(gates, gateRows);
   return (
     <Box flexDirection="column">
       {facts.map((fact) => (
@@ -81,22 +103,22 @@ export function TaskDetail({ detail, glyphs, depth, maxLines }: TaskDetailProps)
       {gates.length === 0 ? (
         <Text {...colorProps("muted", depth)}>no gate results</Text>
       ) : (
-        gates.map((gate) => (
-          <Text key={`${gate.step}-${gate.name}`} wrap="truncate">
-            <Text {...colorProps(statusToken(gate.status), depth)}>
-              {statusGlyph(gate.status, glyphs)}
-            </Text>{" "}
-            {gateLine(gate.name, gate.status, formatElapsed(gate.durationMs), widths)}
-          </Text>
-        ))
+        <>
+          {gateWindow.shown.map((gate) => (
+            <Text key={`${gate.step}-${gate.name}`} wrap="truncate">
+              <Text {...colorProps(statusToken(gate.status), depth)}>
+                {statusGlyph(gate.status, glyphs)}
+              </Text>{" "}
+              {gateLine(gate.name, gate.status, formatElapsed(gate.durationMs), widths)}
+            </Text>
+          ))}
+          {gateWindow.more === 0 ? null : (
+            <Text {...colorProps("muted", depth)}>{`${gateWindow.more} more gates`}</Text>
+          )}
+        </>
       )}
       <Text bold>Activity</Text>
-      <ActivityTail
-        lines={activity}
-        glyphs={glyphs}
-        depth={depth}
-        maxLines={Math.max(0, maxLines - EXTRA_FACT_ROWS)}
-      />
+      <ActivityTail lines={activity} glyphs={glyphs} depth={depth} maxLines={maxLines} />
     </Box>
   );
 }

@@ -40,7 +40,9 @@ The header repeats the phase glyph and label, id, elapsed time, tokens, cost and
 one column of left padding and titles its two sections `Tasks` and `Activity`. The task graph follows
 `tasks.md` order and shows each task's status glyph and label, repo and attempt.
 Selecting a task (or drilling into it with `Enter` below 100 columns) shows the task detail: agent
-role and model, retries, every gate with its step, status and duration, and the task's activity.
+role and model, retries, the gates that fit with their step, status and duration, and the task's
+activity. When more gates exist than the terminal has rows, the list ends with an `N more gates` row
+so the activity tail and footer keep their rows.
 
 The activity tail is folded from every run event, not just an agent's tool lines: design, approval,
 installs, merges, closing, progress and heartbeats all land there. Each line reads

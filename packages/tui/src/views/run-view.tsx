@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import {
   type ActivityLine,
   singlePaneTailRows,
+  taskDetailGateRows,
   taskDetailTailRows,
   twoPaneTailRows,
   type ViewModel,
@@ -119,6 +120,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
                 glyphs={glyphs}
                 depth={depth}
                 maxLines={taskDetailTailRows(viewModel)}
+                gateRows={taskDetailGateRows(viewModel)}
               />
             )}
           </Box>
@@ -140,6 +142,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
           glyphs={glyphs}
           depth={depth}
           maxLines={taskDetailTailRows(viewModel)}
+          gateRows={taskDetailGateRows(viewModel)}
         />
       )}
     </Box>
