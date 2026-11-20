@@ -22,6 +22,9 @@ import {
   roleLabel,
   type SpecFindingRow,
   singlePaneTailRows,
+  taskDetailGateRows,
+  taskDetailTailRows,
+  twoPaneTailRows,
   type ViewModelInput,
 } from "../src/model/view-model.ts";
 import { lastOffset, moveBy, pageSize, windowTitle } from "../src/model/viewport.ts";
@@ -1061,6 +1064,53 @@ describe("scroll windows", () => {
     );
     expect(fits.taskWindow.size).toBe(12);
     expect(singlePaneTailRows(fits)).toBe(9);
+  });
+
+  test("a paused run with findings counts its banner row in every budget", () => {
+    const findings: readonly SpecFindingRow[] = [
+      {
+        severity: "must",
+        file: "packages/tui/src/views/header.tsx",
+        line: 42,
+        what: "the banner hides the count",
+        problem: "a paused run looks like a generic pause",
+        fix: "name the findings in words",
+        impact: "the user cannot see why the run stopped",
+      },
+      {
+        severity: "should",
+        file: "packages/tui/src/model/view-model.ts",
+        line: 437,
+        what: "the banner row is missing",
+        problem: "the budget counts one header row for a two-row header",
+        fix: "count the paused banner",
+        impact: "a long paused run overflows",
+      },
+      {
+        severity: "nice",
+        file: "packages/tui/src/strings.ts",
+        line: 44,
+        what: "the third finding is a fixture",
+        problem: "three findings exercise the plural banner",
+        fix: "keep three",
+        impact: "none",
+      },
+    ];
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const view = buildViewModel(
+      runInput(runState({ phase: "paused", specFindings: findings, tasks }), [], {
+        rows: 24,
+        selectedTaskId: "task-0",
+      }),
+    );
+    // 24 rows - two header rows - graph and titles - footer; the graph gives way to the tail floor.
+    expect(view.taskWindow.size).toBe(16);
+    expect(singlePaneTailRows(view)).toBe(4);
+    expect(twoPaneTailRows(view)).toBe(21);
+    expect(taskDetailGateRows(view)).toBe(7);
+    expect(taskDetailTailRows(view)).toBe(10);
   });
 
   test("the overview never loses the tail", () => {

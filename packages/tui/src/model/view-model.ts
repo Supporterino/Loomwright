@@ -430,23 +430,29 @@ function footerFor(input: ViewModelInput, run: RunDetail | null): readonly KeyHi
 /** The overview's compact tail never drops below four rows; a shorter terminal scrolls the graph. */
 export const TAIL_FLOOR = 4;
 
+/** Header rows: the phase line, plus the approving or paused-findings banner when it renders. */
+function headerRows(run: RunDetail | null): number {
+  if (run === null) return 1;
+  if (run.phase === "awaiting-approval") return 2;
+  if (run.phase === "paused" && run.specFindings.length > 0) return 2;
+  return 1;
+}
+
 /** Rows left for the tail in one pane: header, notice, graph title and rows, footer. */
 export function singlePaneTailRows(viewModel: ViewModel): number {
   const run = viewModel.run;
   if (run === null) return 0;
-  const headerRows = run.phase === "awaiting-approval" ? 2 : 1;
   const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
   const graphRows = 1 + Math.min(run.tasks.length, viewModel.taskWindow.size);
-  return Math.max(0, viewModel.rows - headerRows - noticeRows - graphRows - 1);
+  return Math.max(0, viewModel.rows - headerRows(run) - noticeRows - graphRows - 1);
 }
 
 /** Rows left for the two-pane run tail: header, notice, footer. */
 export function twoPaneTailRows(viewModel: ViewModel): number {
   const run = viewModel.run;
   if (run === null) return 0;
-  const headerRows = run.phase === "awaiting-approval" ? 2 : 1;
   const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
-  return Math.max(0, viewModel.rows - headerRows - noticeRows - 1);
+  return Math.max(0, viewModel.rows - headerRows(run) - noticeRows - 1);
 }
 
 /** The detail rows that are never windowed: eight facts plus the `Gates` and `Activity` titles. */
@@ -457,9 +463,8 @@ const DETAIL_TAIL_FLOOR = 4;
 
 /** Rows left for the detail body: header, notice and footer removed. */
 function detailBodyRows(viewModel: ViewModel, run: RunDetail): number {
-  const headerRows = run.phase === "awaiting-approval" ? 2 : 1;
   const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
-  return Math.max(0, viewModel.rows - headerRows - noticeRows - 1);
+  return Math.max(0, viewModel.rows - headerRows(run) - noticeRows - 1);
 }
 
 /** Rows the gate list may render, the last one counting the hidden gates; the tail keeps its floor. */
@@ -504,12 +509,12 @@ export function buildViewModel(input: ViewModelInput): ViewModel {
 
   // Every growing region gets a budget; the footer and a one-row title are never spent on rows.
   const noticeRows = notice === null ? 0 : notice.split("\n").length;
-  const headerRows = run?.phase === "awaiting-approval" ? 2 : 1;
+  const header = headerRows(run);
   const footerRows = 1;
   const listSize = Math.max(0, input.rows - 1 - footerRows - noticeRows);
   const graphSize = Math.min(
     run?.tasks.length ?? 0,
-    Math.max(0, input.rows - headerRows - noticeRows - 2 - TAIL_FLOOR),
+    Math.max(0, input.rows - header - noticeRows - 2 - TAIL_FLOOR),
   );
 
   const listIndex = list.findIndex((item) => item.id === input.selectedRunId);

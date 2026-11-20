@@ -507,6 +507,33 @@ describe("run view layout", () => {
     expect(text).not.toContain("no activity yet");
   });
 
+  test("a paused run with findings and a full activity tail keeps the frame within 24 lines", async () => {
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const findings = Array.from({ length: 3 }, (_, index) => ({
+      severity: index === 0 ? "must" : index === 1 ? "should" : "nice",
+      file: "packages/tui/src/views/header.tsx",
+      line: 42 + index,
+      what: `finding ${index + 1}`,
+      problem: "the banner row is missing",
+      fix: "count it",
+      impact: "the frame overflows",
+    }));
+    const run = runState({ phase: "paused", specFindings: findings, tasks });
+    resetSeq();
+    const events = Array.from({ length: 19 }, (_, index) =>
+      event("progress.line", { level: "normal", text: `activity-${index + 1}` }),
+    );
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, rows: 24 }));
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("paused - 3 spec findings need reword");
+    expect(text).toContain("activity-19");
+  });
+
   test("a multi-line failure notice counts its rows so the newest activity stays visible", async () => {
     const run = runState({
       tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
