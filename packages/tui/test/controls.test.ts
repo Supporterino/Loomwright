@@ -19,6 +19,8 @@ import {
   type QuestionsState,
   questionsKeys,
   questionsPanel,
+  recordAnswerInState,
+  recordKey,
 } from "../src/controls/questions.tsx";
 import {
   createLandGuard,
@@ -172,8 +174,13 @@ function askRun(
   );
 }
 
-function panelText(run: RunDetail, state: QuestionsState): string {
-  const panel = questionsPanel({ run, state, glyphs: UNICODE_GLYPHS });
+function panelText(run: RunDetail, state: QuestionsState, rows?: number): string {
+  const panel = questionsPanel({
+    run,
+    state,
+    glyphs: UNICODE_GLYPHS,
+    ...(rows === undefined ? {} : { rows }),
+  });
   return [
     panel.title,
     ...panel.lines,
@@ -320,7 +327,7 @@ describe("Q opens the questions pane only when questions exist", () => {
     expect(quiet.footer.some((hint) => hint.key === "Q")).toBe(false);
   });
 
-  test("an unanswered record opens its draft directly", () => {
+  test("openQuestions selects the first unanswered record with focus record and no text", () => {
     const run = askRun([
       { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
       { step: "design", question: "Do health checks need auth?", status: "skipped" },
@@ -328,17 +335,16 @@ describe("Q opens the questions pane only when questions exist", () => {
     const state = openQuestions(run);
     expect(state).toEqual({
       selected: 0,
-      draft: {
-        step: "design",
-        question: "Which endpoints should be public?",
-        text: "",
-        recorded: false,
-      },
+      focus: "record",
+      text: "",
+      offset: 0,
+      recorded: new Set(),
       notice: null,
     });
     if (state === null) throw new Error("the pane did not open");
     expect(questionsPanel({ run, state, glyphs: UNICODE_GLYPHS }).kind).toBe("questions");
-    expect(panelText(run, state)).toContain("answer>");
+    expect(panelText(run, state)).toContain("unanswered");
+    expect(panelText(run, state)).not.toContain("answer>");
   });
 });
 
@@ -349,7 +355,8 @@ describe("an answer is recorded, then confirmed", () => {
     ]);
     const opened = openQuestions(run);
     if (opened === null) throw new Error("the pane did not open");
-    const typed = typeText(run, opened, "public /health");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "public /health");
 
     const outcome = questionsKeys(run, typed, "Enter", key({ return: true }));
     expect(outcome.answer).toEqual({
@@ -373,18 +380,21 @@ describe("an answer is recorded, then confirmed", () => {
     ]);
     const opened = openQuestions(run);
     if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
 
-    const blank = questionsKeys(run, opened, "Enter", key({ return: true }));
+    const blank = questionsKeys(run, composing, "Enter", key({ return: true }));
     expect(blank.answer).toBeUndefined();
     expect(blank.state.notice).toBe("the answer is empty");
 
     const typed = typeText(run, blank.state, "public");
     const emitted = questionsKeys(run, typed, "Enter", key({ return: true }));
     if (emitted.answer === undefined) throw new Error("the typed answer did not emit");
-    const recorded: QuestionsState = {
-      ...emitted.state,
-      draft: emitted.state.draft === null ? null : { ...emitted.state.draft, recorded: true },
-    };
+    const recorded = recordAnswerInState(
+      run,
+      emitted.state,
+      "design",
+      "Which endpoints should be public?",
+    );
     const pending = panelText(run, recorded);
     expect(pending).toContain(answerRecorded);
     expect(pending).not.toContain("answered -");
@@ -397,11 +407,9 @@ describe("an answer is recorded, then confirmed", () => {
         answer: "public /health",
       },
     ]);
-    const answered = panelText(answeredRun, {
-      selected: 0,
-      draft: null,
-      notice: null,
-    });
+    const answeredState = openQuestions(answeredRun);
+    if (answeredState === null) throw new Error("the pane did not open");
+    const answered = panelText(answeredRun, answeredState);
     expect(answered).toContain("answered");
     expect(answered).toContain("public /health");
   });
@@ -412,17 +420,198 @@ describe("an answer is recorded, then confirmed", () => {
     ]);
     const opened = openQuestions(run);
     if (opened === null) throw new Error("the pane did not open");
-    const typed = typeText(run, opened, "public /health");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "public /health");
     const first = questionsKeys(run, typed, "Enter", key({ return: true }));
     if (first.answer === undefined) throw new Error("the first Enter did not emit");
 
     const recorded: QuestionsState = {
       ...first.state,
-      draft: first.state.draft === null ? null : { ...first.state.draft, recorded: true },
+      recorded: new Set([recordKey("design", "Which endpoints should be public?")]),
     };
     const second = questionsKeys(run, recorded, "Enter", key({ return: true }));
     expect(second.answer).toBeUndefined();
     expect(second.state).toEqual(recorded);
+  });
+});
+
+describe("answer then advance keeps the pane open", () => {
+  test("answering the first of three records selects the second and keeps the pane open", () => {
+    const run = askRun([
+      { step: "design", question: "First?", status: "unanswered" },
+      { step: "design", question: "Second?", status: "unanswered" },
+      { step: "design", question: "Third?", status: "answered", answer: "done" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "one");
+    const emitted = questionsKeys(run, typed, "Enter", key({ return: true }));
+    if (emitted.answer === undefined) throw new Error("the answer did not emit");
+
+    const recorded = recordAnswerInState(run, emitted.state, "design", "First?");
+    expect(recorded.selected).toBe(1);
+    expect(recorded.focus).toBe("record");
+    expect(recorded.text).toBe("");
+    expect(recorded.recorded.has(recordKey("design", "First?"))).toBe(true);
+
+    const panel = questionsPanel({ run, state: recorded, glyphs: UNICODE_GLYPHS });
+    expect(panel.kind).toBe("questions");
+    const text = panel.lines.join("\n");
+    expect(text).toContain(answerRecorded);
+    expect(text).toContain("Second?");
+    expect(text).toContain("Enter answers");
+    expect(panel.keys.map((hint) => `${hint.key} ${hint.label}`)).toEqual([
+      "j/k navigate",
+      "Enter answer",
+      "Esc close",
+    ]);
+  });
+});
+
+describe("Ctrl-J inserts a newline", () => {
+  test("first, Ctrl-J, second emits one answer with a newline and the composer shows two lines", () => {
+    const run = askRun([
+      { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const first = typeText(run, composing, "first");
+    const newline = questionsKeys(run, first, "j", key({ ctrl: true }));
+    expect(newline.state.text).toBe("first\n");
+    const second = typeText(run, newline.state, "second");
+
+    const outcome = questionsKeys(run, second, "Enter", key({ return: true }));
+    expect(outcome.answer).toEqual({
+      answer: "first\nsecond",
+      question: "Which endpoints should be public?",
+    });
+    const panel = questionsPanel({ run, state: outcome.state, glyphs: UNICODE_GLYPHS });
+    expect(panel.lines).toContain("answer> first");
+    expect(panel.lines).toContain("  second");
+  });
+});
+
+describe("Esc discards the composer, then closes", () => {
+  test("the first Esc clears the text and keeps the pane, the second closes it", () => {
+    const run = askRun([
+      { step: "design", question: "First?", status: "unanswered" },
+      { step: "design", question: "Second?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "draft");
+
+    const left = questionsKeys(run, typed, "", key({ escape: true }));
+    expect(left.close).toBeUndefined();
+    expect(left.answer).toBeUndefined();
+    expect(left.state.focus).toBe("record");
+    expect(left.state.text).toBe("");
+    expect(left.state.selected).toBe(0);
+
+    const moved = questionsKeys(run, left.state, "j", key()).state;
+    expect(moved.selected).toBe(1);
+
+    const closed = questionsKeys(run, moved, "", key({ escape: true }));
+    expect(closed.close).toBe(true);
+  });
+});
+
+describe("an empty answer is refused", () => {
+  test("spaces and newlines show the notice and record nothing", () => {
+    const run = askRun([
+      { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    let state = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    state = typeText(run, state, "  ");
+    state = questionsKeys(run, state, "j", key({ ctrl: true })).state;
+    state = typeText(run, state, " ");
+
+    const refused = questionsKeys(run, state, "Enter", key({ return: true }));
+    expect(refused.answer).toBeUndefined();
+    expect(refused.state.notice).toBe("the answer is empty");
+    expect(refused.state.focus).toBe("composer");
+    expect(panelText(run, refused.state)).toContain("the answer is empty");
+  });
+});
+
+describe("many records scroll", () => {
+  test("eight records at 80x24 show the selected last record and not the first", () => {
+    const run = askRun(
+      Array.from({ length: 8 }, (_, index) => ({
+        step: "design",
+        question: `Question ${index}?`,
+        status: "unanswered" as const,
+      })),
+    );
+    let state = openQuestions(run);
+    if (state === null) throw new Error("the pane did not open");
+    for (let step = 0; step < 7; step += 1) {
+      state = questionsKeys(run, state, "j", key(), 24).state;
+    }
+    expect(state.selected).toBe(7);
+    expect(state.offset).toBeGreaterThan(0);
+
+    const panel = questionsPanel({
+      run,
+      state,
+      glyphs: ASCII_GLYPHS,
+      rows: 24,
+    });
+    const text = panel.lines.join("\n");
+    expect(text).toContain("Question 7?");
+    expect(text).not.toContain("Question 0?");
+
+    // The window moves with the selection: back at the top the first record is visible again.
+    for (let step = 0; step < 7; step += 1) {
+      state = questionsKeys(run, state, "k", key(), 24).state;
+    }
+    expect(state.selected).toBe(0);
+    expect(state.offset).toBe(0);
+    expect(panelText(run, state, 24)).toContain("Question 0?");
+  });
+});
+
+describe("the questions footer names the keys that work", () => {
+  test("record focus lists j/k, Enter and Esc and composer focus names Ctrl-J and Esc leaves", () => {
+    const run = askRun([
+      { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const recordPanel = questionsPanel({ run, state: opened, glyphs: UNICODE_GLYPHS });
+    expect(recordPanel.keys.map((hint) => `${hint.key} ${hint.label}`)).toEqual([
+      "j/k navigate",
+      "Enter answer",
+      "Esc close",
+    ]);
+
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const composerPanel = questionsPanel({ run, state: composing, glyphs: UNICODE_GLYPHS });
+    expect(composerPanel.keys.map((hint) => `${hint.key} ${hint.label}`)).toEqual([
+      "Ctrl-J newline",
+      "Enter record",
+      "Esc leaves the composer to navigate",
+    ]);
+  });
+});
+
+describe("printable keys append in the composer", () => {
+  test("j appends text and leaves the selection alone", () => {
+    const run = askRun([
+      { step: "design", question: "First?", status: "unanswered" },
+      { step: "design", question: "Second?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = questionsKeys(run, composing, "j", key()).state;
+    expect(typed.text).toBe("j");
+    expect(typed.selected).toBe(0);
   });
 });
 
@@ -437,8 +626,8 @@ describe("the run is not asked", () => {
     expect(text).toContain("openspec/changes/add-health/questions.md");
     expect(text).toContain("Which endpoints should be public?");
     expect(text).toContain("unanswered");
-    expect(text).toContain("answer>");
-    // No stdin prompt: the pane only holds a draft, and no answer exists until the user types.
+    expect(text).not.toContain("answer>");
+    // No stdin prompt: the record has no composer until the user presses Enter.
     expect(text.split("\n").some((line) => line.trim().startsWith("answered"))).toBe(false);
   });
 
@@ -461,7 +650,8 @@ describe("a skipped question is shown as skipped", () => {
     ]);
     const state = openQuestions(run);
     if (state === null) throw new Error("the pane did not open");
-    expect(state.draft).toBeNull();
+    expect(state.focus).toBe("record");
+    expect(state.text).toBe("");
     const text = panelText(run, state);
     expect(text).toContain("skipped");
     expect(text).not.toContain("Enter answers");

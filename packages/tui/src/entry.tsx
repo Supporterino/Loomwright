@@ -45,6 +45,7 @@ import {
   type QuestionsState,
   questionsKeys,
   questionsPanel,
+  recordAnswerInState,
 } from "./controls/questions.tsx";
 import { helpKeys, helpPanel } from "./help.ts";
 import { type IntakeState, initialIntake, intakeKeys, intakePanel } from "./intake/dialog.tsx";
@@ -362,7 +363,7 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
   if (data.questions !== null && base.run !== null) {
     return buildViewModel({
       ...baseInput,
-      panel: questionsPanel({ run: base.run, state: data.questions, glyphs }),
+      panel: questionsPanel({ run: base.run, state: data.questions, glyphs, rows: data.rows }),
     });
   }
   if (data.confirmation !== null) {
@@ -1083,22 +1084,18 @@ function Interactive({
 
   /** Records the answer, then waits only for the short command write, never for the run. */
   const submitAnswer = useCallback(
-    (id: string, question: string, answer: string): void => {
+    (id: string, question: string, step: string, answer: string): void => {
       if (isReadOnly(viewRef.current) || answering.current) return;
       answering.current = true;
       void (async () => {
         try {
           await recordAnswer(factory, id, answer, question);
+          const run = viewRef.current.run;
           setData((current) => {
-            const questions = current.questions;
-            if (questions === null || questions.draft === null) return current;
+            if (current.questions === null || run === null) return current;
             return {
               ...current,
-              questions: {
-                ...questions,
-                draft: { ...questions.draft, recorded: true },
-                notice: null,
-              },
+              questions: recordAnswerInState(run, current.questions, step, question, current.rows),
             };
           });
           await refreshStatus();
@@ -1256,16 +1253,17 @@ function Interactive({
     if (state.questions !== null) {
       const run = viewRef.current.run;
       if (run !== null) {
-        if (key.escape && state.questions.draft === null) {
+        const outcome = questionsKeys(run, state.questions, input, key, state.rows);
+        if (outcome.close === true) {
           setData((current) => ({ ...current, questions: null }));
           return;
         }
-        const outcome = questionsKeys(run, state.questions, input, key);
         if (outcome.state !== state.questions) {
           setData((current) => ({ ...current, questions: outcome.state }));
         }
         if (outcome.answer !== undefined) {
-          submitAnswer(run.id, outcome.answer.question, outcome.answer.answer);
+          const record = run.questions[state.questions.selected];
+          submitAnswer(run.id, outcome.answer.question, record?.step ?? "", outcome.answer.answer);
         }
       }
       return;

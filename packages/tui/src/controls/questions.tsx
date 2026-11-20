@@ -5,29 +5,38 @@
  */
 import type { KeyInput } from "../model/keys.ts";
 import type { PanelView, QuestionRow, RunDetail } from "../model/view-model.ts";
+import { clampOffset, nextOffset, sliceWindow, window as windowOf } from "../model/viewport.ts";
 import { answerRecorded, keyHint } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 
-export interface AnswerDraft {
-  readonly step: string;
-  readonly question: string;
-  readonly text: string;
-  /** `Factory.answer` returned; waiting for `question.answered`. */
-  readonly recorded: boolean;
-}
+export type QuestionsFocus = "record" | "composer";
 
 export interface QuestionsState {
   /** Index into `run.questions`. */
   readonly selected: number;
-  readonly draft: AnswerDraft | null;
+  readonly focus: QuestionsFocus;
+  /** Composer text; empty while no composer is open. */
+  readonly text: string;
+  /** Rows scrolled within the record list. */
+  readonly offset: number;
+  /** Records whose `Factory.answer` call returned, keyed by `recordKey(step, question)`. */
+  readonly recorded: ReadonlySet<string>;
   readonly notice: string | null;
 }
 
 export const initialQuestions: QuestionsState = {
   selected: 0,
-  draft: null,
+  focus: "record",
+  text: "",
+  offset: 0,
+  recorded: new Set<string>(),
   notice: null,
 };
+
+/** One record's answer attempt: the step and question identify it across re-opened panes. */
+export function recordKey(step: string, question: string): string {
+  return `${step}\u0000${question}`;
+}
 
 export interface AnswerRequest {
   readonly answer: string;
@@ -38,44 +47,84 @@ export interface QuestionsOutcome {
   readonly state: QuestionsState;
   /** Set only when the caller should record the answer through `Factory.answer`. */
   readonly answer?: AnswerRequest;
+  /** Set on `Esc` outside a composer: the caller closes the pane. */
+  readonly close?: boolean;
+}
+
+/** Every record renders three body lines: step, question and status. */
+const RECORD_BLOCK_ROWS = 3;
+
+/** Rows the panel chrome, the notice row and the questions-file line spend. */
+const PANE_CHROME_ROWS = 6;
+
+/**
+ * The body rows a questions pane of `rows` terminal rows may give to records; the questions-file
+ * line and the panel's own border, title, notice and key rows are spent. Never zero so a short
+ * pane still scrolls.
+ */
+export function questionsBodyRows(rows: number): number {
+  return Math.max(1, rows - PANE_CHROME_ROWS);
 }
 
 function recordAt(run: RunDetail, index: number): QuestionRow | undefined {
   return run.questions[index];
 }
 
-/** An unanswered record opens its prompt directly; the other statuses offer none. */
-function draftFor(record: QuestionRow): AnswerDraft | null {
-  if (record.status !== "unanswered") return null;
-  return { step: record.step, question: record.question, text: "", recorded: false };
-}
-
-function withSelection(run: RunDetail, state: QuestionsState, index: number): QuestionsState {
-  const record = recordAt(run, index);
-  if (record === undefined) return state;
-  const draft = draftFor(record);
-  return { selected: index, draft, notice: null };
-}
-
 /** `Q` opens the pane only when the run asked something; the first unanswered record is selected. */
 export function openQuestions(run: RunDetail): QuestionsState | null {
   if (run.questions.length === 0) return null;
   const index = run.questions.findIndex((record) => record.status === "unanswered");
-  return withSelection(run, initialQuestions, index === -1 ? 0 : index);
+  return { ...initialQuestions, selected: index === -1 ? 0 : index };
+}
+
+/** The offset that keeps `selected` inside the pane's record window. */
+export function questionsSelectionOffset(
+  run: RunDetail,
+  selected: number,
+  offset: number,
+  rows: number,
+  composerRows = 0,
+): number {
+  const total = run.questions.length * RECORD_BLOCK_ROWS;
+  const size = Math.max(1, questionsBodyRows(rows) - composerRows);
+  return selectedWindowOffset(offset, selected, total, size);
+}
+
+/**
+ * The smallest move that puts the whole selected record inside the window. A window taller than
+ * the record only needs its start visible; a short one still keeps the header on screen.
+ */
+function selectedWindowOffset(
+  offset: number,
+  selected: number,
+  total: number,
+  size: number,
+): number {
+  const start = selected * RECORD_BLOCK_ROWS;
+  const end = start + RECORD_BLOCK_ROWS;
+  const next = nextOffset(offset, start, total, size);
+  return end > next + size ? clampOffset(end - size, total, size) : next;
+}
+
+function selectRecord(
+  run: RunDetail,
+  state: QuestionsState,
+  index: number,
+  rows: number | undefined,
+): QuestionsState {
+  if (index === state.selected) return state;
+  const offset =
+    rows === undefined ? state.offset : questionsSelectionOffset(run, index, state.offset, rows);
+  return { ...state, selected: index, offset, notice: null };
 }
 
 function append(state: QuestionsState, text: string): QuestionsState {
-  if (state.draft === null) return state;
-  return { ...state, draft: { ...state.draft, text: state.draft.text + text }, notice: null };
+  return { ...state, text: state.text + text, notice: null };
 }
 
+/** Deletes one code point, so an emoji typed into the composer is removed whole. */
 function removeLast(state: QuestionsState): QuestionsState {
-  if (state.draft === null) return state;
-  return {
-    ...state,
-    draft: { ...state.draft, text: state.draft.text.slice(0, -1) },
-    notice: null,
-  };
+  return { ...state, text: Array.from(state.text).slice(0, -1).join(""), notice: null };
 }
 
 /** One keypress against the pane; effects never happen here. */
@@ -84,41 +133,88 @@ export function questionsKeys(
   state: QuestionsState,
   input: string,
   key: KeyInput,
+  rows?: number,
 ): QuestionsOutcome {
   const record = recordAt(run, state.selected);
 
   if (key.escape) {
-    return state.draft === null ? { state } : { state: { ...state, draft: null, notice: null } };
-  }
-
-  if (state.draft === null && (key.upArrow || (!key.ctrl && input === "k"))) {
-    return { state: withSelection(run, state, Math.max(0, state.selected - 1)) };
-  }
-  if (state.draft === null && (key.downArrow || (!key.ctrl && input === "j"))) {
-    return {
-      state: withSelection(run, state, Math.min(run.questions.length - 1, state.selected + 1)),
-    };
-  }
-
-  if (key.return) {
-    if (record === undefined) return { state };
-    if (state.draft === null) {
-      const draft = draftFor(record);
-      return draft === null ? { state } : { state: { ...state, draft, notice: null } };
+    if (state.focus === "composer") {
+      return { state: { ...state, focus: "record", text: "", notice: null } };
     }
-    // Already sent to `Factory.answer`; only `question.answered` changes the record now.
-    if (state.draft.recorded) return { state };
-    const text = state.draft.text.trim();
-    if (text === "") return { state: { ...state, notice: "the answer is empty" } };
-    // `answered` comes only from `question.answered`; a skipped record takes no answer.
-    if (record.status !== "unanswered") return { state };
-    return { state, answer: { answer: text, question: record.question } };
+    return { state, close: true };
   }
 
-  if (state.draft === null) return { state };
+  if (state.focus === "record") {
+    if (key.upArrow || (!key.ctrl && input === "k")) {
+      return { state: selectRecord(run, state, Math.max(0, state.selected - 1), rows) };
+    }
+    if (key.downArrow || (!key.ctrl && input === "j")) {
+      return {
+        state: selectRecord(
+          run,
+          state,
+          Math.min(run.questions.length - 1, state.selected + 1),
+          rows,
+        ),
+      };
+    }
+    if (key.return) {
+      if (record === undefined || record.status !== "unanswered") return { state };
+      const offset =
+        rows === undefined
+          ? state.offset
+          : questionsSelectionOffset(run, state.selected, state.offset, rows, 1);
+      return { state: { ...state, focus: "composer", text: "", offset, notice: null } };
+    }
+    return { state };
+  }
+
+  if (key.ctrl && (input === "j" || input === "\n" || input === "\r")) {
+    return { state: append(state, "\n") };
+  }
+  if (key.return) {
+    if (record === undefined || record.status !== "unanswered") return { state };
+    // Already sent to `Factory.answer`; only `question.answered` changes the record now.
+    if (state.recorded.has(recordKey(record.step, record.question))) return { state };
+    const answer = state.text.trim();
+    if (answer === "") return { state: { ...state, notice: "the answer is empty" } };
+    return { state, answer: { answer, question: record.question } };
+  }
   if (key.backspace) return { state: removeLast(state) };
+  // Navigation stays inert while composing, even when the terminal reports a raw sequence.
+  if (key.upArrow || key.downArrow || key.pageUp || key.pageDown) return { state };
   if (key.tab || key.ctrl || key.meta || input.length === 0) return { state };
   return { state: append(state, input) };
+}
+
+/**
+ * The state after `Factory.answer` returned: remember the record so its row keeps reading
+ * `recorded — applies at the next step`, then select the next unanswered record after it.
+ */
+export function recordAnswerInState(
+  run: RunDetail,
+  state: QuestionsState,
+  step: string,
+  question: string,
+  rows?: number,
+): QuestionsState {
+  const recorded = new Set(state.recorded);
+  recorded.add(recordKey(step, question));
+  const next = run.questions.findIndex(
+    (record, index) => index > state.selected && record.status === "unanswered",
+  );
+  const selected = next === -1 ? state.selected : next;
+  const offset =
+    rows === undefined ? state.offset : questionsSelectionOffset(run, selected, state.offset, rows);
+  return {
+    ...state,
+    selected,
+    focus: "record",
+    text: "",
+    offset,
+    recorded,
+    notice: null,
+  };
 }
 
 function dash(glyphs: GlyphSet): string {
@@ -169,16 +265,13 @@ function recordLines(
     case "skipped":
       lines.push("  skipped");
       break;
-    case "unanswered": {
-      const draft = selected ? state.draft : null;
-      if (draft?.recorded === true) {
-        lines.push(`  ${recordedLabel(glyphs)}`);
-      } else {
-        lines.push(`  unanswered ${dash(glyphs)} Enter answers`);
-        if (draft !== null) lines.push(`  answer> ${draft.text}`);
-      }
+    case "unanswered":
+      lines.push(
+        state.recorded.has(recordKey(record.step, record.question))
+          ? `  ${recordedLabel(glyphs)}`
+          : `  unanswered ${dash(glyphs)} Enter answers`,
+      );
       break;
-    }
     default: {
       const unhandled: never = record.status;
       throw new Error(`unknown question status: ${String(unhandled)}`);
@@ -187,31 +280,64 @@ function recordLines(
   return lines;
 }
 
+/** The composer under the selected record: each newline in the text is its own panel line. */
+function composerLines(text: string): string[] {
+  return text.split("\n").map((line, index) => (index === 0 ? `answer> ${line}` : `  ${line}`));
+}
+
+function footerKeys(run: RunDetail, state: QuestionsState): PanelView["keys"] {
+  if (state.focus === "composer") {
+    return [
+      keyHint("Ctrl-J", "newline"),
+      keyHint("Enter", "record"),
+      keyHint("Esc", "leaves the composer to navigate"),
+    ];
+  }
+  const keys: PanelView["keys"][number][] = [keyHint("j/k", "navigate")];
+  if (run.questions[state.selected]?.status === "unanswered") keys.push(keyHint("Enter", "answer"));
+  keys.push(keyHint("Esc", "close"));
+  return keys;
+}
+
 export interface QuestionsPanelInput {
   readonly run: RunDetail;
   readonly state: QuestionsState;
   readonly glyphs: GlyphSet;
+  /** Terminal rows; absent means no clipping and the panel is as long as its records. */
+  readonly rows?: number;
 }
 
 /** The first line is the run's questions file; every record then gets its own block. */
 export function questionsPanel(input: QuestionsPanelInput): PanelView {
-  const { run, state, glyphs } = input;
+  const { run, state, glyphs, rows } = input;
   const questionsFile =
     run.questions[0]?.questionsFile ?? `openspec/changes/${run.id}/questions.md`;
-  const lines = [questionsFile];
-  run.questions.forEach((record, index) => {
-    lines.push(...recordLines(record, index, state, glyphs));
-  });
-  const selected = run.questions[state.selected];
-  const canAnswer = selected?.status === "unanswered";
-  const keys = canAnswer
-    ? [keyHint("Enter", "answer"), keyHint("Esc", "close")]
-    : [keyHint("Esc", "close")];
+  const composer = state.focus === "composer" ? composerLines(state.text) : [];
+  const blocks = run.questions.map((record, index) => recordLines(record, index, state, glyphs));
+
+  let lines: readonly string[];
+  if (rows === undefined) {
+    lines = [questionsFile, ...blocks.flat(), ...composer];
+  } else {
+    const flat = blocks.flat();
+    const bodyRows = questionsBodyRows(rows);
+    // A composer taller than the pane keeps its newest lines so the frame still fits.
+    const composerRows = Math.min(composer.length, Math.max(0, bodyRows - 1));
+    const shownComposer = composerRows === 0 ? [] : composer.slice(composer.length - composerRows);
+    const recordRows = Math.max(1, bodyRows - shownComposer.length);
+    const offset = selectedWindowOffset(state.offset, state.selected, flat.length, recordRows);
+    lines = [
+      questionsFile,
+      ...sliceWindow(flat, windowOf(offset, flat.length, recordRows)),
+      ...shownComposer,
+    ];
+  }
+
   return {
     kind: "questions",
     title: `Questions ${dash(glyphs)} ${run.id}`,
     lines,
-    keys,
+    keys: footerKeys(run, state),
     notice: state.notice,
   };
 }
