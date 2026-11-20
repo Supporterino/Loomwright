@@ -30,6 +30,7 @@ import {
   resumeFailed,
   resumeStarted,
   runInSession,
+  settleLanding,
   startLand,
   startResume,
   type UiData,
@@ -287,6 +288,7 @@ function uiData(overrides: Partial<UiData> = {}): UiData {
     confirmation: null,
     help: false,
     identity: null,
+    pendingLand: null,
     ...overrides,
   };
 }
@@ -937,6 +939,108 @@ describe("a landed run leaves the screen", () => {
     expect(next.screen).toBe("run");
     expect(next.selectedRunId).toBe(RUN);
     expect(next.notice).toBeNull();
+  });
+
+  test("a landed run leaves the screen when its first refresh fails and the retry succeeds", async () => {
+    const empty: StatusDocument = {
+      active: null,
+      driverAlive: false,
+      queue: [],
+      corrupt: [],
+      runs: [],
+    };
+    const run = runState({ phase: "done" });
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher();
+    let state = uiData();
+    const states: UiData[] = [];
+    let exited = false;
+    let failures = 0;
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createResumeGuard(),
+        update: (change) => {
+          state = change(state);
+          states.push(state);
+        },
+        refresh: async () => {
+          if (!exited) return { status: statusDoc(run), runs: [run] };
+          if (failures === 0) {
+            failures += 1;
+            return null;
+          }
+          return { status: empty, runs: [] };
+        },
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    exited = true;
+    exit(0);
+    await Bun.sleep(0);
+
+    expect(failures).toBe(1);
+    const last = states.at(-1);
+    expect(last?.screen).toBe("list");
+    expect(last?.selectedRunId).toBeNull();
+    expect(last?.pendingLand).toBeNull();
+    expect(last?.notice).toContain(`landed ${RUN}`);
+  });
+
+  test("a landed run leaves the screen when its first refresh fails and a later poll succeeds", async () => {
+    const empty: StatusDocument = {
+      active: null,
+      driverAlive: false,
+      queue: [],
+      corrupt: [],
+      runs: [],
+    };
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher();
+    let state = uiData();
+    const states: UiData[] = [];
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createResumeGuard(),
+        update: (change) => {
+          state = change(state);
+          states.push(state);
+        },
+        refresh: async () => null,
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    exit(0);
+    await Bun.sleep(0);
+
+    // The zero exit armed the settlement even though its own refresh failed.
+    const armed = states.at(-1);
+    expect(armed?.pendingLand).toBe(RUN);
+    expect(armed?.screen).toBe("run");
+
+    // The next successful poll sees the run is gone and leaves the screen.
+    const settled = settleLanding({ ...(armed ?? uiData()), status: empty, runs: [] });
+    expect(settled.screen).toBe("list");
+    expect(settled.selectedRunId).toBeNull();
+    expect(settled.pendingLand).toBeNull();
+    expect(settled.notice).toContain(`landed ${RUN}`);
+  });
+
+  test("a still-listed run keeps its selection when a later poll settles the land", () => {
+    const run = runState({ phase: "done" });
+    const armed: UiData = { ...uiData(), pendingLand: RUN };
+    const settled = settleLanding({ ...armed, status: statusDoc(run), runs: [run] });
+    expect(settled.screen).toBe("run");
+    expect(settled.selectedRunId).toBe(RUN);
+    expect(settled.pendingLand).toBeNull();
+    expect(settled.notice).toBeNull();
   });
 });
 

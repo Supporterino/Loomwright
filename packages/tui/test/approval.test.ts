@@ -260,6 +260,7 @@ function uiData(run: RunState, overrides: Partial<UiData> = {}): UiData {
     confirmation: null,
     help: false,
     identity: null,
+    pendingLand: null,
     ...overrides,
   };
 }

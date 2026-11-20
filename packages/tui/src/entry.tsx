@@ -206,6 +206,8 @@ export interface UiData {
   readonly help: boolean;
   /** `git config user.email`; null until the overlay has read it once. */
   readonly identity: string | null;
+  /** A zero-exit land whose refresh failed; the next successful poll settles it. */
+  readonly pendingLand: string | null;
 }
 
 function selectedRunState(data: UiData): RunState | undefined {
@@ -335,6 +337,7 @@ function initialData(
     confirmation: null,
     help: false,
     identity: null,
+    pendingLand: null,
   };
   // The list is newest first, so the first item is the run the list opens on.
   const view = viewOf(base, glyphs);
@@ -457,7 +460,7 @@ export function resumeFailed(data: UiData, id: string, spawn: SpawnLog, code: nu
 
 /** The launch is in flight: a notice keeps the land child's log path on screen until it settles. */
 export function landStarted(data: UiData, id: string, displayPath: string): UiData {
-  return { ...data, notice: `land ${id} — ${spawnLogLine(displayPath)}` };
+  return { ...data, notice: `land ${id} — ${spawnLogLine(displayPath)}`, pendingLand: null };
 }
 
 export interface ResumeRun extends ControlDeps {
@@ -506,6 +509,7 @@ export function landFailed(data: UiData, id: string, spawn: SpawnLog, code: numb
     notice: [`land ${id} exited with code ${code}`, spawnLogLine(spawn.displayPath), ...tail].join(
       "\n",
     ),
+    pendingLand: null,
   };
 }
 
@@ -520,7 +524,12 @@ export interface LandRefresh {
  * unfinished, so it stays selected with its branches; only an absent run returns to the list.
  */
 export function landSettled(data: UiData, id: string, refreshed: LandRefresh): UiData {
-  const next: UiData = { ...data, status: refreshed.status, runs: refreshed.runs };
+  const next: UiData = {
+    ...data,
+    status: refreshed.status,
+    runs: refreshed.runs,
+    pendingLand: null,
+  };
   if (refreshed.status.runs.some((run) => run.id === id)) return next;
   return {
     ...next,
@@ -537,6 +546,18 @@ export function landSettled(data: UiData, id: string, refreshed: LandRefresh): U
     help: false,
     identity: null,
   };
+}
+
+/**
+ * A successful poll completes a zero-exit land whose refresh failed: when that run is still
+ * selected, an absent run returns to the list with the landed notice and a listed one keeps its
+ * selection. A selection the user moved to is left alone.
+ */
+export function settleLanding(data: UiData): UiData {
+  const id = data.pendingLand;
+  if (id === null) return data;
+  if (data.selectedRunId !== id) return { ...data, pendingLand: null };
+  return landSettled(data, id, { status: data.status, runs: data.runs });
 }
 
 export interface LandRun extends ControlDeps {
@@ -577,6 +598,7 @@ export function startLand(deps: LandRun, id: string): void {
             spawnLogLine(result.displayPath),
             ...tail,
           ].join("\n"),
+          pendingLand: null,
         }));
         return;
       }
@@ -584,10 +606,20 @@ export function startLand(deps: LandRun, id: string): void {
         deps.update((current) => landFailed(current, id, result, code));
         return;
       }
-      void deps.refresh().then((refreshed) => {
-        if (refreshed === null) return;
+      // A failed refresh must not strand the run: retry once, then the next poll settles this id.
+      deps.update((current) => ({ ...current, pendingLand: id }));
+      const settle = (refreshed: LandRefresh): void => {
         deps.update((current) => landSettled(current, id, refreshed));
         if (!refreshed.status.runs.some((run) => run.id === id)) deps.stopTail();
+      };
+      void deps.refresh().then((refreshed) => {
+        if (refreshed !== null) {
+          settle(refreshed);
+          return;
+        }
+        void deps.refresh().then((retry) => {
+          if (retry !== null) settle(retry);
+        });
       });
     });
     // The spawn is the one extra poll that does not wait for the next second.
@@ -920,36 +952,40 @@ function Interactive({
   const refreshStatus = useCallback(async (): Promise<LandRefresh | null> => {
     try {
       const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
+      const selected = dataRef.current.selectedRunId;
+      if (selected !== null && !status.runs.some((run) => run.id === selected)) stopTail();
       const pending = spawnBaseline.current;
       if (pending === null) {
-        setData((current) => syncApproval({ ...current, status, runs }));
+        setData((current) => settleLanding(syncApproval({ ...current, status, runs })));
         return { status, runs };
       }
       const watch = watchSpawn(pending.ids, status, pending.logPath, tailLog);
       if (watch.started !== null) {
         spawnBaseline.current = null;
-        setData((current) => syncApproval({ ...current, status, runs }));
+        setData((current) => settleLanding(syncApproval({ ...current, status, runs })));
         openRun(watch.started);
         return { status, runs };
       }
       setData((current) => {
         const intake = current.intake;
-        return syncApproval({
-          ...current,
-          status,
-          runs,
-          intake:
-            intake === null || intake.spawned === null
-              ? intake
-              : { ...intake, spawned: { ...intake.spawned, tail: watch.tail } },
-        });
+        return settleLanding(
+          syncApproval({
+            ...current,
+            status,
+            runs,
+            intake:
+              intake === null || intake.spawned === null
+                ? intake
+                : { ...intake, spawned: { ...intake.spawned, tail: watch.tail } },
+          }),
+        );
       });
       return { status, runs };
     } catch {
       // A refresh failure keeps the last good status; the next poll retries.
       return null;
     }
-  }, [factory, openRun]);
+  }, [factory, openRun, stopTail]);
 
   const answering = useRef(false);
 
