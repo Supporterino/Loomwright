@@ -28,7 +28,8 @@ import {
   shortCommit,
 } from "../src/approval/overlay.ts";
 import { initialQuestions } from "../src/controls/questions.tsx";
-import { approvalKeyRoute, syncApproval, type UiData, viewOf } from "../src/entry.tsx";
+import { initialReword } from "../src/controls/reword.ts";
+import { approvalKeyRoute, quitsOnKey, syncApproval, type UiData, viewOf } from "../src/entry.tsx";
 import { initialIntake } from "../src/intake/dialog.tsx";
 import { collectFacts } from "../src/model/facts.ts";
 import type { KeyInput } from "../src/model/keys.ts";
@@ -498,6 +499,62 @@ describe("q quits from the gate", () => {
       const panel = approvalPanel({ run, evidence: evidence(), state, glyphs: ASCII_GLYPHS });
       expect(panel.keys.map((hint) => `${hint.key} ${hint.label}`)).toContain("q quit");
     }
+  });
+});
+
+describe("q quits unless a text field owns the key", () => {
+  const run = runState();
+  const idle = { kind: "idle" } as const;
+
+  test("q still quits from the collapsed banner, help and the log pane", () => {
+    expect(quitsOnKey(uiData(run, { approval: idle, approvalCollapsed: true }), "q", key())).toBe(
+      true,
+    );
+    expect(quitsOnKey(uiData(run, { approval: idle, help: true }), "q", key())).toBe(true);
+    expect(
+      quitsOnKey(
+        uiData(run, {
+          approval: idle,
+          activity: { scope: "run", taskId: null, offset: 0, follow: true },
+        }),
+        "q",
+        key(),
+      ),
+    ).toBe(true);
+  });
+
+  test("q types into the intake dialog opened over the collapsed banner instead of quitting", () => {
+    expect(quitsOnKey(uiData(run, { approval: idle, intake: initialIntake }), "q", key())).toBe(
+      false,
+    );
+  });
+
+  test("q types into the answer composer but not into the questions record list", () => {
+    expect(
+      quitsOnKey(
+        uiData(run, {
+          approval: idle,
+          questions: { ...initialQuestions, focus: "composer" },
+        }),
+        "q",
+        key(),
+      ),
+    ).toBe(false);
+    expect(
+      quitsOnKey(uiData(run, { approval: idle, questions: initialQuestions }), "q", key()),
+    ).toBe(true);
+  });
+
+  test("q types into the reword prompt", () => {
+    expect(quitsOnKey(uiData(run, { approval: idle, reword: initialReword }), "q", key())).toBe(
+      false,
+    );
+  });
+
+  test("Ctrl-C quits even while a text field owns q", () => {
+    expect(
+      quitsOnKey(uiData(run, { approval: idle, intake: initialIntake }), "c", key({ ctrl: true })),
+    ).toBe(true);
   });
 });
 

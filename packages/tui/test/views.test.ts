@@ -1588,6 +1588,57 @@ describe("the interactive entry", () => {
     }
   }, 60_000);
 
+  test("q types into the intake dialog opened over the collapsed approval banner", async () => {
+    const run = runState({ phase: "awaiting-approval" });
+    const status = statusDoc([{ run, tokens: 0, cost: 0 }]);
+    resetSeq();
+    const pending = event("approval.pending", {
+      specHash: "0123456789abcdef0123456789abcdef",
+      changeDir: "openspec/changes/add-health",
+    });
+    const factory: Factory = {
+      ...listFactory(status, [run]),
+      // The stream carries the pending approval the overlay opens from.
+      events: async function* () {
+        yield { line: JSON.stringify(pending), event: pending };
+      },
+    };
+
+    let typed = "";
+    const result = await driveTui(
+      factory,
+      async (input, output) => {
+        const last = (): string => output.writes.at(-1) ?? "";
+        await until(() => output.text().includes(run.id), "the run row");
+        // One Enter only: a repeat would call openRun again and abort the load that opens the gate.
+        await pressUntil(input, "\r", "the approval overlay", () =>
+          output.text().includes("Approval - add-health"),
+        );
+        // Esc collapses the overlay to the banner; n then opens the intake dialog over it.
+        await pressUntil(input, "\u001b", "the collapsed banner", () =>
+          last().includes("! awaiting approval"),
+        );
+        await pressUntil(input, "n", "the intake dialog", () => last().includes("request:"));
+        input.press("q");
+        await until(
+          () => {
+            typed = last();
+            return typed.includes("request: q");
+          },
+          "q typed into the request",
+          5_000,
+        );
+        await pressUntil(input, "\u001b", "the closed intake", () => !last().includes("request:"));
+        input.press("q");
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(typed).toContain("request: q");
+  }, 60_000);
+
   test("help opens on ? and closes on Esc; q still quits", async () => {
     const run = runState();
     const factory = listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]);
