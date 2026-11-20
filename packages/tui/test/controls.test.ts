@@ -22,6 +22,7 @@ import {
   recordAnswerInState,
   recordKey,
 } from "../src/controls/questions.tsx";
+import { initialReword, openReword, type RewordState, rewordKeys } from "../src/controls/reword.ts";
 import {
   createLandGuard,
   createResumeGuard,
@@ -32,11 +33,14 @@ import {
   recordAnswer,
   resumeFailed,
   resumeStarted,
+  rewordFailed,
   runInSession,
   settleLanding,
   startLand,
   startResume,
+  startReword,
   type UiData,
+  viewOf,
 } from "../src/entry.tsx";
 import {
   actionArgs,
@@ -1462,6 +1466,122 @@ describe("quit restores the terminal", () => {
     expect(leaves).toBe(1);
     expect(streams.writes.at(-1)).toContain("[?25h");
     expect(streams.writes.at(-1)).toContain("[?1049l");
+  });
+});
+
+function typeReword(run: RunDetail, state: RewordState, text: string): RewordState {
+  let current = state;
+  for (const character of text) {
+    current = rewordKeys(run, current, character, key(), 24, 120).state;
+  }
+  return current;
+}
+
+describe("the reword panel is a detached child", () => {
+  test("an open reword state renders the panel through viewOf", () => {
+    const view = viewOf(uiData({ reword: initialReword }), ASCII_GLYPHS);
+    expect(view.panel?.kind).toBe("reword");
+    expect(view.panel?.title).toContain(RUN);
+    expect(view.footer).toEqual(view.panel?.keys ?? []);
+  });
+
+  test("confirming with a prompt launches one reword with the prompt", async () => {
+    const run = detail(
+      runState({
+        phase: "paused",
+        specFindings: [
+          { severity: "must", what: "w", problem: "p", fix: "f", impact: "i" },
+          { severity: "should", what: "w", problem: "p", fix: "f", impact: "i" },
+        ],
+      }),
+    );
+    const opened = openReword(run);
+    if (opened === null) throw new Error("the reword panel did not open");
+    const typed = typeReword(run, opened, "apply finding 1");
+    const outcome = rewordKeys(run, typed, "Enter", key({ return: true }), 24, 120);
+    if (outcome.launch === undefined) throw new Error("the confirm did not launch");
+
+    const { launcher, launches } = resumeLauncher();
+    startReword(
+      { launcher, guard: createResumeGuard(), update: () => {} },
+      RUN,
+      outcome.launch.prompt,
+    );
+    await Bun.sleep(0);
+    expect(launches).toEqual([{ kind: "reword", id: RUN, prompt: "apply finding 1" }]);
+  });
+
+  test("a whitespace prompt is no prompt: the child gets reword <id> without a prompt key", async () => {
+    const { launcher, launches } = resumeLauncher();
+    startReword({ launcher, guard: createResumeGuard(), update: () => {} }, RUN, "   ");
+    await Bun.sleep(0);
+    expect(launches).toEqual([{ kind: "reword", id: RUN }]);
+    expect(Object.keys(launches[0] ?? {})).not.toContain("prompt");
+  });
+
+  test("the reword panel becomes actionable again after a failed child", () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-reword-"));
+    try {
+      const logPath = join(dir, "reword.log");
+      const lines = Array.from(
+        { length: 12 },
+        (_, index) => `log line ${String(index + 1).padStart(2, "0")}`,
+      );
+      writeFileSync(logPath, lines.join("\n"));
+      const data = rewordFailed(
+        uiData({ reword: initialReword }),
+        RUN,
+        { logPath, displayPath: LOG },
+        3,
+      );
+      expect(data.notice).toBeNull();
+      expect(data.reword?.failure?.code).toBe(3);
+      expect(data.reword?.failure?.logPath).toBe(LOG);
+      for (const line of lines.slice(-10)) expect(data.reword?.failure?.lines).toContain(line);
+      expect(data.reword?.failure?.lines).not.toContain(lines[0]);
+      expect(data.reword?.failure?.lines).not.toContain(lines[1]);
+
+      const state = data.reword;
+      if (state === null || state === undefined) throw new Error("the panel closed on failure");
+      const typed = typeReword(detail(runState()), state, "apply finding 1");
+      const outcome = rewordKeys(
+        detail(runState()),
+        typed,
+        "Enter",
+        key({ return: true }),
+        24,
+        120,
+      );
+      expect(outcome.launch).toEqual({ prompt: "apply finding 1" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("startReword surfaces a failed child as code and tail on the open panel", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-reword-"));
+    try {
+      const logPath = join(dir, "reword.log");
+      writeFileSync(logPath, "prompt rejected\n");
+      const { launcher, exit } = resumeLauncher(logPath, LOG);
+      const states: UiData[] = [];
+      startReword(
+        {
+          launcher,
+          guard: createResumeGuard(),
+          update: (change) => states.push(change(uiData({ reword: initialReword }))),
+        },
+        RUN,
+      );
+      await Bun.sleep(0);
+      exit(3);
+      await Bun.sleep(0);
+      expect(states.at(-1)?.reword?.failure?.code).toBe(3);
+      expect(states.at(-1)?.reword?.failure?.lines).toContain("prompt rejected");
+      expect(states.at(-1)?.reword?.failure?.logPath).toBe(LOG);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

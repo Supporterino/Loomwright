@@ -138,9 +138,9 @@ export interface RunDetail {
   readonly reword: RewordAvailability;
 }
 
-/** A panel is built by its owning module (intake, approval, questions, confirm, help, activity). */
+/** A panel is built by its owning module (intake, approval, questions, confirm, help, activity, reword). */
 export interface PanelView {
-  readonly kind: "intake" | "approval" | "questions" | "confirm" | "help" | "activity";
+  readonly kind: "intake" | "approval" | "questions" | "confirm" | "help" | "activity" | "reword";
   readonly title: string;
   readonly lines: readonly string[];
   readonly keys: readonly KeyHint[];

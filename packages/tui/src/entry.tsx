@@ -47,6 +47,7 @@ import {
   questionsPanel,
   recordAnswerInState,
 } from "./controls/questions.tsx";
+import { openReword, type RewordState, rewordKeys, rewordPanel } from "./controls/reword.ts";
 import { helpKeys, helpPanel } from "./help.ts";
 import { type IntakeState, initialIntake, intakeKeys, intakePanel } from "./intake/dialog.tsx";
 import { watchSpawn } from "./intake/follow.ts";
@@ -243,6 +244,11 @@ export interface UiData {
    * tasks stay valid; every reader normalises it with `?? null`.
    */
   readonly activity?: ActivityPaneState | null;
+  /**
+   * The reword panel, or null when it is closed. Optional so `UiData` literals owned by other
+   * tasks stay valid; every reader normalises it with `?? null`.
+   */
+  readonly reword?: RewordState | null;
   /** The abort confirmation, or null when no confirmation is open. */
   readonly confirmation: ControlAction | null;
   /** The help panel is open; `?` sets it and Esc clears it. */
@@ -272,11 +278,12 @@ function evidenceOf(data: UiData): ApprovalEvidence {
   };
 }
 
-/** Intake, questions, help, the log pane and confirmations own the screen while they are open. */
+/** Intake, questions, reword, help, the log pane and confirmations own the screen while open. */
 function panelOpen(data: UiData): boolean {
   return (
     data.intake !== null ||
     data.questions !== null ||
+    (data.reword ?? null) !== null ||
     data.confirmation !== null ||
     data.help ||
     (data.activity ?? null) !== null
@@ -388,6 +395,17 @@ export function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
     });
     return buildViewModel({ ...baseInput, panel });
   }
+  const reword = data.reword ?? null;
+  if (reword !== null && base.run !== null) {
+    const panel = rewordPanel({
+      run: base.run,
+      state: reword,
+      glyphs,
+      rows: data.rows,
+      columns: data.columns,
+    });
+    return buildViewModel({ ...baseInput, panel });
+  }
   if (data.intake !== null) {
     return buildViewModel({ ...baseInput, panel: intakePanel(data.intake, glyphs, data.rows) });
   }
@@ -427,6 +445,7 @@ function initialData(
     approvalCollapsed: false,
     questions: null,
     activity: null,
+    reword: null,
     confirmation: null,
     help: false,
     identity: null,
@@ -585,6 +604,95 @@ export function landStarted(data: UiData, id: string, displayPath: string): UiDa
   return { ...data, notice: `land ${id} — ${spawnLogLine(displayPath)}`, pendingLand: null };
 }
 
+/** The reword child is in flight: the open panel shows its log path; without one, a notice. */
+export function rewordStarted(data: UiData, id: string, displayPath: string): UiData {
+  const log = spawnLogLine(displayPath);
+  const reword = data.reword ?? null;
+  return reword === null
+    ? { ...data, notice: `reword ${id} — ${log}` }
+    : { ...data, reword: { ...reword, notice: log, failure: null } };
+}
+
+/** A non-zero reword exit: the panel shows the code and tail and becomes actionable again. */
+export function rewordFailed(data: UiData, id: string, spawn: SpawnLog, code: number): UiData {
+  const tail = tailLog(spawn.logPath, 10);
+  const reword = data.reword ?? null;
+  if (reword !== null) {
+    return {
+      ...data,
+      reword: {
+        ...reword,
+        notice: null,
+        failure: { code, lines: tail, logPath: spawn.displayPath },
+      },
+    };
+  }
+  return {
+    ...data,
+    notice: [
+      `reword ${id} exited with code ${code}`,
+      spawnLogLine(spawn.displayPath),
+      ...tail,
+    ].join("\n"),
+  };
+}
+
+/** A zero-exit reword: the panel closes and the child's log path stays as the run notice. */
+export function rewordSucceeded(data: UiData, id: string, displayPath: string): UiData {
+  return {
+    ...data,
+    reword: null,
+    notice: `reword ${id} — ${spawnLogLine(displayPath)}`,
+  };
+}
+
+export interface RewordRun {
+  readonly launcher: Pick<Launcher, "launch">;
+  /** One detached reword per run at a time; the panel's confirm is inert while it runs. */
+  readonly guard: ResumeGuard;
+  /** The UI's `setData`. */
+  readonly update: (change: (data: UiData) => UiData) => void;
+}
+
+/**
+ * Starts one detached `reword` and watches its exit: the panel is read-only while the child
+ * runs, a zero exit closes it and a non-zero exit shows the code and log tail in the panel.
+ */
+export function startReword(deps: RewordRun, id: string, prompt?: string): void {
+  if (!deps.guard.begin(id)) return;
+  const text = prompt?.trim() ?? "";
+  void (async () => {
+    let result: LaunchResult;
+    try {
+      result = await deps.launcher.launch({
+        kind: "reword",
+        id,
+        ...(text === "" ? {} : { prompt: text }),
+      });
+    } catch (err: unknown) {
+      deps.guard.end(id);
+      const message = err instanceof Error ? err.message : String(err);
+      deps.update((current) => {
+        const reword = current.reword ?? null;
+        return reword === null
+          ? { ...current, notice: message }
+          : { ...current, reword: { ...reword, notice: message } };
+      });
+      return;
+    }
+    deps.update((current) => rewordStarted(current, id, result.displayPath));
+    void result.exited.then(({ code }) => {
+      deps.guard.end(id);
+      if (code === 0) {
+        deps.update((current) => rewordSucceeded(current, id, result.displayPath));
+        return;
+      }
+      if (code === null) return;
+      deps.update((current) => rewordFailed(current, id, result, code));
+    });
+  })();
+}
+
 export interface ResumeRun extends ControlDeps {
   readonly guard: ResumeGuard;
   /** The UI's `setData`. */
@@ -668,6 +776,7 @@ export function landSettled(data: UiData, id: string, refreshed: LandRefresh): U
     approvalCollapsed: false,
     questions: null,
     activity: null,
+    reword: null,
     confirmation: null,
     help: false,
     identity: null,
@@ -889,6 +998,7 @@ function Interactive({
         approvalCollapsed: false,
         questions: null,
         activity: null,
+        reword: null,
         confirmation: null,
         help: false,
         identity: null,
@@ -1148,6 +1258,7 @@ function Interactive({
 
   /** Abort and retry return immediately; resume runs one guarded detached child per run. */
   const resumeGuard = useRef<ResumeGuard>(createResumeGuard());
+  const rewordGuard = useRef<ResumeGuard>(createResumeGuard());
   const landGuard = useRef<LandGuard>(createLandGuard());
   const applyControl = useCallback(
     (action: ControlAction): void => {
@@ -1355,6 +1466,53 @@ function Interactive({
       }
       return;
     }
+    const reword = state.reword ?? null;
+    if (reword !== null) {
+      const run = viewRef.current.run;
+      if (run === null) {
+        setData((current) => ({ ...current, reword: null }));
+        return;
+      }
+      const outcome = rewordKeys(run, reword, input, key, state.rows, state.columns);
+      if (outcome.close === true) {
+        setData((current) => ({ ...current, reword: null }));
+        return;
+      }
+      if (outcome.state !== reword) {
+        setData((current) => ({ ...current, reword: outcome.state }));
+      }
+      if (outcome.launch !== undefined) {
+        startReword(
+          { launcher, guard: rewordGuard.current, update: setData },
+          run.id,
+          outcome.launch.prompt,
+        );
+      }
+      return;
+    }
+    // The panel owns its keys, so its intent lives here: `w` is inert or absent without
+    // `run.reword`, and the panel reads that predicate instead of re-deriving it.
+    if (!key.ctrl && input === "w" && !panelOpen(state) && state.screen === "run") {
+      const run = viewRef.current.run;
+      if (run !== null) {
+        switch (run.reword.state) {
+          case "available": {
+            const opened = openReword(run);
+            if (opened !== null) setData((current) => ({ ...current, reword: opened }));
+            return;
+          }
+          case "inert":
+            setData((current) => ({ ...current, notice: run.reword.reason }));
+            return;
+          case "absent":
+            return;
+          default: {
+            const unhandled: never = run.reword.state;
+            throw new Error(`unknown reword state: ${String(unhandled)}`);
+          }
+        }
+      }
+    }
     if (!key.ctrl && input === "n") {
       submitting.current = false;
       setData((current) => ({ ...current, intake: initialIntake }));
@@ -1443,6 +1601,7 @@ function Interactive({
           approval: null,
           approvalCollapsed: false,
           questions: null,
+          reword: null,
           confirmation: null,
           help: false,
           identity: null,
