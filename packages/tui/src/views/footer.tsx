@@ -13,14 +13,18 @@ export interface KeyFooterProps {
   readonly columns: number;
 }
 
-/** Enabled hints, then the inert ones with the CLI's reason so a dead key explains itself. */
+/** Inert hints first, so their reason survives the clip on a narrow footer; then the enabled ones. */
 function hintParts(hints: readonly KeyHint[], glyphs: GlyphSet): readonly string[] {
-  const parts = hints.filter((hint) => hint.enabled).map((hint) => `${hint.key} ${hint.label}`);
+  const inert: string[] = [];
+  const enabled: string[] = [];
   for (const hint of hints) {
-    if (hint.enabled || hint.reason === undefined) continue;
-    parts.push(`${hint.key} ${hint.label} ${dash(glyphs)} ${hint.reason}`);
+    if (hint.enabled) {
+      enabled.push(`${hint.key} ${hint.label}`);
+    } else if (hint.reason !== undefined) {
+      inert.push(`${hint.key} ${hint.label} ${dash(glyphs)} ${hint.reason}`);
+    }
   }
-  return parts;
+  return [...inert, ...enabled];
 }
 
 export function KeyFooter({ hints, glyphs, depth, columns }: KeyFooterProps): ReactElement {

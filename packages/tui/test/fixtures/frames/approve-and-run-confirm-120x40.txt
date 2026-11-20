@@ -37,4 +37,4 @@
 
 
 
-Enter confirm - n cancel - q quit - Esc waits for the action - press Enter or n
+Esc waits for the action - press Enter or n - Enter confirm - n cancel - q quit

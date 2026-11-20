@@ -23,6 +23,7 @@ import {
   type ViewModelInput,
 } from "../src/model/view-model.ts";
 import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
+import { renderFrame } from "../src/views/frame.tsx";
 
 const ISO = "2026-11-18T10:00:00.000Z";
 const RUN = "add-health";
@@ -377,6 +378,15 @@ describe("a driven run explains why w is inert", () => {
     expect(openReword(run)).toBeNull();
     const view = runView({ phase: "implementing" }, { active: lock, driverAlive: true });
     expect(view.footer).toContainEqual({ key: "w", label: "reword", enabled: false, reason });
+  });
+
+  test("a driven run explains why w is inert at the 80-column minimum width", async () => {
+    const lock: ActiveLock = { changeId: RUN, pid: 4242, host: "host", since: ISO };
+    const view = runView({ phase: "implementing" }, { active: lock, driverAlive: true });
+    const text = await renderFrame(view, { columns: 80, rows: 24 }, { ascii: true });
+    const footer = text.split("\n").at(-1) ?? "";
+    expect(footer).toContain("w reword");
+    expect(footer).toContain("add-health is being driven by pid 4242");
   });
 });
 
