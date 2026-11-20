@@ -239,6 +239,52 @@ describe("run list", () => {
     expect(oldestAt).toBeGreaterThan(runningAt);
     expect(text).toContain("12.3k tokens");
     expect(text).toContain("$0.42");
+    // Every row carries its elapsed time beside the other metadata.
+    expect(text).toContain("1h00m");
+    expect(text).toContain("50m08s");
+    expect(text).toContain("40m08s");
+  });
+
+  test("the run list marks findings: 2 findings on the row and no marker on a clean run", async () => {
+    const finding = {
+      severity: "must",
+      file: "packages/tui/src/views/header.tsx",
+      line: 42,
+      what: "the banner hides the count",
+      problem: "the run looks idle",
+      fix: "carry the count",
+      impact: "the user cannot see why the run stopped",
+    };
+    const marked = runState({
+      id: "paused-run",
+      summary: "Paused change",
+      phase: "paused",
+      createdAt: new Date(Date.parse(ISO) + 1_000).toISOString(),
+      specFindings: [finding, { ...finding, severity: "should", line: 97 }],
+    });
+    const clean = runState({ id: "clean-run", summary: "Clean change" });
+    const view = buildViewModel(
+      vmInput({
+        screen: "list",
+        status: statusDoc([
+          { run: marked, tokens: 0, cost: 0 },
+          { run: clean, tokens: 0, cost: 0 },
+        ]),
+        runs: [marked, clean],
+        selectedRunId: marked.id,
+      }),
+    );
+    const text = await frame(view, 120, 40, true);
+    const markedRow = text.split("\n").find((line) => line.includes("Paused change"));
+    expect(markedRow).toBeDefined();
+    expect(markedRow).toContain("paused-run  Paused change");
+    expect(markedRow).toContain("2 findings");
+    // The gate glyph and label, not the coral approval hue.
+    expect(markedRow).toContain("! 2 findings");
+
+    const cleanRow = text.split("\n").find((line) => line.includes("Clean change"));
+    expect(cleanRow).toBeDefined();
+    expect(cleanRow).not.toContain("findings");
   });
 
   test("every run row carries its phase glyph beside the phase label", async () => {

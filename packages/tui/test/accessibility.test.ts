@@ -436,6 +436,8 @@ describe("the styling pass", () => {
     const muted = colorFor("muted", "truecolor");
     if (muted === undefined) throw new Error("the muted token has no truecolor form");
     expect(header).toContain(muted);
+    // The id and phase are bold; the elapsed, tokens and cost are muted.
+    expect(header).toContain("\u001b[1m");
     expect(stripAnsi(header ?? "")).toContain("add-health implementing");
     expect(stripAnsi(raw)).toContain("Tasks");
     expect(stripAnsi(raw)).toContain("Activity");

@@ -269,6 +269,12 @@ describe("buildViewModel", () => {
     expect(roleLabel(view.list[0]?.role ?? { kind: "idle" })).toBe("queued #1");
     expect(roleLabel(view.list[2]?.role ?? { kind: "idle" })).toBe("idle");
     expect(view.list.filter((item) => item.selected).map((item) => item.id)).toEqual(["oldest"]);
+    // Every row carries its elapsed time even when no event has updated the run.
+    expect(view.list.map((item) => formatElapsed(item.elapsedMs))).toEqual([
+      "40m08s",
+      "50m08s",
+      "1h00m",
+    ]);
     expect(view.footer.map((hint) => hint.key)).toEqual(["n", "?", "q", "Enter"]);
   });
 
