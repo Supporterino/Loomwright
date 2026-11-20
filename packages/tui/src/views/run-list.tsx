@@ -14,9 +14,16 @@ export interface RunListProps {
   readonly depth: ColorDepth;
 }
 
-/** id and summary; two spaces keep the summary off the bullet list. */
-function headOf(item: RunListItem): string {
-  return `${item.id}  ${item.summary}`;
+/** Cells kept for the summary when a long row has to share its width with the metadata. */
+const SUMMARY_RESERVE = 12;
+
+/** id then as much summary as the room leaves; the id is never cut to make room for it. */
+function clipHead(item: RunListItem, room: number, glyphs: GlyphSet): string {
+  if (room <= 0) return "";
+  if (room <= item.id.length) return clip(item.id, room, glyphs);
+  const summaryRoom = room - item.id.length - 2;
+  if (summaryRoom <= 0) return item.id;
+  return `${item.id}  ${clip(item.summary, summaryRoom, glyphs)}`;
 }
 
 /** The findings marker: the gate glyph and label, never the coral approval hue. */
@@ -55,21 +62,16 @@ export function RunList({ viewModel, glyphs, depth }: RunListProps): ReactElemen
         const meta = metaOf(item);
         const metaFull = meta.join(` ${glyphs.bullet} `);
         const marker = clip(markerOf(item, glyphs), cells, glyphs);
-        // The marker is always reserved. The full-width list then reserves every metadata field
-        // before the head, so a long summary cannot hide the finding count or cut the fields each
-        // row carries. The half-width two-pane list keeps the identifying head instead.
+        // The marker is always reserved. The identifying head comes next: its id and the start of
+        // the summary survive before the optional metadata, which is clipped into what is left.
+        // The half-width two-pane list already gives the head all of the marker room.
         const markerRoom = Math.max(0, cells - marker.length);
-        const headFirst = viewModel.twoPane;
-        const head = clip(
-          headOf(item),
-          headFirst ? markerRoom : Math.max(0, markerRoom - metaFull.length),
-          glyphs,
-        );
-        const clippedMeta = clip(
-          metaFull,
-          Math.max(0, markerRoom - (headFirst ? head.length : 0)),
-          glyphs,
-        );
+        const headReserve = Math.min(markerRoom, item.id.length + 2 + SUMMARY_RESERVE);
+        const headRoom = viewModel.twoPane
+          ? markerRoom
+          : Math.max(markerRoom - metaFull.length, headReserve);
+        const head = clipHead(item, headRoom, glyphs);
+        const clippedMeta = clip(metaFull, Math.max(0, markerRoom - head.length), glyphs);
         const selected = item.selected;
         return (
           <Text key={item.id} wrap="truncate" {...(selected ? { bold: true } : {})}>

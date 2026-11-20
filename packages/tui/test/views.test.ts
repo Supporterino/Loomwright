@@ -232,7 +232,8 @@ describe("run list", () => {
         selectedRunId: "oldest",
       }),
     );
-    const text = await frame(view, 80, 24, true);
+    // A width that leaves room for every field: the 80-column row prioritises the id instead.
+    const text = await frame(view, 90, 24, true);
     const lines = text.split("\n");
     expect(lines.some((line) => line.startsWith("> > oldest  Oldest"))).toBe(true);
     expect(text).toContain("Queued");
@@ -291,14 +292,14 @@ describe("run list", () => {
     expect(cleanRow).not.toContain("findings");
   });
 
-  test("a long summary keeps the findings marker and every metadata field at 80x24", async () => {
+  test("a long row keeps the change id and the findings marker at 80x24", async () => {
     const finding = {
       severity: "must",
       file: "packages/tui/src/views/run-list.tsx",
       line: 56,
       what: "the marker is cut off",
       problem: "a long summary eats the row",
-      fix: "reserve the marker and the metadata first",
+      fix: "reserve the id and the marker first",
       impact: "the finding count is invisible",
     };
     const run = runState({
@@ -318,9 +319,40 @@ describe("run list", () => {
     const text = await frame(view, 80, 24, true);
     const row = text.split("\n").find((line) => line.includes("2 findings"));
     expect(row).toBeDefined();
+    expect(row).toContain("fix-tui-findings-log-styling");
+    expect(row).toContain("Fix the f");
     expect(row).toContain("! 2 findings");
-    expect(row).toContain("paused - idle - 1.2k tokens - $0.42 - 8s");
+    expect(row).toContain("paused");
     expect(row?.length).toBeLessThanOrEqual(80);
+
+    // An active run at the gate has the longest metadata; the id and summary must survive it.
+    const gated = runState({
+      id: "add-health",
+      summary: "Add health endpoints",
+      phase: "awaiting-approval",
+      createdAt: new Date(Date.parse(ISO) - 3_592_000).toISOString(),
+    });
+    const lock: ActiveLock = {
+      changeId: gated.id,
+      pid: 4242,
+      host: "host",
+      since: ISO,
+    };
+    const activeView = buildViewModel(
+      vmInput({
+        screen: "list",
+        status: statusDoc([{ run: gated, tokens: 12_345, cost: 0.42 }], { active: lock }),
+        runs: [gated],
+        selectedRunId: gated.id,
+      }),
+    );
+    const activeText = await frame(activeView, 80, 24, true);
+    const activeRow = activeText.split("\n").find((line) => line.includes("add-health"));
+    expect(activeRow).toBeDefined();
+    expect(activeRow).toContain("Add healt");
+    expect(activeRow).toContain("awaiting approval");
+    expect(activeRow).toContain("active (pid 4242)");
+    expect(activeRow?.length).toBeLessThanOrEqual(80);
 
     // The narrower two-pane list still reserves the marker ahead of the long head.
     const wide = await frame(view, 120, 40, true);
