@@ -464,6 +464,24 @@ describe("the confirm line names the exact argv", () => {
     expect(rewordArgvLine(run, "   ")).toBe(`reword ${RUN} --prompt <text>`);
     expect(rewordArgvLine(run, "apply finding 2")).toBe(`reword ${RUN} --prompt apply finding 2`);
     expect(rewordArgvLine(run, "first\nsecond")).toBe(`reword ${RUN} --prompt first…`);
+    expect(rewordArgvLine(run, "first\nsecond", ASCII_GLYPHS)).toBe(
+      `reword ${RUN} --prompt first...`,
+    );
+  });
+
+  test("a multi-line prompt keeps the ASCII frame printable", async () => {
+    const run = detail({ specFindings: [finding()] });
+    const first = typeText(run, opening({ specFindings: [finding()] }), "first line");
+    const newline = rewordKeys(run, first, "j", key({ ctrl: true }), 24, 80).state;
+    const state = typeText(run, newline, "second line");
+    const view = buildViewModel({
+      ...viewInput(runState({ specFindings: [finding()] })),
+      panel: panel(run, state),
+    });
+    const text = await renderFrame(view, { columns: 80, rows: 24 }, { ascii: true });
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain(`reword ${RUN} --prompt first line...`);
   });
 });
 

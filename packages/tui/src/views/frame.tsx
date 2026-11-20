@@ -28,7 +28,13 @@ export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
     <Box flexDirection="column" width={viewModel.columns} height={viewModel.rows}>
       <Box flexDirection="column" flexGrow={1}>
         {viewModel.panel !== null ? (
-          <PanelBox panel={viewModel.panel} glyphs={glyphs} depth={depth} rows={viewModel.rows} />
+          <PanelBox
+            panel={viewModel.panel}
+            glyphs={glyphs}
+            depth={depth}
+            rows={viewModel.rows}
+            columns={viewModel.columns}
+          />
         ) : viewModel.screen === "list" ? (
           viewModel.twoPane && run !== null ? (
             <Box flexDirection="row">

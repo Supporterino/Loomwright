@@ -7,7 +7,7 @@ import type { KeyInput } from "../model/keys.ts";
 import type { PanelView, RunDetail, SpecFindingRow } from "../model/view-model.ts";
 import { clampOffset, pageSize, sliceWindow, window as windowOf } from "../model/viewport.ts";
 import { keyHint } from "../strings.ts";
-import type { GlyphSet } from "../theme/glyphs.ts";
+import { type GlyphSet, UNICODE_GLYPHS } from "../theme/glyphs.ts";
 
 /** The prompt is required only when the run has no findings to reword by number. */
 export const REWORD_PROMPT_REQUIRED = "the prompt is required";
@@ -83,13 +83,19 @@ function promptLines(text: string, columns: number): string[] {
 
 /**
  * The confirm line: always the `reword <id> --prompt <text>` template, with the typed prompt
- * substituted (first line only, then an ellipsis) once it is non-empty.
+ * substituted (first line only, then an ellipsis) once it is non-empty. The ASCII frame gets
+ * `...`, because Ink is not the one deciding here.
  */
-export function rewordArgvLine(run: RunDetail, text: string): string {
+export function rewordArgvLine(
+  run: RunDetail,
+  text: string,
+  glyphs: GlyphSet = UNICODE_GLYPHS,
+): string {
   const trimmed = text.trim();
   if (trimmed === "") return `reword ${run.id} --prompt <text>`;
   const [first = "", ...rest] = trimmed.split("\n");
-  return `reword ${run.id} --prompt ${rest.length === 0 ? first : `${first}…`}`;
+  const mark = glyphs.bullet === "-" ? "..." : "…";
+  return `reword ${run.id} --prompt ${rest.length === 0 ? first : `${first}${mark}`}`;
 }
 
 function findingLines(finding: SpecFindingRow, index: number, columns: number): string[] {
@@ -102,11 +108,16 @@ function findingLines(finding: SpecFindingRow, index: number, columns: number): 
   ];
 }
 
-function bodyLines(run: RunDetail, state: RewordState, columns: number): string[] {
+function bodyLines(
+  run: RunDetail,
+  state: RewordState,
+  columns: number,
+  glyphs: GlyphSet = UNICODE_GLYPHS,
+): string[] {
   return [
     ...run.specFindings.flatMap((finding, index) => findingLines(finding, index, columns)),
     ...promptLines(state.text, columns),
-    rewordArgvLine(run, state.text),
+    rewordArgvLine(run, state.text, glyphs),
   ];
 }
 
@@ -228,7 +239,7 @@ export interface RewordPanelInput {
 /** Findings in run-state order, the multi-line prompt, the confirm argv and the failure block. */
 export function rewordPanel(input: RewordPanelInput): PanelView {
   const { run, state, glyphs, rows, columns } = input;
-  const body = bodyLines(run, state, columns);
+  const body = bodyLines(run, state, columns, glyphs);
   const size = bodyRows(rows, state);
   const shown = sliceWindow(
     body,

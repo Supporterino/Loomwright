@@ -962,6 +962,48 @@ describe("panel keys", () => {
   });
 });
 
+describe("an ASCII panel clips its body with ASCII", () => {
+  test("a long panel body line ends in '...' and the frame stays printable ASCII", async () => {
+    const long = `gate lint started: ${"x".repeat(200)}`;
+    const view = buildViewModel(
+      vmInput({
+        columns: 60,
+        panel: {
+          kind: "activity",
+          title: "Activity",
+          lines: [long],
+          keys: [],
+          notice: null,
+        },
+      }),
+    );
+    const text = await frame(view, 60, 24, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("gate lint started: ");
+    expect(text).toContain("...");
+  });
+
+  test("a long questions line clips with '...' too", async () => {
+    const view = buildViewModel(
+      vmInput({
+        columns: 60,
+        panel: {
+          kind: "questions",
+          title: "Questions",
+          lines: [`  ${"y".repeat(200)}`],
+          keys: [],
+          notice: null,
+        },
+      }),
+    );
+    const text = await frame(view, 60, 24, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("...");
+  });
+});
+
 describe("the terminal session", () => {
   test("a crash restores the terminal", () => {
     const writes: string[] = [];
