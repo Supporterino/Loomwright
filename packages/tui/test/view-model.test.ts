@@ -723,6 +723,83 @@ describe("spec findings", () => {
   });
 });
 
+describe("reword availability", () => {
+  const ACCEPTED = [
+    "queued",
+    "implementing",
+    "reviewing",
+    "contracts",
+    "full-suite",
+    "closing",
+    "paused",
+    "aborted",
+  ] as const;
+  const REFUSED = ["intake", "design", "awaiting-approval", "done"] as const;
+  const LOCK: ActiveLock = { changeId: RUN, pid: 4242, host: "host", since: ISO };
+
+  function viewWith(
+    run: RunState,
+    extras: { readonly active?: ActiveLock | null; readonly driverAlive?: boolean } = {},
+  ) {
+    return buildViewModel(
+      runInput(run, [], { status: statusDoc([{ run, tokens: 0, cost: 0 }], extras) }),
+    );
+  }
+
+  test("the eight phases the CLI accepts offer a reword", () => {
+    for (const phase of ACCEPTED) {
+      const view = buildViewModel(runInput(runState({ phase })));
+      expect(view.run?.reword, phase).toEqual({ state: "available", reason: null });
+      expect(view.footer, phase).toContainEqual({ key: "w", label: "reword", enabled: true });
+    }
+  });
+
+  test("phases the CLI refuses offer no reword", () => {
+    for (const phase of REFUSED) {
+      const view = buildViewModel(runInput(runState({ phase })));
+      expect(view.run?.reword, phase).toEqual({ state: "absent", reason: null });
+      expect(
+        view.footer.some((hint) => hint.key === "w"),
+        phase,
+      ).toBe(false);
+    }
+  });
+
+  test("a replay source offers no reword even at implementing", () => {
+    const view = buildViewModel(
+      runInput(runState({ phase: "implementing" }), [], { source: "replay" }),
+    );
+    expect(view.run?.reword).toEqual({ state: "absent", reason: null });
+    expect(view.footer.some((hint) => hint.key === "w")).toBe(false);
+  });
+
+  test("a driven run explains why w is inert", () => {
+    const view = viewWith(runState({ phase: "implementing" }), { active: LOCK });
+    const reason = "add-health is being driven by pid 4242; stop it first";
+    expect(view.run?.reword).toEqual({ state: "inert", reason });
+    expect(view.footer).toContainEqual({ key: "w", label: "reword", enabled: false, reason });
+  });
+
+  test("another change holding the lock names that change", () => {
+    const other: ActiveLock = { changeId: "faster-imports", pid: 99, host: "host", since: ISO };
+    const view = viewWith(runState({ phase: "implementing" }), { active: other });
+    const reason =
+      "faster-imports is the active change; finish or abort it before rewording add-health";
+    expect(view.run?.reword).toEqual({ state: "inert", reason });
+    expect(view.footer).toContainEqual({ key: "w", label: "reword", enabled: false, reason });
+  });
+
+  test("a stale lock with a dead driver leaves the reword available", () => {
+    const view = viewWith(runState({ phase: "implementing" }), {
+      active: LOCK,
+      driverAlive: false,
+    });
+    expect(view.run?.lock).toEqual({ kind: "idle" });
+    expect(view.run?.reword).toEqual({ state: "available", reason: null });
+    expect(view.footer).toContainEqual({ key: "w", label: "reword", enabled: true });
+  });
+});
+
 describe("applyKey", () => {
   test("the list and run keys return their intents", () => {
     const run = runState();
@@ -765,7 +842,7 @@ describe("applyKey", () => {
     expect(applyKey(runView, "?")).toEqual({ kind: "help" });
   });
 
-  test("the run footer leaves a, A, w and R to the approval overlay", () => {
+  test("the run footer leaves a, A and R to the approval overlay", () => {
     const implementing = runState({
       specFindings: [
         {
@@ -783,7 +860,6 @@ describe("applyKey", () => {
       const keys = view.footer.map((hint) => hint.key);
       expect(keys).not.toContain("a");
       expect(keys).not.toContain("A");
-      expect(keys).not.toContain("w");
       expect(keys).not.toContain("R");
     }
   });

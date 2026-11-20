@@ -37,4 +37,4 @@ Tasks                                                        first - Health endp
 
 
 
-x abort - t retry task - ? help - q quit
+w reword - x abort - t retry task - ? help - q quit

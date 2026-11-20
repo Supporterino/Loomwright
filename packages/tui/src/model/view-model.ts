@@ -23,6 +23,8 @@ export interface KeyHint {
   readonly key: string;
   readonly label: string;
   readonly enabled: boolean;
+  /** The CLI's message; only a disabled hint whose key the CLI refuses carries one. */
+  readonly reason?: string;
 }
 
 export interface RunListItem {
@@ -98,6 +100,14 @@ export interface ApprovalView {
   readonly approver: string | null;
 }
 
+export type RewordState = "available" | "inert" | "absent";
+
+export interface RewordAvailability {
+  readonly state: RewordState;
+  /** The CLI's message, present only when `state === "inert"`. */
+  readonly reason: string | null;
+}
+
 export interface TaskDetail {
   readonly task: TaskRow;
   readonly agent: AgentFact | null;
@@ -123,6 +133,7 @@ export interface RunDetail {
   readonly specFindings: readonly SpecFindingRow[];
   readonly pausedReason: string | null;
   readonly replayed: boolean;
+  readonly reword: RewordAvailability;
 }
 
 /** A panel is built by its owning module (intake, approval, questions, confirm, help). */
@@ -289,6 +300,38 @@ function taskDetail(row: TaskRow, facts: EventFacts): TaskDetail {
   };
 }
 
+/** The CLI's `CHANGE_PHASES`: the phases `reword` accepts once a run is approved. */
+const REWORD_PHASES: ReadonlySet<Phase> = new Set<Phase>([
+  "queued",
+  "implementing",
+  "reviewing",
+  "contracts",
+  "full-suite",
+  "closing",
+  "paused",
+  "aborted",
+]);
+
+/** The CLI's preconditions as far as the read API can see them; the approval file is not read. */
+function rewordAvailability(run: RunState, input: ViewModelInput): RewordAvailability {
+  if (input.source === "replay" || !REWORD_PHASES.has(run.phase))
+    return { state: "absent", reason: null };
+  // `roleOf` already treats a lock with a dead driver as idle, so liveness lives in one place.
+  const role = roleOf(run.id, input.status);
+  if (role.kind === "active")
+    return {
+      state: "inert",
+      reason: `${run.id} is being driven by pid ${role.pid}; stop it first`,
+    };
+  const active = input.status.active;
+  if (input.status.driverAlive && active !== null && active.changeId !== run.id)
+    return {
+      state: "inert",
+      reason: `${active.changeId} is the active change; finish or abort it before rewording ${run.id}`,
+    };
+  return { state: "available", reason: null };
+}
+
 function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
   const { run } = entry;
   const tasks = run.tasks.map((task) => taskRow(task, input.snapshot, input.selectedTaskId));
@@ -310,6 +353,7 @@ function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
     specFindings: findingRows(run),
     pausedReason: run.pausedReason === undefined ? null : flat(run.pausedReason),
     replayed: input.source === "replay",
+    reword: rewordAvailability(run, input),
   };
 }
 
@@ -332,7 +376,7 @@ function listFooter(input: ViewModelInput): KeyHint[] {
   ];
 }
 
-// The approval overlay owns a/A/w/R: its panel keys replace this footer while it is open.
+// The approval overlay owns a/A/R: its panel keys replace this footer while it is open.
 function runFooter(input: ViewModelInput, run: RunDetail | null): KeyHint[] {
   if (run === null) return [keyHint("q", "quit"), keyHint("?", "help")];
   // Replay intercepts every write key (see `REPLAY_WRITE_KEYS` in the entry), so only help and quit remain.
@@ -340,11 +384,35 @@ function runFooter(input: ViewModelInput, run: RunDetail | null): KeyHint[] {
   const hints: KeyHint[] = [];
   if (canResume(run.phase)) hints.push(keyHint("r", "resume"));
   if (canLand(run.phase)) hints.push(keyHint("l", "land"));
+  hints.push(...rewordHints(run.reword));
   if (run.phase !== "done" && run.phase !== "aborted") hints.push(keyHint("x", "abort"));
   if (run.detail?.task.status === "failed") hints.push(keyHint("t", "retry task"));
   if (run.questions.length > 0) hints.push(keyHint("Q", "questions"));
   hints.push(keyHint("?", "help"), keyHint("q", "quit"));
   return hints;
+}
+
+/** One hint at most: an inert key keeps the CLI's reason for the footer that learns to print it. */
+function rewordHints(reword: RewordAvailability): KeyHint[] {
+  switch (reword.state) {
+    case "available":
+      return [keyHint("w", "reword")];
+    case "inert":
+      return [
+        {
+          key: "w",
+          label: "reword",
+          enabled: false,
+          ...(reword.reason === null ? {} : { reason: reword.reason }),
+        },
+      ];
+    case "absent":
+      return [];
+    default: {
+      const unhandled: never = reword.state;
+      throw new Error(`unknown reword state: ${String(unhandled)}`);
+    }
+  }
 }
 
 function footerFor(input: ViewModelInput, run: RunDetail | null): readonly KeyHint[] {

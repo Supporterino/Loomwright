@@ -140,6 +140,14 @@ const MATRIX: readonly { readonly action: LaunchAction; readonly expected: reado
     expected: ["approve", "add-health", "--no-continue"],
   },
   { action: { kind: "reword", id: "add-health" }, expected: ["reword", "add-health"] },
+  {
+    action: {
+      kind: "reword",
+      id: "add-health",
+      prompt: "apply findings 1 and 2",
+    },
+    expected: ["reword", "add-health", "--prompt", "apply findings 1 and 2"],
+  },
   { action: { kind: "reapprove", id: "add-health" }, expected: ["reapprove", "add-health"] },
   { action: { kind: "resume", id: "add-health" }, expected: ["resume", "add-health"] },
   { action: { kind: "land", id: "add-health" }, expected: ["land", "add-health"] },
@@ -192,6 +200,26 @@ describe("text stays one argv element", () => {
   test("spaces and newlines are never split", () => {
     const text = "add a health\nendpoint with spaces";
     expect(actionArgs({ kind: "run-text", text })).toEqual(["run", text, "--no-interactive"]);
+  });
+});
+
+describe("the reword prompt is one argv element", () => {
+  test("a two-line prompt keeps its newline and no quoting", () => {
+    expect(actionArgs({ kind: "reword", id: "add-health", prompt: "  first\nsecond  " })).toEqual([
+      "reword",
+      "add-health",
+      "--prompt",
+      "first\nsecond",
+    ]);
+  });
+
+  test("an empty prompt after trimming launches without --prompt", () => {
+    for (const prompt of ["", "   \n ", "\n\t "]) {
+      expect(
+        actionArgs({ kind: "reword", id: "add-health", prompt }),
+        JSON.stringify(prompt),
+      ).toEqual(["reword", "add-health"]);
+    }
   });
 });
 

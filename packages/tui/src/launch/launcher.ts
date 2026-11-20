@@ -14,7 +14,7 @@ export type LaunchAction =
   | { readonly kind: "run-file"; readonly path: string }
   | { readonly kind: "approve"; readonly id: string }
   | { readonly kind: "approve-only"; readonly id: string }
-  | { readonly kind: "reword"; readonly id: string }
+  | { readonly kind: "reword"; readonly id: string; readonly prompt?: string }
   | { readonly kind: "reapprove"; readonly id: string }
   | { readonly kind: "resume"; readonly id: string }
   | { readonly kind: "land"; readonly id: string };
@@ -46,8 +46,12 @@ export function actionArgs(action: LaunchAction): readonly string[] {
       return ["approve", action.id];
     case "approve-only":
       return ["approve", action.id, "--no-continue"];
-    case "reword":
-      return ["reword", action.id];
+    case "reword": {
+      // Trim decides emptiness and the trimmed text is passed, so the 80-column check and the
+      // confirm line agree; internal newlines stay in the one argv element.
+      const prompt = action.prompt?.trim() ?? "";
+      return prompt === "" ? ["reword", action.id] : ["reword", action.id, "--prompt", prompt];
+    }
     case "reapprove":
       return ["reapprove", action.id];
     case "resume":
