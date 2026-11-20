@@ -196,6 +196,27 @@ describe("the scoped activity pane", () => {
     expect(cycleScope(detail, state)).toEqual(state);
   });
 
+  test("Tab reaches task and repo scope: a run with tasks but no selection reaches the first task", () => {
+    const detail = run({
+      tasks: [task("first", "app"), task("second", "api")],
+      selectedTaskId: null,
+      activity: [line(1, "run", "run", "run line"), line(2, "first", "agent", "first line")],
+    });
+    const opened = openActivityPane(detail);
+    expect(opened.scope).toBe("run");
+    const taskScope = cycleScope(detail, opened);
+    expect(taskScope.scope).toBe("task");
+    expect(taskScope.taskId).toBe("first");
+    const panel = activityPanePanel({
+      run: detail,
+      state: taskScope,
+      glyphs: ASCII_GLYPHS,
+      rows: 24,
+    });
+    expect(panel.title).toBe("Activity - first");
+    expect(cycleScope(detail, taskScope).scope).toBe("repo");
+  });
+
   test("Tab reaches task and repo scope: a task with no repo skips the repo scope", () => {
     const detail = run({ tasks: [task("solo", "")], selectedTaskId: "solo" });
     const state = openActivityPane(detail);

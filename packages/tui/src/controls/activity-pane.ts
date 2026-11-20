@@ -59,7 +59,8 @@ export function openActivityPane(run: RunDetail): ActivityPaneState {
 export function cycleScope(run: RunDetail, state: ActivityPaneState): ActivityPaneState {
   switch (state.scope) {
     case "run": {
-      const task = taskFor(run, run.selectedTaskId);
+      // A run with tasks but no selection (the 80-column case) still reaches the task scope.
+      const task = taskFor(run, run.selectedTaskId ?? run.tasks[0]?.id ?? null);
       return task === undefined ? state : { ...state, scope: "task", taskId: task.id };
     }
     case "task": {
