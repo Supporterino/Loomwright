@@ -1,0 +1,27 @@
+{
+  "changeId": "fix-tui-events-and-land",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "5c4c702f495ba6b35a5badd1d2a97503c6688b9c",
+  "hash": "641c18dbfe0a64246b0af89a16d064baccf745e1df49af62c296e457ffc904cf",
+  "approvedAt": "2026-11-20T11:18:05.676Z",
+  "history": [
+    {
+      "hash": "c5e339673d9e688bb418428bdad1e6dd326dd2657ad0b2ca6161e79fb87d0652",
+      "specCommit": "597cd4af2b7665013cfabd197ae84bda0cedc6b7",
+      "at": "2026-11-19T12:55:14.795Z",
+      "reason": "reword: review findings applied"
+    },
+    {
+      "hash": "7113930b133065b76a3bc03bbaf59b826167bf642931e7dc73e739512813f9e6",
+      "specCommit": "3a9b53b92f4b5431e1324e80d3eb4bd30d6318c8",
+      "at": "2026-11-20T07:49:52.167Z",
+      "reason": "reword: review findings applied"
+    },
+    {
+      "hash": "7a6ef20b5231c47971d975e5c46e3aec7681dd30e2c0da7cdc502c9b238100bd",
+      "specCommit": "ea0bbced4c3d18caa940a6d55a6349819b61a997",
+      "at": "2026-11-20T10:13:55.506Z",
+      "reason": "manual re-approval"
+    }
+  ]
+}
