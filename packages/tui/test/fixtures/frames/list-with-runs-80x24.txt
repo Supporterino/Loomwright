@@ -1,6 +1,6 @@
 Runs
-> > add-health - implementing - idle - 0 tokens - $0.00 - 8s
-  + faster-imports - done - idle - 0 tokens - $0.00 - 1h00m
+> > add-health  Add health endpoints  - implementing - idle - 0 tokens - $0.0...
+  + faster-imports  Add health endpoints  - done - idle - 0 tokens - $0.00 - ...
 
 
 

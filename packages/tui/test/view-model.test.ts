@@ -17,8 +17,19 @@ import { landFor } from "../src/controls/actions.ts";
 import { ACTIVITY_LIMIT, collectFacts } from "../src/model/facts.ts";
 import { formatElapsed, formatPercent, formatTokensShort, truncate } from "../src/model/format.ts";
 import { applyKey } from "../src/model/keys.ts";
-import { buildViewModel, roleLabel, type ViewModelInput } from "../src/model/view-model.ts";
-import { emptyWorkspace, LABELS, replayNotice } from "../src/strings.ts";
+import {
+  buildViewModel,
+  roleLabel,
+  type SpecFindingRow,
+  type ViewModelInput,
+} from "../src/model/view-model.ts";
+import {
+  emptyWorkspace,
+  findingsCount,
+  LABELS,
+  pausedFindings,
+  replayNotice,
+} from "../src/strings.ts";
 
 const ISO = "2026-11-17T10:00:00.000Z";
 const RUN = "add-health";
@@ -195,9 +206,31 @@ describe("buildViewModel", () => {
   });
 
   test("the list is ordered and labelled: newest first, active pid, queued #1, idle", () => {
-    const oldest = runState({ id: "oldest", createdAt: "2026-11-17T09:00:00.000Z" });
-    const active = runState({ id: "running", createdAt: "2026-11-17T09:10:00.000Z" });
-    const queued = runState({ id: "queued", createdAt: "2026-11-17T09:20:00.000Z" });
+    const finding = {
+      severity: "should",
+      file: "packages/tui/src/model/view-model.ts",
+      line: 28,
+      what: "the row lacks the count",
+      problem: "findings are invisible",
+      fix: "carry the count",
+      impact: "the run looks idle",
+    };
+    const oldest = runState({
+      id: "oldest",
+      createdAt: "2026-11-17T09:00:00.000Z",
+      summary: "Oldest change",
+    });
+    const active = runState({
+      id: "running",
+      createdAt: "2026-11-17T09:10:00.000Z",
+      summary: "Active change",
+    });
+    const queued = runState({
+      id: "queued",
+      createdAt: "2026-11-17T09:20:00.000Z",
+      summary: "Queued change",
+      specFindings: [finding, { ...finding, severity: "must", line: 97 }],
+    });
     const lock: ActiveLock = { changeId: "running", pid: 4242, host: "host", since: ISO };
     const status = statusDoc(
       [
@@ -216,6 +249,12 @@ describe("buildViewModel", () => {
       }),
     );
     expect(view.list.map((item) => item.id)).toEqual(["queued", "running", "oldest"]);
+    expect(view.list.map((item) => item.summary)).toEqual([
+      "Queued change",
+      "Active change",
+      "Oldest change",
+    ]);
+    expect(view.list.map((item) => item.findings)).toEqual([2, 0, 0]);
     expect(view.list[0]?.role).toEqual({ kind: "queued", position: 1 });
     expect(view.list[1]?.role).toEqual({ kind: "active", pid: 4242 });
     expect(view.list[2]?.role).toEqual({ kind: "idle" });
@@ -585,6 +624,102 @@ describe("buildViewModel", () => {
       }),
     ]);
     expect(withLog.activity[0]?.logRef).toBe(".factory/logs/add-health/task.log");
+  });
+});
+
+describe("spec findings", () => {
+  const finding: SpecFindingRow = {
+    severity: "must",
+    file: "packages/core/src/state/run.ts",
+    line: 111,
+    what: "carries the paused reason",
+    problem: "the run view cannot say why it stopped",
+    fix: "carry pausedReason in RunDetail",
+    impact: "the user rewords blind",
+  };
+
+  test("RunDetail carries severity, file, line and the flattened text in run-state order", () => {
+    const second: SpecFindingRow = {
+      severity: "nice",
+      file: "packages/tui/src/strings.ts",
+      line: 40,
+      what: "the count reads twice",
+      problem: "the label repeats",
+      fix: "name it once",
+      impact: "the row is noisy",
+    };
+    const run = runState({
+      phase: "paused",
+      pausedReason: "spec findings need reword",
+      specFindings: [finding, second],
+    });
+    const detail = buildViewModel(runInput(run)).run;
+    expect(detail?.specFindings.map((row) => row.severity)).toEqual(["must", "nice"]);
+    expect(detail?.specFindings[0]).toEqual(finding);
+    expect(detail?.specFindings[1]).toEqual(second);
+    expect(detail?.pausedReason).toBe("spec findings need reword");
+  });
+
+  test("the run list marks findings: the count is carried and a run without findings reads 0", () => {
+    const paused = runState({
+      phase: "paused",
+      specFindings: [finding, { ...finding, severity: "should", line: 97 }],
+    });
+    const clean = runState({ id: "clean" });
+    const view = buildViewModel(
+      vmInput({
+        screen: "list",
+        status: statusDoc([
+          { run: paused, tokens: 0, cost: 0 },
+          { run: clean, tokens: 0, cost: 0 },
+        ]),
+        runs: [paused, clean],
+        selectedRunId: RUN,
+      }),
+    );
+    expect(view.list.find((item) => item.id === RUN)?.findings).toBe(2);
+    expect(view.list.find((item) => item.id === "clean")?.findings).toBe(0);
+  });
+
+  test("control characters are stripped from spec findings and pausedReason", () => {
+    const run = runState({
+      phase: "paused",
+      pausedReason: "\u001b[2Jblocked\u0007",
+      specFindings: [
+        {
+          severity: "must",
+          what: "\u001b[2Jwhat\u0007",
+          problem: "\u001b]52;c;problem\u0007",
+          fix: "\u001b[2Jfix\u0007",
+          impact: "\u001b]52;c;impact\u0007",
+        },
+      ],
+    });
+    const detail = buildViewModel(runInput(run)).run;
+    expect(detail?.specFindings[0]?.what).toBe("[2Jwhat");
+    expect(detail?.specFindings[0]?.problem).toBe("]52;c;problem");
+    expect(detail?.specFindings[0]?.fix).toBe("[2Jfix");
+    expect(detail?.specFindings[0]?.impact).toBe("]52;c;impact");
+    expect(detail?.pausedReason).toBe("[2Jblocked");
+  });
+
+  test("a finding with no file or line carries null, never undefined or an empty string", () => {
+    const run = runState({
+      phase: "paused",
+      specFindings: [{ severity: "should", what: "w", problem: "p", fix: "f", impact: "i" }],
+    });
+    const row = buildViewModel(runInput(run)).run?.specFindings[0];
+    expect(row?.file).toBeNull();
+    expect(row?.line).toBeNull();
+    expect(buildViewModel(runInput(runState())).run?.pausedReason).toBeNull();
+  });
+
+  test("the banner says reword is needed: the words name the count and the singular", () => {
+    expect(pausedFindings("—", 3)).toBe("paused — 3 spec findings need reword");
+    expect(pausedFindings("—", 1)).toBe("paused — 1 spec finding needs reword");
+    expect(pausedFindings("-", 2)).toBe("paused - 2 spec findings need reword");
+    expect(findingsCount(2)).toBe("2 findings");
+    expect(findingsCount(1)).toBe("1 finding");
   });
 });
 

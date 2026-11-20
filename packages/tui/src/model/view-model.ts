@@ -33,7 +33,19 @@ export interface RunListItem {
   readonly tokens: number;
   readonly cost: number;
   readonly elapsedMs: number;
+  /** Recorded spec findings; the row shows the count only when it is above zero. */
+  readonly findings: number;
   readonly selected: boolean;
+}
+
+export interface SpecFindingRow {
+  readonly severity: "must" | "should" | "nice";
+  readonly file: string | null;
+  readonly line: number | null;
+  readonly what: string;
+  readonly problem: string;
+  readonly fix: string;
+  readonly impact: string;
 }
 
 export interface TaskRow {
@@ -108,6 +120,8 @@ export interface RunDetail {
   readonly activity: readonly ActivityLine[];
   readonly questions: readonly QuestionRow[];
   readonly approval: ApprovalView | null;
+  readonly specFindings: readonly SpecFindingRow[];
+  readonly pausedReason: string | null;
   readonly replayed: boolean;
 }
 
@@ -252,6 +266,19 @@ function approvalView(run: RunState, snapshot: RunSnapshot | null): ApprovalView
   };
 }
 
+function findingRows(run: RunState): SpecFindingRow[] {
+  // Run-state order is the 1-based order `reword --finding <n>` uses; never sort it.
+  return run.specFindings.map((finding) => ({
+    severity: finding.severity,
+    file: finding.file === undefined ? null : flat(finding.file),
+    line: finding.line === undefined ? null : finding.line,
+    what: flat(finding.what),
+    problem: flat(finding.problem),
+    fix: flat(finding.fix),
+    impact: flat(finding.impact),
+  }));
+}
+
 function taskDetail(row: TaskRow, facts: EventFacts): TaskDetail {
   return {
     task: row,
@@ -280,6 +307,8 @@ function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
     activity: input.facts.activity,
     questions: questionRows(run, input.snapshot),
     approval: approvalView(run, input.snapshot),
+    specFindings: findingRows(run),
+    pausedReason: run.pausedReason === undefined ? null : flat(run.pausedReason),
     replayed: input.source === "replay",
   };
 }
@@ -335,6 +364,7 @@ export function buildViewModel(input: ViewModelInput): ViewModel {
     tokens,
     cost,
     elapsedMs: elapsedSince(run.createdAt, input.now),
+    findings: run.specFindings.length,
     selected: run.id === input.selectedRunId,
   }));
 

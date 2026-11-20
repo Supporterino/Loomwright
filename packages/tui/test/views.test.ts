@@ -191,9 +191,21 @@ function failingTaskView(selectedTaskId: string | null = "first"): ViewModel {
 
 describe("run list", () => {
   test("the list is ordered and labelled: newest first, active pid, queued #1, idle", async () => {
-    const oldest = runState({ id: "oldest", createdAt: "2026-11-17T09:00:00.000Z" });
-    const active = runState({ id: "running", createdAt: "2026-11-17T09:10:00.000Z" });
-    const queued = runState({ id: "queued", createdAt: "2026-11-17T09:20:00.000Z" });
+    const oldest = runState({
+      id: "oldest",
+      createdAt: "2026-11-17T09:00:00.000Z",
+      summary: "Oldest",
+    });
+    const active = runState({
+      id: "running",
+      createdAt: "2026-11-17T09:10:00.000Z",
+      summary: "Active",
+    });
+    const queued = runState({
+      id: "queued",
+      createdAt: "2026-11-17T09:20:00.000Z",
+      summary: "Queued",
+    });
     const lock: ActiveLock = {
       changeId: "running",
       pid: 4242,
@@ -215,9 +227,10 @@ describe("run list", () => {
         selectedRunId: "oldest",
       }),
     );
-    const text = await frame(view, 80, 24, true);
+    const text = await frame(view, 90, 24, true);
     const lines = text.split("\n");
-    expect(lines.some((line) => line.startsWith("> > oldest"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("> > oldest  Oldest"))).toBe(true);
+    expect(text).toContain("Queued");
     const queuedAt = text.indexOf("queued #1");
     const runningAt = text.indexOf("active (pid 4242)");
     const oldestAt = text.indexOf("idle");
