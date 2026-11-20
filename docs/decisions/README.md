@@ -51,3 +51,4 @@ Short ADRs for every choice the build prompt did not lock. Format: Context / Dec
 | [0045](0045-opencode-feature-floors.md)         | opencode feature version floors                                    |
 | [0046](0046-typed-event-stream.md)              | Typed event stream: JSONL, sequence numbers, single writer         |
 | [0047](0047-tui.md)                             | Terminal UI: Ink, lazy bundle, detached children                   |
+| [0048](0048-tui-scroll-log-and-reword.md)       | TUI scroll, scoped log and reword                                  |

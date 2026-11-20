@@ -412,6 +412,8 @@ describe("terminal UI documentation", () => {
       "# The terminal UI",
       "## The run list",
       "## The run view",
+      "## Findings and reword",
+      "## The activity log",
       "## Layout",
       "## Keys",
       "## Starting a change",
@@ -424,6 +426,10 @@ describe("terminal UI documentation", () => {
       expect(tui).toContain(heading);
     expect(tui).toContain("recorded — applies at the next step");
     expect(tui).toContain("`l`");
+    expect(tui).toContain("`L`");
+    expect(tui).toContain("`w`");
+    expect(tui).toContain("every run event");
+    expect(tui).toContain("full-height");
 
     // The long actions are detached children; answer, abort and retry are in-process writes.
     expect(tui).toContain("detached CLI children");
@@ -458,7 +464,20 @@ describe("terminal UI documentation", () => {
     expect(adr).toContain("approval.pending");
     expect(adr).toContain("--replay");
     expect(adr).not.toContain("Loomwright");
-    expect(read("docs/decisions/README.md")).toContain("| [0047](0047-tui.md)");
+
+    const next = read("docs/decisions/0048-tui-scroll-log-and-reword.md");
+    expect(next.startsWith("# 0048 — ")).toBe(true);
+    expect(next).toContain("## Context");
+    expect(next).toContain("## Decision");
+    expect(next).toContain("## Consequences");
+    expect(next).toContain("Ink 6.4.0");
+    expect(next).toContain("React 19.3.1");
+    expect(next).not.toContain("[");
+    expect(next).not.toContain("Loomwright");
+
+    const index = read("docs/decisions/README.md");
+    expect(index).toContain("| [0047](0047-tui.md)");
+    expect(index).toContain("| [0048](0048-tui-scroll-log-and-reword.md)");
   });
 
   test("the keys are documented", () => {
@@ -467,6 +486,7 @@ describe("terminal UI documentation", () => {
       ["n", "new change"],
       ["Tab", "file mode"],
       ["Tab", "text mode"],
+      ["Tab", "scope"],
       ["a", "approve and run"],
       ["A", "approve only"],
       ["w", "reword"],
@@ -476,18 +496,29 @@ describe("terminal UI documentation", () => {
       ["t", "retry task"],
       ["l", "land"],
       ["Q", "questions"],
+      ["PgUp/PgDn", "page"],
+      ["g/G", "ends"],
+      ["f", "follow on"],
+      ["Ctrl-J", "newline"],
+      ["Esc", "collapse"],
       ["?", "help"],
       ["q", "quit"],
     ];
-    for (const [key] of hints) expect(tui).toContain(`\`${key}\``);
+    for (const [key] of hints)
+      for (const part of key.split("/")) expect(tui).toContain(`\`${part}\``);
+    expect(tui).toContain("`L`");
 
     // The footer is built from these pure hints, so checking them covers the rendered footer.
     const sources = [
       read("packages/tui/src/model/view-model.ts"),
       read("packages/tui/src/intake/dialog.tsx"),
       read("packages/tui/src/approval/overlay.ts"),
+      read("packages/tui/src/controls/activity-pane.ts"),
     ].join("\n");
-    for (const [key, label] of hints) expect(sources).toContain(`keyHint("${key}", "${label}")`);
+    for (const [key, label] of hints)
+      if (key === "f") expect(sources).toContain('keyHint("f"');
+      else expect(sources).toContain(`keyHint("${key}", "${label}")`);
+    expect(read("packages/tui/src/help.ts")).toContain("L open the activity log");
 
     // The honest answer wording is shared with the questions pane.
     expect(read("packages/tui/src/strings.ts")).toContain("recorded — applies at the next step");
