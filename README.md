@@ -162,9 +162,10 @@ design, installs, merges and closing included. At 100 columns and wider it uses 
 that, one pane with drill-down, where the tail sits below the graph.
 - `n` starts a change: type the request, `Ctrl-J` for a newline, or `Tab` to pick a request file with
   a preview. It launches `loomwright run` as a detached child and shows the spawn log.
-- At `awaiting-approval` the overlay offers `a` approve and run, `A` approve only, `w` reword (when
-  the run has spec findings) and `R` reapprove (after an approval). It needs `git user.email`; `Esc`
-  cancels.
+- At `awaiting-approval` the overlay offers `a` approve and run, `A` approve only and `R` reapprove
+  once the stream carries the spec commit. `Esc` collapses it to the run view's gate banner, where
+  `a`, `A` or `R` reopens it. Reword (`w`) starts from the run view, never at the gate; approving
+  needs `git user.email`.
 - `Q` opens the questions pane. A recorded answer reads "recorded — applies at the next step" until
   the run emits `question.answered`, and only then "answered"; the UI never claims it was applied.
 - `r` resumes, `x` aborts and `t` retries a failed task; `?` is help and `q` quits.
