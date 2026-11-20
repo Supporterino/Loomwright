@@ -21,8 +21,10 @@ import {
   buildViewModel,
   roleLabel,
   type SpecFindingRow,
+  singlePaneTailRows,
   type ViewModelInput,
 } from "../src/model/view-model.ts";
+import { lastOffset, moveBy, pageSize, windowTitle } from "../src/model/viewport.ts";
 import {
   emptyWorkspace,
   findingsCount,
@@ -150,6 +152,8 @@ function vmInput(overrides: Partial<ViewModelInput>): ViewModelInput {
       overrides.selectedTaskId === undefined ? base.selectedTaskId : overrides.selectedTaskId,
     panel: overrides.panel === undefined ? null : overrides.panel,
     notice: overrides.notice === undefined ? null : overrides.notice,
+    listOffset: overrides.listOffset ?? 0,
+    taskOffset: overrides.taskOffset ?? 0,
   };
 }
 
@@ -820,6 +824,10 @@ describe("applyKey", () => {
     expect(applyKey(list, "j")).toEqual({ kind: "next-run" });
     expect(applyKey(list, "Up")).toEqual({ kind: "prev-run" });
     expect(applyKey(list, "k")).toEqual({ kind: "prev-run" });
+    expect(applyKey(list, "PgUp")).toEqual({ kind: "page-up" });
+    expect(applyKey(list, "PgDn")).toEqual({ kind: "page-down" });
+    expect(applyKey(list, "g")).toEqual({ kind: "first" });
+    expect(applyKey(list, "G")).toEqual({ kind: "last" });
     expect(applyKey(list, "Esc")).toEqual({ kind: "none" });
 
     const runView = buildViewModel(runInput(run));
@@ -828,6 +836,10 @@ describe("applyKey", () => {
     expect(applyKey(runView, "j")).toEqual({ kind: "next-task" });
     expect(applyKey(runView, "Up")).toEqual({ kind: "prev-task" });
     expect(applyKey(runView, "k")).toEqual({ kind: "prev-task" });
+    expect(applyKey(runView, "PgUp")).toEqual({ kind: "page-up" });
+    expect(applyKey(runView, "PgDn")).toEqual({ kind: "page-down" });
+    expect(applyKey(runView, "g")).toEqual({ kind: "first" });
+    expect(applyKey(runView, "G")).toEqual({ kind: "last" });
     // The approval overlay owns a/A/w/R; the run screen leaves them inert.
     expect(applyKey(runView, "a")).toEqual({ kind: "none" });
     expect(applyKey(runView, "A")).toEqual({ kind: "none" });
@@ -916,6 +928,139 @@ describe("applyKey", () => {
     );
     expect(view.footer.map((hint) => hint.key)).toEqual(["y"]);
     expect(applyKey(view, "a")).toEqual({ kind: "none" });
+  });
+});
+
+describe("scroll windows", () => {
+  /** `count` runs newest first: `run-0` is the oldest row. */
+  function manyRuns(count: number): RunState[] {
+    return Array.from({ length: count }, (_, index) =>
+      runState({
+        id: `run-${index}`,
+        summary: `run ${index}`,
+        createdAt: new Date(Date.parse(ISO) + index * 1_000).toISOString(),
+      }),
+    );
+  }
+
+  function listView(
+    runs: readonly RunState[],
+    selectedRunId: string,
+    overrides: Partial<ViewModelInput> = {},
+  ) {
+    return buildViewModel(
+      vmInput({
+        screen: "list",
+        rows: 24,
+        status: statusDoc(runs.map((run) => ({ run, tokens: 0, cost: 0 }))),
+        runs,
+        selectedRunId,
+        ...overrides,
+      }),
+    );
+  }
+
+  test("a 60-run list keeps the frame still", () => {
+    const runs = manyRuns(60);
+    const top = listView(runs, "run-59");
+    expect(top.listWindow).toEqual({ offset: 0, size: 22, total: 60 });
+
+    const bottom = listView(runs, "run-0");
+    expect(bottom.listWindow.offset).toBe(60 - 22);
+    expect(bottom.listWindow.offset + bottom.listWindow.size).toBe(60);
+  });
+
+  test("resize re-clamps the offset", () => {
+    const runs = manyRuns(60);
+    const small = listView(runs, "run-0", { rows: 24 });
+    expect(small.listWindow).toEqual({ offset: 38, size: 22, total: 60 });
+    expect(windowTitle("runs", small.listWindow)).toBe("runs 39-60/60");
+
+    // Growing to 120x40 keeps the same requested offset but clamps it to the larger window.
+    const grown = listView(runs, "run-0", { rows: 40, listOffset: small.listWindow.offset });
+    expect(grown.listWindow).toEqual({ offset: 22, size: 38, total: 60 });
+    expect(grown.listWindow.offset + grown.listWindow.size).toBe(60);
+    expect(windowTitle("runs", grown.listWindow)).toBe("runs 23-60/60");
+
+    // Shrinking back re-clamps in the other direction and keeps the selection visible.
+    const shrunk = listView(runs, "run-0", { rows: 24, listOffset: grown.listWindow.offset });
+    expect(shrunk.listWindow.offset).toBe(38);
+    expect(shrunk.listWindow.offset).toBeLessThanOrEqual(60 - shrunk.listWindow.size);
+  });
+
+  test("the selection stays visible for every requested offset", () => {
+    const runs = manyRuns(60);
+    // Newest first, so `run-30` sits at index 29.
+    for (let offset = 0; offset <= 40; offset += 1) {
+      const view = listView(runs, "run-30", { listOffset: offset });
+      expect(view.listWindow.offset, `offset ${offset}`).toBeLessThanOrEqual(29);
+      expect(view.listWindow.offset + view.listWindow.size, `offset ${offset}`).toBeGreaterThan(29);
+    }
+  });
+
+  test("the title names the window only when needed", () => {
+    const runs = manyRuns(12);
+    // 9 rows fit at 11 terminal rows; offset 2 puts the window over rows 3-11.
+    const windowed = listView(runs, "run-3", { rows: 11, listOffset: 2 });
+    expect(windowed.listWindow).toEqual({ offset: 2, size: 9, total: 12 });
+    expect(windowTitle("runs", windowed.listWindow)).toBe("runs 3-11/12");
+
+    const fits = listView(runs, "run-3", { rows: 40 });
+    expect(fits.listWindow).toEqual({ offset: 0, size: 38, total: 12 });
+    expect(windowTitle("runs", fits.listWindow)).toBeNull();
+  });
+
+  test("a page move keeps the selection in the window", () => {
+    const tasks = Array.from({ length: 30 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    const input = runInput(run, [], { rows: 24, selectedTaskId: "task-0" });
+    const first = buildViewModel(input);
+    expect(first.taskWindow).toEqual({ offset: 0, size: 21, total: 30 });
+
+    let selected = "task-0";
+    let offset = first.taskWindow.offset;
+    for (let press = 0; press < 2; press += 1) {
+      const index = tasks.findIndex((task) => task.id === selected);
+      const next = Math.min(tasks.length - 1, index + pageSize(first.taskWindow.size));
+      offset = moveBy(offset, pageSize(first.taskWindow.size), tasks.length, first.taskWindow.size);
+      selected = `task-${next}`;
+      const view = buildViewModel({ ...input, selectedTaskId: selected, taskOffset: offset });
+      expect(view.taskWindow.offset).toBeLessThanOrEqual(next);
+      expect(view.taskWindow.offset + view.taskWindow.size).toBeGreaterThan(next);
+      offset = view.taskWindow.offset;
+    }
+    expect(offset).toBe(lastOffset(30, first.taskWindow.size));
+    expect(selected).toBe("task-29");
+  });
+
+  test("a requested offset clamps at both ends", () => {
+    const runs = manyRuns(60);
+    expect(listView(runs, "run-0", { listOffset: 999 }).listWindow.offset).toBe(38);
+    expect(listView(runs, "run-59", { listOffset: -5 }).listWindow.offset).toBe(0);
+  });
+
+  test("singlePaneTailRows keeps its notice fixture and sizes from the graph window", () => {
+    const notice = Array.from({ length: 12 }, (_, index) => `notice line ${index + 1}`).join("\n");
+    const oneTask = buildViewModel(
+      runInput(runState({ tasks: [taskState({ id: "first" })] }), [], {
+        rows: 24,
+        notice,
+        selectedTaskId: null,
+      }),
+    );
+    expect(singlePaneTailRows(oneTask)).toBe(8);
+
+    const twelve = Array.from({ length: 12 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    // A graph that fits leaves the remaining rows to the tail.
+    const fits = buildViewModel(
+      runInput(runState({ tasks: twelve }), [], { rows: 24, selectedTaskId: null }),
+    );
+    expect(fits.taskWindow.size).toBe(21);
+    expect(singlePaneTailRows(fits)).toBe(9);
   });
 });
 

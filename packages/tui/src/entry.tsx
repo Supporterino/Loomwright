@@ -60,6 +60,7 @@ import {
   type ViewModel,
   type ViewModelInput,
 } from "./model/view-model.ts";
+import { firstOffset, lastOffset, moveBy, nextOffset, pageSize } from "./model/viewport.ts";
 import { type ReplayLoad, readReplayFile, replayModel } from "./replay/replay.ts";
 import { createTerminalSession, type TerminalSession } from "./session.ts";
 import { landedNotice } from "./strings.ts";
@@ -117,12 +118,21 @@ function themeFor(options: TuiOptions): ResolvedTheme {
 
 function keyName(
   input: string,
-  key: { return: boolean; escape: boolean; upArrow: boolean; downArrow: boolean },
+  key: {
+    return: boolean;
+    escape: boolean;
+    upArrow: boolean;
+    downArrow: boolean;
+    pageUp: boolean;
+    pageDown: boolean;
+  },
 ): string {
   if (key.return) return "Enter";
   if (key.escape) return "Esc";
   if (key.upArrow) return "Up";
   if (key.downArrow) return "Down";
+  if (key.pageUp) return "PgUp";
+  if (key.pageDown) return "PgDn";
   return input;
 }
 
@@ -194,6 +204,10 @@ export interface UiData {
   readonly snapshot: RunSnapshot | null;
   readonly facts: EventFacts;
   readonly notice: string | null;
+  /** The requested run-list scroll offset; the model re-clamps it every build. */
+  readonly listOffset?: number;
+  /** The requested task-graph scroll offset; the model re-clamps it every build. */
+  readonly taskOffset?: number;
   /** The new-run dialog, or null when no panel is open. */
   readonly intake: IntakeState | null;
   /** The approval overlay, or null when the selected run is not at the gate. */
@@ -282,6 +296,8 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
     selectedTaskId: data.selectedTaskId,
     panel: null,
     notice: data.notice,
+    listOffset: data.listOffset ?? 0,
+    taskOffset: data.taskOffset ?? 0,
   };
   const base = buildViewModel(baseInput);
   if (data.help) {
@@ -331,6 +347,8 @@ function initialData(
     snapshot: null,
     facts: collectFacts([]),
     notice: null,
+    listOffset: 0,
+    taskOffset: 0,
     intake: null,
     approval: null,
     questions: null,
@@ -1319,9 +1337,21 @@ function Interactive({
         const index = items.findIndex((item) => item.id === current.selectedRunId);
         const step = intent.kind === "next-run" ? 1 : -1;
         const probe = index === -1 ? 0 : index + step;
-        const next = items[Math.min(items.length - 1, Math.max(0, probe))];
+        const clamped = Math.min(items.length - 1, Math.max(0, probe));
+        const next = items[clamped];
         if (next !== undefined) {
-          setData((state) => ({ ...state, selectedRunId: next.id, selectedTaskId: null }));
+          const offset = nextOffset(
+            current.listWindow.offset,
+            clamped,
+            items.length,
+            current.listWindow.size,
+          );
+          setData((state) => ({
+            ...state,
+            selectedRunId: next.id,
+            selectedTaskId: null,
+            listOffset: offset,
+          }));
         }
         return;
       }
@@ -1332,12 +1362,95 @@ function Interactive({
         const index = tasks.findIndex((task) => task.selected);
         const step = intent.kind === "next-task" ? 1 : -1;
         const probe = index === -1 ? 0 : index + step;
-        const next = tasks[Math.min(tasks.length - 1, Math.max(0, probe))];
+        const clamped = Math.min(tasks.length - 1, Math.max(0, probe));
+        const next = tasks[clamped];
         if (next !== undefined) {
-          setData((state) => ({ ...state, selectedTaskId: next.id }));
+          const offset = nextOffset(
+            current.taskWindow.offset,
+            clamped,
+            tasks.length,
+            current.taskWindow.size,
+          );
+          setData((state) => ({ ...state, selectedTaskId: next.id, taskOffset: offset }));
         }
         return;
       }
+      case "page-up":
+      case "page-down":
+        if (current.screen === "list") {
+          const items = current.list;
+          if (items.length === 0) return;
+          const size = current.listWindow.size;
+          const step = pageSize(size) * (intent.kind === "page-down" ? 1 : -1);
+          const index = items.findIndex((item) => item.id === current.selectedRunId);
+          const clamped = Math.min(
+            items.length - 1,
+            Math.max(0, (index === -1 ? 0 : index) + step),
+          );
+          const next = items[clamped];
+          if (next !== undefined) {
+            const offset = moveBy(current.listWindow.offset, step, items.length, size);
+            setData((state) => ({
+              ...state,
+              selectedRunId: next.id,
+              selectedTaskId: null,
+              listOffset: offset,
+            }));
+          }
+          return;
+        }
+        {
+          const tasks = current.run?.tasks ?? [];
+          if (tasks.length === 0) return;
+          const size = current.taskWindow.size;
+          const step = pageSize(size) * (intent.kind === "page-down" ? 1 : -1);
+          const index = tasks.findIndex((task) => task.selected);
+          const clamped = Math.min(
+            tasks.length - 1,
+            Math.max(0, (index === -1 ? 0 : index) + step),
+          );
+          const next = tasks[clamped];
+          if (next !== undefined) {
+            const offset = moveBy(current.taskWindow.offset, step, tasks.length, size);
+            setData((state) => ({ ...state, selectedTaskId: next.id, taskOffset: offset }));
+          }
+          return;
+        }
+      case "first":
+      case "last":
+        if (current.screen === "list") {
+          const items = current.list;
+          if (items.length === 0) return;
+          const index = intent.kind === "first" ? 0 : items.length - 1;
+          const next = items[index];
+          if (next !== undefined) {
+            const offset =
+              intent.kind === "first"
+                ? firstOffset(items.length)
+                : lastOffset(items.length, current.listWindow.size);
+            setData((state) => ({
+              ...state,
+              selectedRunId: next.id,
+              selectedTaskId: null,
+              listOffset: offset,
+            }));
+          }
+          return;
+        }
+        {
+          const tasks = current.run?.tasks ?? [];
+          if (tasks.length === 0) return;
+          const index = intent.kind === "first" ? 0 : tasks.length - 1;
+          const next = tasks[index];
+          if (next !== undefined) {
+            const offset =
+              intent.kind === "first"
+                ? firstOffset(tasks.length)
+                : lastOffset(tasks.length, current.taskWindow.size);
+            setData((state) => ({ ...state, selectedTaskId: next.id, taskOffset: offset }));
+          }
+          return;
+        }
       default:
         return;
     }

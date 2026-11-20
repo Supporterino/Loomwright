@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import type { ReactElement } from "react";
 import { formatElapsed, formatTokensShort } from "../model/format.ts";
 import { type RunListItem, roleLabel, type ViewModel } from "../model/view-model.ts";
+import { sliceWindow, windowTitle } from "../model/viewport.ts";
 import { findingsCount, LABELS } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
@@ -37,10 +38,16 @@ function clip(text: string, room: number, glyphs: GlyphSet): string {
 export function RunList({ viewModel, glyphs, depth }: RunListProps): ReactElement {
   // 8 cells are the focus and phase markers and the separators around the head.
   const cells = paneWidth(viewModel) - 8;
+  const title = windowTitle("runs", viewModel.listWindow);
   return (
     <Box flexDirection="column">
-      <Text bold>Runs</Text>
-      {viewModel.list.map((item) => {
+      <Text>
+        <Text bold>Runs</Text>
+        {title === null ? null : (
+          <Text {...colorProps("muted", depth)}>{` ${glyphs.bullet} ${title}`}</Text>
+        )}
+      </Text>
+      {sliceWindow(viewModel.list, viewModel.listWindow).map((item) => {
         const head = clip(headOf(item, glyphs), cells, glyphs);
         const meta = clip(
           joinFields(glyphs, [

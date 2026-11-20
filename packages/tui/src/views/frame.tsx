@@ -1,6 +1,6 @@
 import { Box, render } from "ink";
 import type { ReactElement } from "react";
-import type { ViewModel } from "../model/view-model.ts";
+import { twoPaneTailRows, type ViewModel } from "../model/view-model.ts";
 import { detectColorDepth, type TerminalEnv } from "../theme/env.ts";
 import { type GlyphSet, glyphsFor } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
@@ -26,7 +26,7 @@ export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
   const run = viewModel.run;
   return (
     <Box flexDirection="column" width={viewModel.columns} height={viewModel.rows}>
-      <Box flexDirection="column" flexGrow={1} overflowY="hidden">
+      <Box flexDirection="column" flexGrow={1}>
         {viewModel.panel !== null ? (
           <PanelBox panel={viewModel.panel} glyphs={glyphs} depth={depth} />
         ) : viewModel.screen === "list" ? (
@@ -41,7 +41,7 @@ export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
                   lines={run.activity}
                   glyphs={glyphs}
                   depth={depth}
-                  maxLines={Math.max(0, viewModel.rows - 6)}
+                  maxLines={twoPaneTailRows(viewModel)}
                 />
               </Box>
             </Box>

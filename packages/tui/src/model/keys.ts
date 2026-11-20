@@ -34,6 +34,10 @@ export type Intent =
   | { kind: "prev-run" }
   | { kind: "next-task" }
   | { kind: "prev-task" }
+  | { kind: "page-up" }
+  | { kind: "page-down" }
+  | { kind: "first" }
+  | { kind: "last" }
   | { kind: "resume" }
   | { kind: "abort" }
   | { kind: "retry" }
@@ -53,6 +57,14 @@ function listIntent(viewModel: ViewModel, key: string): Intent {
     case "Up":
     case "k":
       return { kind: "prev-run" };
+    case "PgUp":
+      return { kind: "page-up" };
+    case "PgDn":
+      return { kind: "page-down" };
+    case "g":
+      return { kind: "first" };
+    case "G":
+      return { kind: "last" };
     default:
       return { kind: "none" };
   }
@@ -70,6 +82,14 @@ function runIntent(viewModel: ViewModel, key: string): Intent {
     case "Up":
     case "k":
       return { kind: "prev-task" };
+    case "PgUp":
+      return { kind: "page-up" };
+    case "PgDn":
+      return { kind: "page-down" };
+    case "g":
+      return { kind: "first" };
+    case "G":
+      return { kind: "last" };
     case "r":
       return { kind: "resume" };
     case "x":
