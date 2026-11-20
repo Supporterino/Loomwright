@@ -91,8 +91,9 @@ The activity tail SHALL be built from every run event, whatever the phase and wh
 task is running. Every event type the protocol defines SHALL fold into an activity line, except
 that repeated `heartbeat` events update the newest heartbeat line in place instead of adding a
 line each, so the tail carries at most one heartbeat line between bursts of work. Each line SHALL
-carry a source label (the task id or step when the event names one,
-otherwise `run`), a kind label naming the event family, and readable text. A line whose event
+carry a source label — the task id, the install repo or the step when the event names one, and
+`run` otherwise — a kind label naming the event family — except `agent.activity`, whose kind is
+the activity kind it carries (`tool`, `step-done`, …) — and readable text. A line whose event
 carries a truncation reference (`ref`, or `gate.finished.outputRef`) SHALL name that
 `.factory/logs/` path. `run.*`, `phase.changed`, `task.*`, `gate.*`, `agent.*`, `install.*`,
 `question.*`, `approval.*`, `usage.delta`, `progress.line` and `heartbeat` SHALL therefore be

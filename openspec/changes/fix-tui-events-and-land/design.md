@@ -22,9 +22,11 @@ finish a run from the surface that shows it.
 ### Fold every event in the existing facts layer
 
 Extend `appendFacts` with a total mapping from `RunEvent` to an `ActivityLine`: source is the
-task id or step where the event names one and `run` otherwise; kind names the event family
-(`phase`, `task`, `gate`, `install`, `agent`, `question`, `approval`, `usage`, `log`, `run`);
-text is the event's own readable content (reasons, statuses, counts, durations, progress text).
+task id, the install repo or the step where the event names one and `run` otherwise; kind names
+the event family (`phase`, `task`, `gate`, `install`, `agent`, `question`, `approval`, `usage`,
+`log`, `run`), except `agent.activity`, which keeps the activity kind it carries (`tool`,
+`step-done`, …); text is the event's own readable content (reasons, statuses, counts,
+durations, progress text).
 The `ActivityLine` shape and the 2,000-line `ActivityRing` stay as they are apart from an
 append-or-replace push for heartbeats, so the view-model, task detail filter and rendering need no
 new data model.
