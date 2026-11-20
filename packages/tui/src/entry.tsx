@@ -160,12 +160,13 @@ export interface ReplayKeyOutcome {
  * help only where the footer advertises it (the approval overlay owns the screen otherwise).
  */
 export function replayKey(view: ViewModel, input: string, key: KeyInput): ReplayKeyOutcome {
+  // Ctrl-C quits before any panel, help included: the terminal must be restored on an interrupt.
+  if (key.ctrl && input === "c") return { quit: true, notice: null, help: null };
   if (view.panel?.kind === "help") {
     const outcome = helpKeys(input, key);
     if (outcome === "quit") return { quit: true, notice: null, help: null };
     return { quit: false, notice: null, help: outcome === "close" ? false : null };
   }
-  if (key.ctrl && input === "c") return { quit: true, notice: null, help: null };
   if (!key.ctrl && input === "q") return { quit: true, notice: null, help: null };
   if (!key.ctrl && input === "?" && view.footer.some((hint) => hint.key === "?")) {
     return { quit: false, notice: null, help: true };

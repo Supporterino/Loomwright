@@ -297,6 +297,21 @@ describe("replay is read-only", () => {
     expect(replayKey(help, "q", key()).quit).toBe(true);
   });
 
+  test("Ctrl-C quits the replay with the help panel open", async () => {
+    const path = tempFile(
+      "implementing.jsonl",
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"implementing"}}',
+        "",
+      ].join("\n"),
+    );
+    const view = viewOf(await readReplayFile(path));
+    const help = replayHelpView(view);
+    expect(help.panel?.kind).toBe("help");
+    expect(replayKey(help, "c", key({ ctrl: true })).quit).toBe(true);
+  });
+
   test("the replay approval overlay never advertises ? and ignores it", async () => {
     const view = viewOf(await readReplayFile(FIXTURE));
     expect(view.panel?.kind).toBe("approval");
