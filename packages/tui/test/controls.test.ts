@@ -21,6 +21,7 @@ import {
   questionsPanel,
 } from "../src/controls/questions.tsx";
 import {
+  createLandGuard,
   createResumeGuard,
   landConfirmation,
   landFailed,
@@ -828,7 +829,7 @@ describe("a double-tapped land launches one child", () => {
     const deps = {
       factory: fake.factory,
       launcher,
-      guard: createResumeGuard(),
+      guard: createLandGuard(),
       update: () => {},
       refresh: async () => ({ status: statusDoc(run), runs: [run] }),
       stopTail: () => {},
@@ -856,7 +857,7 @@ describe("a double-tapped land launches one child", () => {
       {
         factory: fake.factory,
         launcher,
-        guard: createResumeGuard(),
+        guard: createLandGuard(),
         update: (change) => {
           const data = change(uiData());
           notices.push(data.notice);
@@ -882,14 +883,44 @@ describe("a double-tapped land launches one child", () => {
 
   test("the second confirmation is ignored while the land child is in flight", () => {
     const view = buildViewModel(viewInput(runState({ phase: "done" })));
-    const guard = createResumeGuard();
+    const guard = createLandGuard();
     expect(landConfirmation(view, guard)).toEqual({ kind: "land", id: RUN });
 
-    expect(guard.begin(RUN)).toBe(true);
+    expect(guard.begin()).toBe(true);
     expect(landConfirmation(view, guard)).toBeNull();
 
-    guard.end(RUN);
+    guard.end();
     expect(landConfirmation(view, guard)).toEqual({ kind: "land", id: RUN });
+  });
+
+  test("a land child for one run blocks a land started for another run", async () => {
+    const fake = fakeFactory();
+    const { launcher, launches, exit } = resumeLauncher();
+    const other = "add-other";
+    const run = runState({ phase: "done" });
+    const otherRun = runState({ id: other, phase: "done" });
+    const deps = {
+      factory: fake.factory,
+      launcher,
+      guard: createLandGuard(),
+      update: () => {},
+      refresh: async () => ({ status: statusDoc(run), runs: [run, otherRun] }),
+      stopTail: () => {},
+    };
+
+    startLand(deps, RUN);
+    startLand(deps, other);
+    await Bun.sleep(0);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
+
+    exit(0);
+    await Bun.sleep(0);
+    startLand(deps, other);
+    await Bun.sleep(0);
+    expect(launches).toEqual([
+      { kind: "land", id: RUN },
+      { kind: "land", id: other },
+    ]);
   });
 });
 
@@ -910,7 +941,7 @@ describe("a landed run leaves the screen", () => {
       {
         factory: fake.factory,
         launcher,
-        guard: createResumeGuard(),
+        guard: createLandGuard(),
         update: (change) => states.push(change(uiData())),
         refresh: async () => ({ status: empty, runs: [] }),
         stopTail: () => {
@@ -960,7 +991,7 @@ describe("a landed run leaves the screen", () => {
       {
         factory: fake.factory,
         launcher,
-        guard: createResumeGuard(),
+        guard: createLandGuard(),
         update: (change) => {
           state = change(state);
           states.push(state);
@@ -1006,7 +1037,7 @@ describe("a landed run leaves the screen", () => {
       {
         factory: fake.factory,
         launcher,
-        guard: createResumeGuard(),
+        guard: createLandGuard(),
         update: (change) => {
           state = change(state);
           states.push(state);
@@ -1075,7 +1106,7 @@ describe("a failed land is visible", () => {
       {
         factory: fake.factory,
         launcher,
-        guard: createResumeGuard(),
+        guard: createLandGuard(),
         update: (change) => states.push(change(uiData())),
         refresh: async () => null,
         stopTail: () => {},
@@ -1105,7 +1136,7 @@ describe("a failed land is visible", () => {
         {
           factory: fake.factory,
           launcher,
-          guard: createResumeGuard(),
+          guard: createLandGuard(),
           update: (change) => states.push(change(uiData())),
           refresh: async () => null,
           stopTail: () => {},

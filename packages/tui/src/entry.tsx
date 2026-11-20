@@ -422,6 +422,35 @@ export function createResumeGuard(): ResumeGuard {
   };
 }
 
+/**
+ * One land for the whole UI: every land merges in the same checkout, so a child landing one run
+ * must block a start for another.
+ */
+export interface LandGuard {
+  /** True when no land child is in flight. */
+  begin(): boolean;
+  /** True while a land child is in flight. */
+  has(): boolean;
+  end(): void;
+}
+
+export function createLandGuard(): LandGuard {
+  let inFlight = false;
+  return {
+    begin(): boolean {
+      if (inFlight) return false;
+      inFlight = true;
+      return true;
+    },
+    has(): boolean {
+      return inFlight;
+    },
+    end(): void {
+      inFlight = false;
+    },
+  };
+}
+
 /** The launcher's half a control keeps while its child runs: the log to tail and how to show it. */
 type SpawnLog = Pick<LaunchResult, "logPath" | "displayPath">;
 
@@ -561,7 +590,7 @@ export function settleLanding(data: UiData): UiData {
 }
 
 export interface LandRun extends ControlDeps {
-  readonly guard: ResumeGuard;
+  readonly guard: LandGuard;
   /** The UI's `setData`. */
   readonly update: (change: (data: UiData) => UiData) => void;
   /** Refreshes `status()` and `listRuns()`; null when the refresh failed. */
@@ -570,25 +599,25 @@ export interface LandRun extends ControlDeps {
 }
 
 /**
- * Starts one detached `land` and watches its exit: a repeat while the child runs is ignored, a
- * zero exit returns to the list when the refreshed status no longer lists the run, and a failure
- * shows the code and log tail without claiming the change landed.
+ * Starts one detached `land` and watches its exit: a repeat while a child runs — for any run — is
+ * ignored, a zero exit returns to the list when the refreshed status no longer lists the run, and a
+ * failure shows the code and log tail without claiming the change landed.
  */
 export function startLand(deps: LandRun, id: string): void {
-  if (!deps.guard.begin(id)) return;
+  if (!deps.guard.begin()) return;
   void (async () => {
     let result: LaunchResult;
     try {
       result = await performControl(deps, { kind: "land", id });
     } catch (err: unknown) {
-      deps.guard.end(id);
+      deps.guard.end();
       const message = err instanceof Error ? err.message : String(err);
       deps.update((current) => ({ ...current, notice: message }));
       return;
     }
     deps.update((current) => landStarted(current, id, result.displayPath));
     void result.exited.then(({ code }) => {
-      deps.guard.end(id);
+      deps.guard.end();
       if (code === null) {
         const tail = tailLog(result.logPath, 10);
         deps.update((current) => ({
@@ -632,10 +661,10 @@ export function startLand(deps: LandRun, id: string): void {
   })();
 }
 
-/** The land confirmation; null while that run's child is in flight, so a double tap is ignored. */
-export function landConfirmation(viewModel: ViewModel, guard: ResumeGuard): ControlAction | null {
+/** The land confirmation; null while a land child is in flight, so a second land cannot start. */
+export function landConfirmation(viewModel: ViewModel, guard: LandGuard): ControlAction | null {
   const action = landFor(viewModel);
-  if (action === null || guard.has(action.id)) return null;
+  if (action === null || guard.has()) return null;
   return action;
 }
 
@@ -1027,7 +1056,7 @@ function Interactive({
 
   /** Abort and retry return immediately; resume runs one guarded detached child per run. */
   const resumeGuard = useRef<ResumeGuard>(createResumeGuard());
-  const landGuard = useRef<ResumeGuard>(createResumeGuard());
+  const landGuard = useRef<LandGuard>(createLandGuard());
   const applyControl = useCallback(
     (action: ControlAction): void => {
       if (isReadOnly(viewRef.current)) return;
