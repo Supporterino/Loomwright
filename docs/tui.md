@@ -163,7 +163,7 @@ launching or waiting, and the footer says so; `n` cancels a confirmation.
 
 Approving (`a`, `A`, `R`) requires `git user.email`. Without it the overlay shows exactly
 `git user.email is not set; it records who approved` and the actions stay unavailable. `Enter` or
-`y` confirms, `Esc` or `n` cancels. While the child runs, the overlay is read-only and waits for the
+`y` confirms, `n` cancels. While the child runs, the overlay is read-only and waits for the
 phase to move (`approve` for `queued`/`implementing`, `approve only` for `queued`, `reapprove` for
 `awaiting-approval`/`queued`) and, where the action records one, for `approval.granted`. A non-zero
 exit shows the code and the log tail and makes the overlay actionable again.
