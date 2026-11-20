@@ -386,8 +386,9 @@ function listFooter(input: ViewModelInput): KeyHint[] {
 // The approval overlay owns a/A/R: its panel keys replace this footer while it is open.
 function runFooter(input: ViewModelInput, run: RunDetail | null): KeyHint[] {
   if (run === null) return [keyHint("q", "quit"), keyHint("?", "help")];
-  // Replay intercepts every write key (see `REPLAY_WRITE_KEYS` in the entry), so only help and quit remain.
-  if (input.source === "replay") return [keyHint("?", "help"), keyHint("q", "quit")];
+  // Replay intercepts every write key (see `REPLAY_WRITE_KEYS` in the entry); the log pane still opens.
+  if (input.source === "replay")
+    return [keyHint("L", "log"), keyHint("?", "help"), keyHint("q", "quit")];
   const hints: KeyHint[] = [];
   if (canResume(run.phase)) hints.push(keyHint("r", "resume"));
   if (canLand(run.phase)) hints.push(keyHint("l", "land"));
@@ -395,7 +396,7 @@ function runFooter(input: ViewModelInput, run: RunDetail | null): KeyHint[] {
   if (run.phase !== "done" && run.phase !== "aborted") hints.push(keyHint("x", "abort"));
   if (run.detail?.task.status === "failed") hints.push(keyHint("t", "retry task"));
   if (run.questions.length > 0) hints.push(keyHint("Q", "questions"));
-  hints.push(keyHint("?", "help"), keyHint("q", "quit"));
+  hints.push(keyHint("L", "log"), keyHint("?", "help"), keyHint("q", "quit"));
   return hints;
 }
 

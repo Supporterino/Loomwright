@@ -37,4 +37,4 @@
                                                             first - tool - activity line 18
                                                             first - tool - activity line 19
                                                             first - tool - activity line 20
-w reword - x abort - ? help - q quit
+w reword - x abort - L log - ? help - q quit

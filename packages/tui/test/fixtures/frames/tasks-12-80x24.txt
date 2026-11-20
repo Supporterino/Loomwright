@@ -21,4 +21,4 @@
 
 
 
-w reword - x abort - ? help - q quit
+w reword - x abort - L log - ? help - q quit

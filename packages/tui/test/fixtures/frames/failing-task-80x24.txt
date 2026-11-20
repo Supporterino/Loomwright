@@ -21,4 +21,4 @@
  first - tool - > .factory/logs/f.log test failed
 
 
-w reword - x abort - t retry task - ? help - q quit
+w reword - x abort - t retry task - L log - ? help - q quit

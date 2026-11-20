@@ -37,4 +37,4 @@
 
 
 
-w reword - x abort - t retry task - ? help - q quit
+w reword - x abort - t retry task - L log - ? help - q quit

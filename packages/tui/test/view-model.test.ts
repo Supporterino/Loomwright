@@ -300,7 +300,7 @@ describe("buildViewModel", () => {
     expect(view.notice).toBe(replayNotice);
   });
 
-  test("replay is read-only: the footer lists only help and quit", () => {
+  test("replay is read-only: the footer lists only log, help and quit", () => {
     for (const phase of ["implementing", "paused", "done", "aborted"] as const) {
       const run = runState({
         phase,
@@ -310,7 +310,15 @@ describe("buildViewModel", () => {
       expect(
         view.footer.map((hint) => hint.key),
         phase,
-      ).toEqual(["?", "q"]);
+      ).toEqual(["L", "?", "q"]);
+    }
+  });
+
+  test("the keys are documented: the run footer offers L for the activity log in live and replay", () => {
+    const run = runState();
+    for (const source of ["live", "replay"] as const) {
+      const view = buildViewModel(runInput(run, [], { source }));
+      expect(view.footer, source).toContainEqual({ key: "L", label: "log", enabled: true });
     }
   });
 
