@@ -26,6 +26,17 @@ export function singlePaneTailRows(viewModel: ViewModel): number {
   return Math.max(0, viewModel.rows - headerRows - noticeRows - graphRows - 1);
 }
 
+/** Rows left for the detail tail: header, notice, task facts, gate rows, footer. */
+export function taskDetailTailRows(viewModel: ViewModel): number {
+  const run = viewModel.run;
+  if (run === null || run.detail === null) return 0;
+  const headerRows = run.phase === "awaiting-approval" ? 2 : 1;
+  const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
+  // Title, status, agent, retries, Gates heading, gate rows, Activity heading.
+  const detailRows = 6 + Math.max(1, run.detail.gates.length);
+  return Math.max(0, viewModel.rows - headerRows - noticeRows - detailRows - 1);
+}
+
 export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): ReactElement {
   const run = viewModel.run;
   if (run === null) {
@@ -53,7 +64,12 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
                 maxLines={Math.max(0, viewModel.rows - 6)}
               />
             ) : (
-              <TaskDetail detail={run.detail} glyphs={glyphs} depth={depth} />
+              <TaskDetail
+                detail={run.detail}
+                glyphs={glyphs}
+                depth={depth}
+                maxLines={taskDetailTailRows(viewModel)}
+              />
             )}
           </Box>
         </Box>
@@ -68,7 +84,12 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
           />
         </Box>
       ) : (
-        <TaskDetail detail={run.detail} glyphs={glyphs} depth={depth} />
+        <TaskDetail
+          detail={run.detail}
+          glyphs={glyphs}
+          depth={depth}
+          maxLines={taskDetailTailRows(viewModel)}
+        />
       )}
     </Box>
   );

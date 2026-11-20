@@ -11,9 +11,11 @@ export interface TaskDetailProps {
   readonly detail: TaskDetailView;
   readonly glyphs: GlyphSet;
   readonly depth: ColorDepth;
+  /** Rows left for the activity tail, so the newest lines fit inside the frame. */
+  readonly maxLines: number;
 }
 
-export function TaskDetail({ detail, glyphs, depth }: TaskDetailProps): ReactElement {
+export function TaskDetail({ detail, glyphs, depth, maxLines }: TaskDetailProps): ReactElement {
   const { task, agent, retries, gates, activity } = detail;
   const agentLine =
     agent === null
@@ -51,7 +53,7 @@ export function TaskDetail({ detail, glyphs, depth }: TaskDetailProps): ReactEle
         ))
       )}
       <Text bold>Activity</Text>
-      <ActivityTail lines={activity} glyphs={glyphs} depth={depth} />
+      <ActivityTail lines={activity} glyphs={glyphs} depth={depth} maxLines={maxLines} />
     </Box>
   );
 }

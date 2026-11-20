@@ -19,7 +19,7 @@ import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/mode
 import { createTerminalSession, type TerminalSession } from "../src/session.ts";
 import { emptyWorkspace } from "../src/strings.ts";
 import { renderFrame } from "../src/views/frame.tsx";
-import { singlePaneTailRows } from "../src/views/run-view.tsx";
+import { singlePaneTailRows, taskDetailTailRows } from "../src/views/run-view.tsx";
 
 const ISO = "2026-11-17T10:00:00.000Z";
 const RUN = "add-health";
@@ -566,6 +566,48 @@ describe("task detail", () => {
     expect(testGate).toBeGreaterThan(lint);
     expect(text).toContain("test failed");
     expect(text).toContain("→ .factory/logs/first.log");
+  });
+
+  test("an 80x24 task detail keeps the newest of a 20-line tail and its log reference", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "failed" })],
+    });
+    resetSeq();
+    const events = [
+      event("task.started", { task: { id: "first", repo: "app" }, attempt: 2 }),
+      event("agent.started", { step: "first", agent: "implementer", model: "claude-5" }),
+      event("gate.finished", {
+        name: "lint",
+        type: "lint",
+        status: "fail",
+        durationMs: 1_200,
+        step: "first",
+      }),
+      event("gate.finished", {
+        name: "test",
+        type: "test",
+        status: "pass",
+        durationMs: 3_400,
+        step: "first",
+      }),
+      ...Array.from({ length: 20 }, (_, index) =>
+        event("agent.activity", {
+          step: "first",
+          detail: `activity-${index + 1}`,
+          kind: "tool",
+          ...(index === 19
+            ? { ref: { path: ".factory/logs/last.log", offset: 0, bytes: 42 } }
+            : {}),
+        }),
+      ),
+    ];
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: "first", rows: 24 }));
+    // 24 rows - header - detail facts - two gate rows - footer.
+    expect(taskDetailTailRows(view)).toBe(14);
+    const text = await frame(view, 80, 24, true);
+    expect(text).toContain("activity-20");
+    expect(text).toContain(".factory/logs/last.log");
+    expect(text).not.toContain("activity-1\n");
   });
 });
 
