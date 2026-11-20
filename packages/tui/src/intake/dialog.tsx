@@ -5,7 +5,7 @@
 import type { StatusDocument } from "@loomwright/core/factory";
 import type { LaunchAction } from "../launch/launcher.ts";
 import { stripControls } from "../model/format.ts";
-import type { KeyInput } from "../model/keys.ts";
+import { deletesLast, type KeyInput } from "../model/keys.ts";
 import type { PanelView } from "../model/view-model.ts";
 import { keyHint } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
@@ -129,7 +129,7 @@ export function intakeKeys(
       ? { state: { ...state, text: `${state.text}\n`, error: null } }
       : { state };
   }
-  if (key.backspace) return { state: removeLast(state, ctx) };
+  if (deletesLast(key)) return { state: removeLast(state, ctx) };
   if (key.escape) return { state };
   // A paste arrives as one string; its embedded controls must never reach the terminal.
   const typed = stripControls(input);

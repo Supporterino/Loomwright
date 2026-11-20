@@ -4,7 +4,7 @@
  * Availability is never re-derived here: `run.reword` is the single predicate.
  */
 import { stripControls } from "../model/format.ts";
-import type { KeyInput } from "../model/keys.ts";
+import { deletesLast, type KeyInput } from "../model/keys.ts";
 import type { PanelView, RunDetail, SpecFindingRow } from "../model/view-model.ts";
 import { clampOffset, pageSize, sliceWindow, window as windowOf } from "../model/viewport.ts";
 import { keyHint } from "../strings.ts";
@@ -195,9 +195,9 @@ export function rewordKeys(
   if (key.ctrl && (input === "j" || input === "\n")) {
     return { state: { ...state, text: `${state.text}\n`, notice: null } };
   }
-  if (key.backspace) return { state: removeLast(state) };
+  if (deletesLast(key)) return { state: removeLast(state) };
   // Other chords, tabs and editing keys stay inert; every other printable key types.
-  if (key.ctrl || key.meta || key.tab || key.delete) return { state };
+  if (key.ctrl || key.meta || key.tab) return { state };
   // A paste arrives as one string; its embedded controls must never reach the terminal.
   const typed = stripControls(input);
   if (typed.length === 0) return { state };

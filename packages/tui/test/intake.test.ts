@@ -251,6 +251,14 @@ describe("text intake", () => {
     expect(newline.text).toBe("first\nsecond\n");
   });
 
+  test("the physical Backspace key Ink reports as delete removes the last character", () => {
+    const ws = workspace();
+    const ctx = context(ws);
+    const typed = typeText("draft", ctx);
+    const deleted = intakeKeys(typed, "", key({ delete: true }), ctx).state;
+    expect(deleted.text).toBe("draf");
+  });
+
   test("a paste with an embedded ESC is stripped in the text and path fields", () => {
     const ws = workspace();
     const ctx = context(ws);

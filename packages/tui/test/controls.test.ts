@@ -667,6 +667,18 @@ describe("printable keys append in the composer", () => {
   });
 });
 
+describe("Backspace deletes the last character in the composer", () => {
+  test("the physical Backspace key Ink reports as delete removes one code point", () => {
+    const run = askRun([{ step: "design", question: "First?", status: "unanswered" }]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "draft");
+    const deleted = questionsKeys(run, typed, "", key({ delete: true })).state;
+    expect(deleted.text).toBe("draf");
+  });
+});
+
 describe("the run is not asked", () => {
   test("an unanswered question is listed and the pane points at questions.md", () => {
     const run = askRun([

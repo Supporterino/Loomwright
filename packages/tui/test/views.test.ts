@@ -1556,4 +1556,55 @@ describe("the interactive entry", () => {
     expect(afterEscape).not.toContain("Help");
     expect(afterEscape).toContain("new change");
   });
+
+  test("the physical Backspace key (\u007f) deletes a character in the answer composer", async () => {
+    const run = runState();
+    const status = statusDoc([{ run, tokens: 0, cost: 0 }]);
+    resetSeq();
+    const raised = event("question.raised", {
+      step: "design",
+      question: "Which endpoints should be public?",
+      status: "unanswered",
+    });
+    const factory: Factory = {
+      ...listFactory(status, [run]),
+      // Opening the run folds this event into the snapshot that carries the question.
+      events: async function* (_runId, query) {
+        if (query?.follow !== true) yield { line: JSON.stringify(raised), event: raised };
+      },
+    };
+
+    let afterBackspace = "";
+    const result = await driveTui(
+      factory,
+      async (input, output) => {
+        const last = (): string => output.writes.at(-1) ?? "";
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the run view", () => output.text().includes("Q questions"));
+        await pressUntil(input, "Q", "the questions pane", () =>
+          output.text().includes("Questions - add-health"),
+        );
+        await pressUntil(input, "\r", "the composer", () => output.text().includes("answer>"));
+        input.press("x");
+        await until(() => last().includes("answer> x"), "the typed answer");
+
+        // Ink maps DEL (\x7f), the key a terminal sends for Backspace, to `delete`, not `backspace`.
+        input.press("\u007f");
+        await until(() => {
+          afterBackspace = last();
+          return afterBackspace.includes("answer>") && !afterBackspace.includes("answer> x");
+        }, "the composer after Backspace");
+
+        await pressUntil(input, "\u001b", "the record focus", () => !last().includes("answer>"));
+        await pressUntil(input, "\u001b", "the closed pane", () => !last().includes("Questions"));
+        input.press("q");
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(afterBackspace).toContain("answer>");
+    expect(afterBackspace).not.toContain("answer> x");
+  });
 });

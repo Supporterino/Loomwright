@@ -436,6 +436,12 @@ describe("the prompt is a multi-line text field", () => {
     expect(state.text).toBe("apply finding 2\nsecond lin");
   });
 
+  test("the physical Backspace key Ink reports as delete deletes one code point", () => {
+    const typed = typeText(run, opening({ specFindings: [finding()] }), "apply");
+    const deleted = rewordKeys(run, typed, "", key({ delete: true }), 24, 80).state;
+    expect(deleted.text).toBe("appl");
+  });
+
   test("a paste with an embedded ESC is stripped before the prompt launches", () => {
     const pasted = rewordKeys(
       run,

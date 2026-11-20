@@ -23,6 +23,14 @@ export interface KeyInput {
   readonly backspace: boolean;
 }
 
+/**
+ * Ink names the physical Backspace key (DEL, `\x7f`) `delete`, not `backspace`; accept both, since
+ * `\b` and a terminal that sends the classic name still report `backspace`.
+ */
+export function deletesLast(key: Pick<KeyInput, "backspace" | "delete">): boolean {
+  return key.backspace || key.delete;
+}
+
 export type Intent =
   | { kind: "none" }
   | { kind: "quit" }

@@ -4,7 +4,7 @@
  * only labels it "answered" once the run state carries the answer.
  */
 import { stripControls } from "../model/format.ts";
-import type { KeyInput } from "../model/keys.ts";
+import { deletesLast, type KeyInput } from "../model/keys.ts";
 import type { PanelView, QuestionRow, RunDetail } from "../model/view-model.ts";
 import { clampOffset, nextOffset, sliceWindow, window as windowOf } from "../model/viewport.ts";
 import { answerRecorded, keyHint } from "../strings.ts";
@@ -201,7 +201,7 @@ export function questionsKeys(
     if (answer === "") return { state: { ...state, notice: "the answer is empty" } };
     return { state, answer: { answer, question: record.question } };
   }
-  if (key.backspace) return { state: removeLast(state) };
+  if (deletesLast(key)) return { state: removeLast(state) };
   // Navigation stays inert while composing, even when the terminal reports a raw sequence.
   if (key.upArrow || key.downArrow || key.pageUp || key.pageDown) return { state };
   // A paste arrives as one string; its embedded controls must never reach the terminal.
