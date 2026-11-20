@@ -151,16 +151,35 @@ const REPLAY_WRITE_KEYS: ReadonlySet<string> = new Set([
 export interface ReplayKeyOutcome {
   readonly quit: boolean;
   readonly notice: string | null;
+  /** The help panel's next open state; null leaves it as it is. */
+  readonly help: boolean | null;
 }
 
-/** A replay consumes only quit; every write key becomes the read-only notice. */
+/**
+ * A replay consumes quit and help; every write key becomes the read-only notice, and `?` opens
+ * help only where the footer advertises it (the approval overlay owns the screen otherwise).
+ */
 export function replayKey(view: ViewModel, input: string, key: KeyInput): ReplayKeyOutcome {
-  if (key.ctrl && input === "c") return { quit: true, notice: null };
-  if (!key.ctrl && input === "q") return { quit: true, notice: null };
-  if (isReadOnly(view) && REPLAY_WRITE_KEYS.has(input)) {
-    return { quit: false, notice: REPLAY_READ_ONLY };
+  if (view.panel?.kind === "help") {
+    const outcome = helpKeys(input, key);
+    if (outcome === "quit") return { quit: true, notice: null, help: null };
+    return { quit: false, notice: null, help: outcome === "close" ? false : null };
   }
-  return { quit: false, notice: null };
+  if (key.ctrl && input === "c") return { quit: true, notice: null, help: null };
+  if (!key.ctrl && input === "q") return { quit: true, notice: null, help: null };
+  if (!key.ctrl && input === "?" && view.footer.some((hint) => hint.key === "?")) {
+    return { quit: false, notice: null, help: true };
+  }
+  if (isReadOnly(view) && REPLAY_WRITE_KEYS.has(input)) {
+    return { quit: false, notice: REPLAY_READ_ONLY, help: null };
+  }
+  return { quit: false, notice: null, help: null };
+}
+
+/** The help panel over a replay view; the footer lists the panel's own keys while it is open. */
+export function replayHelpView(view: ViewModel): ViewModel {
+  const panel = helpPanel();
+  return { ...view, panel, footer: panel.keys };
 }
 
 export interface UiData {
@@ -1310,7 +1329,9 @@ interface ReplayProps {
 function Replay({ view, glyphs, depth }: ReplayProps): ReactElement {
   const { exit } = useApp();
   const [notice, setNotice] = useState<string | null>(null);
-  const current = useMemo(() => (notice === null ? view : { ...view, notice }), [view, notice]);
+  const [help, setHelp] = useState(false);
+  const base = useMemo(() => (notice === null ? view : { ...view, notice }), [view, notice]);
+  const current = help ? replayHelpView(base) : base;
   const currentRef = useRef(current);
   currentRef.current = current;
 
@@ -1321,6 +1342,7 @@ function Replay({ view, glyphs, depth }: ReplayProps): ReactElement {
       return;
     }
     if (outcome.notice !== null) setNotice(outcome.notice);
+    if (outcome.help !== null) setHelp(outcome.help);
   });
 
   return <Frame viewModel={current} glyphs={glyphs} depth={depth} />;

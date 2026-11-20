@@ -5,7 +5,14 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Factory } from "@loomwright/core/factory";
 import { MISSING_IDENTITY } from "../src/approval/overlay.ts";
-import { isReadOnly, REPLAY_READ_ONLY, replayKey, replayView, runTui } from "../src/entry.tsx";
+import {
+  isReadOnly,
+  REPLAY_READ_ONLY,
+  replayHelpView,
+  replayKey,
+  replayView,
+  runTui,
+} from "../src/entry.tsx";
 import type { Launcher } from "../src/launch/launcher.ts";
 import type { KeyInput } from "../src/model/keys.ts";
 import { renderOnceFrame } from "../src/replay/once.ts";
@@ -258,5 +265,42 @@ describe("replay is read-only", () => {
     expect(replayKey(view, "l", key()).notice).toBe(REPLAY_READ_ONLY);
     expect(replayKey(view, "q", key()).quit).toBe(true);
     expect(replayKey(view, "c", key({ ctrl: true })).quit).toBe(true);
+  });
+
+  test("? opens the help panel in replay and Esc closes it", async () => {
+    const path = tempFile(
+      "implementing.jsonl",
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"implementing"}}',
+        "",
+      ].join("\n"),
+    );
+    const view = viewOf(await readReplayFile(path));
+    expect(view.footer.map((hint) => hint.key)).toContain("?");
+
+    const pressed = replayKey(view, "?", key());
+    expect(pressed.help).toBe(true);
+    expect(pressed.quit).toBe(false);
+    expect(pressed.notice).toBeNull();
+
+    const help = replayHelpView(view);
+    expect(help.panel?.kind).toBe("help");
+    expect(help.footer.map((hint) => hint.key)).toEqual(["Esc", "q"]);
+    const frame = await renderOnceFrame(help, SIZE);
+    expect(frame).toContain("Help");
+    expect(frame).toContain("Esc close");
+
+    const closed = replayKey(help, "", key({ escape: true }));
+    expect(closed.help).toBe(false);
+    expect(closed.quit).toBe(false);
+    expect(replayKey(help, "q", key()).quit).toBe(true);
+  });
+
+  test("the replay approval overlay never advertises ? and ignores it", async () => {
+    const view = viewOf(await readReplayFile(FIXTURE));
+    expect(view.panel?.kind).toBe("approval");
+    expect(view.footer.map((hint) => hint.key)).not.toContain("?");
+    expect(replayKey(view, "?", key()).help).toBeNull();
   });
 });
