@@ -1,5 +1,10 @@
 # factory-tui Specification
 
+## RENAMED Requirements
+
+- FROM: `### Requirement: Abort, retry and resume are the remaining controls`
+- TO: `### Requirement: Abort, retry, resume and land are the run controls`
+
 ## MODIFIED Requirements
 
 ### Requirement: The TUI never drives a pipeline in-process
