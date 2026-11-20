@@ -802,6 +802,7 @@ type StateName =
   | "questions-records"
   | "questions-composer"
   | "questions-composer-multiline"
+  | "questions-notice"
   | "approval-banner"
   | "approval-reopened"
   | "log-follow"
@@ -837,6 +838,8 @@ export const STATES: Record<StateName, (size: FrameSize) => ViewModel> = {
     questionsFrame(size, { focus: "composer", text: "public /health" }),
   "questions-composer-multiline": (size) =>
     questionsFrame(size, { focus: "composer", text: "first\nsecond" }),
+  "questions-notice": (size) =>
+    questionsFrame(size, { focus: "composer", text: "  ", notice: "the answer is empty" }),
   "approval-banner": approvalBanner,
   "approval-reopened": approvalReopened,
   "log-follow": (size) => logFrame(size, null, openActivityPane),

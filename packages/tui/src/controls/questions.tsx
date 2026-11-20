@@ -55,16 +55,16 @@ export interface QuestionsOutcome {
 /** Every record renders three body lines: step, question and status. */
 const RECORD_BLOCK_ROWS = 3;
 
-/** Rows the panel chrome, the notice row and the questions-file line spend. */
+/** Rows the panel border, title, key footer row, frame footer and spare row spend. */
 const PANE_CHROME_ROWS = 6;
 
 /**
  * The body rows a questions pane of `rows` terminal rows may give to records; the questions-file
- * line and the panel's own border, title, notice and key rows are spent. Never zero so a short
- * pane still scrolls.
+ * line, the panel's own border, title and key rows, the frame footer and, when present, the notice
+ * row are spent. Never zero so a short pane still scrolls.
  */
-export function questionsBodyRows(rows: number): number {
-  return Math.max(1, rows - PANE_CHROME_ROWS);
+export function questionsBodyRows(rows: number, noticeRows = 0): number {
+  return Math.max(1, rows - PANE_CHROME_ROWS - Math.max(0, noticeRows));
 }
 
 function recordAt(run: RunDetail, index: number): QuestionRow | undefined {
@@ -316,7 +316,8 @@ export function questionsPanel(input: QuestionsPanelInput): PanelView {
     lines = [questionsFile, ...blocks.flat(), ...composer];
   } else {
     const flat = blocks.flat();
-    const bodyRows = questionsBodyRows(rows);
+    // A notice gets its own panel row, so it comes out of the records' budget first.
+    const bodyRows = questionsBodyRows(rows, state.notice === null ? 0 : 1);
     // A composer taller than the pane keeps its newest lines so the frame still fits.
     const composerRows = Math.min(composer.length, Math.max(0, bodyRows - 1));
     const shownComposer = composerRows === 0 ? [] : composer.slice(composer.length - composerRows);

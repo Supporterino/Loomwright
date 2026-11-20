@@ -211,6 +211,15 @@ describe("the frame never exceeds the terminal", () => {
     expect(bottom).not.toContain("run-59  run 59");
   });
 
+  test("an empty answer notice keeps the questions frame at 24 lines with the footer last", async () => {
+    const size = { columns: 80, rows: 24 };
+    const text = await renderFrame(STATES["questions-notice"](size), size, { ascii: true });
+    const lines = text.split("\n");
+    expect(lines).toHaveLength(24);
+    expect(lines.at(-1)).toContain("Ctrl-J newline");
+    expect(text).toContain("the answer is empty");
+  });
+
   test("a 12-task run never exceeds the terminal", async () => {
     const tasks = Array.from({ length: 12 }, (_, index) =>
       taskState({ id: `task-${index}`, title: `Task ${index}` }),
