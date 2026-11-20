@@ -34,6 +34,13 @@ import {
   retryFor,
 } from "./controls/actions.ts";
 import {
+  type ActivityPaneState,
+  activityPaneBodyRows,
+  activityPaneKeys,
+  activityPanePanel,
+  openActivityPane,
+} from "./controls/activity-pane.ts";
+import {
   openQuestions,
   type QuestionsState,
   questionsKeys,
@@ -193,6 +200,17 @@ export function replayHelpView(view: ViewModel): ViewModel {
   return { ...view, panel, footer: panel.keys };
 }
 
+/** The activity pane over a replay view; it renders and scrolls, and has no write path. */
+export function replayActivityView(
+  view: ViewModel,
+  state: ActivityPaneState,
+  glyphs: GlyphSet,
+): ViewModel {
+  if (view.run === null) return view;
+  const panel = activityPanePanel({ run: view.run, state, glyphs, rows: view.rows });
+  return { ...view, panel, footer: panel.keys };
+}
+
 export interface UiData {
   readonly screen: Screen;
   readonly selectedRunId: string | null;
@@ -214,6 +232,11 @@ export interface UiData {
   readonly approval: ApprovalState | null;
   /** The questions pane, or null when it is closed. */
   readonly questions: QuestionsState | null;
+  /**
+   * The activity log pane, or null when it is closed. Optional so `UiData` literals owned by other
+   * tasks stay valid; every reader normalises it with `?? null`.
+   */
+  readonly activity?: ActivityPaneState | null;
   /** The abort confirmation, or null when no confirmation is open. */
   readonly confirmation: ControlAction | null;
   /** The help panel is open; `?` sets it and Esc clears it. */
@@ -243,9 +266,15 @@ function evidenceOf(data: UiData): ApprovalEvidence {
   };
 }
 
-/** Intake, questions, help and confirmations own the screen while they are open. */
+/** Intake, questions, help, the log pane and confirmations own the screen while they are open. */
 function panelOpen(data: UiData): boolean {
-  return data.intake !== null || data.questions !== null || data.confirmation !== null || data.help;
+  return (
+    data.intake !== null ||
+    data.questions !== null ||
+    data.confirmation !== null ||
+    data.help ||
+    (data.activity ?? null) !== null
+  );
 }
 
 /**
@@ -300,8 +329,20 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
     taskOffset: data.taskOffset ?? 0,
   };
   const base = buildViewModel(baseInput);
+  const activity = data.activity ?? null;
   if (data.help) {
     return buildViewModel({ ...baseInput, panel: helpPanel() });
+  }
+  if (activity !== null && base.run !== null) {
+    return buildViewModel({
+      ...baseInput,
+      panel: activityPanePanel({
+        run: base.run,
+        state: activity,
+        glyphs,
+        rows: data.rows,
+      }),
+    });
   }
   if (data.approval !== null && data.screen === "run") {
     if (base.run === null) return base;
@@ -352,6 +393,7 @@ function initialData(
     intake: null,
     approval: null,
     questions: null,
+    activity: null,
     confirmation: null,
     help: false,
     identity: null,
@@ -576,6 +618,7 @@ export function landSettled(data: UiData, id: string, refreshed: LandRefresh): U
     status: refreshed.status,
     runs: refreshed.runs,
     pendingLand: null,
+    activity: null,
   };
   if (refreshed.status.runs.some((run) => run.id === id)) return next;
   return {
@@ -589,6 +632,7 @@ export function landSettled(data: UiData, id: string, refreshed: LandRefresh): U
     intake: null,
     approval: null,
     questions: null,
+    activity: null,
     confirmation: null,
     help: false,
     identity: null,
@@ -808,6 +852,7 @@ function Interactive({
         intake: null,
         approval: null,
         questions: null,
+        activity: null,
         confirmation: null,
         help: false,
         identity: null,
@@ -1247,6 +1292,23 @@ function Interactive({
       if (outcome === "quit") exit();
       return;
     }
+    const activity = state.activity ?? null;
+    if (activity !== null) {
+      const run = viewRef.current.run;
+      if (run === null) {
+        setData((current) => ({ ...current, activity: null }));
+        return;
+      }
+      const outcome = activityPaneKeys(run, activity, input, key, activityPaneBodyRows(state.rows));
+      if (outcome.close === true) {
+        setData((current) => ({ ...current, activity: null }));
+        return;
+      }
+      if (outcome.state !== activity) {
+        setData((current) => ({ ...current, activity: outcome.state }));
+      }
+      return;
+    }
     if (!key.ctrl && input === "n") {
       submitting.current = false;
       setData((current) => ({ ...current, intake: initialIntake }));
@@ -1277,6 +1339,13 @@ function Interactive({
         const questions = run === null ? null : openQuestions(run);
         if (questions !== null) {
           setData((state) => ({ ...state, questions, confirmation: null }));
+        }
+        return;
+      }
+      case "open-activity": {
+        const run = current.run;
+        if (run !== null) {
+          setData((state) => ({ ...state, activity: openActivityPane(run) }));
         }
         return;
       }
@@ -1319,6 +1388,7 @@ function Interactive({
         foldRef.current = null;
         setData((state) => ({
           ...state,
+          activity: null,
           screen: "list",
           selectedTaskId: null,
           snapshot: null,
@@ -1509,13 +1579,37 @@ function Replay({ view, glyphs, depth }: ReplayProps): ReactElement {
   const { exit } = useApp();
   const [notice, setNotice] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
+  const [activity, setActivity] = useState<ActivityPaneState | null>(null);
   const base = useMemo(() => (notice === null ? view : { ...view, notice }), [view, notice]);
-  const current = help ? replayHelpView(base) : base;
+  const withActivity = activity === null ? base : replayActivityView(base, activity, glyphs);
+  const current = help ? replayHelpView(withActivity) : withActivity;
   const currentRef = useRef(current);
   currentRef.current = current;
 
   useInput((input, key) => {
-    const outcome = replayKey(currentRef.current, input, key);
+    const running = currentRef.current;
+    if (activity === null && !help && !key.ctrl && input === "L" && running.run !== null) {
+      setActivity(openActivityPane(running.run));
+      return;
+    }
+    if (activity !== null && running.run !== null) {
+      const outcome = activityPaneKeys(
+        running.run,
+        activity,
+        input,
+        key,
+        activityPaneBodyRows(running.rows),
+      );
+      if (outcome.close === true) {
+        setActivity(null);
+        return;
+      }
+      if (outcome.state !== activity) {
+        setActivity(outcome.state);
+        return;
+      }
+    }
+    const outcome = replayKey(running, input, key);
     if (outcome.quit) {
       exit();
       return;

@@ -1,0 +1,40 @@
++----------------------------------------------------------------------------------------------------------------------+
+| Activity - run                                                                                                       |
+| run - log - activity line 1                                                                                          |
+| first - agent - activity line 2                                                                                      |
+| first - agent - activity line 3                                                                                      |
+| first - agent - activity line 4                                                                                      |
+| run - log - activity line 5                                                                                          |
+| first - agent - activity line 6                                                                                      |
+| first - agent - activity line 7                                                                                      |
+| first - agent - activity line 8                                                                                      |
+| run - log - activity line 9                                                                                          |
+| first - agent - activity line 10                                                                                     |
+| first - agent - activity line 11                                                                                     |
+| first - agent - activity line 12                                                                                     |
+| run - log - activity line 13                                                                                         |
+| first - agent - activity line 14                                                                                     |
+| first - agent - activity line 15                                                                                     |
+| first - agent - activity line 16                                                                                     |
+| run - log - activity line 17                                                                                         |
+| first - agent - activity line 18                                                                                     |
+| first - agent - activity line 19                                                                                     |
+| first - agent - activity line 20                                                                                     |
+| run - log - activity line 21                                                                                         |
+| first - agent - activity line 22                                                                                     |
+| first - agent - activity line 23                                                                                     |
+| first - agent - > .factory/logs/add-health/task.log activity line 24                                                 |
+|                                                                                                                      |
+|                                                                                                                      |
+|                                                                                                                      |
+|                                                                                                                      |
+|                                                                                                                      |
+|                                                                                                                      |
+|                                                                                                                      |
+|                                                                                                                      |
+|                                                                                                                      |
+|                                                                                                                      |
+|                                                                                                                      |
+| j/k scroll - PgUp/PgDn page - g/G ends - f follow on - Tab scope - Esc back                                          |
++----------------------------------------------------------------------------------------------------------------------+
+j/k scroll - PgUp/PgDn page - g/G ends - f follow on - Tab scope - Esc back

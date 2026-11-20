@@ -42,7 +42,8 @@ export type Intent =
   | { kind: "abort" }
   | { kind: "retry" }
   | { kind: "land" }
-  | { kind: "open-questions" };
+  | { kind: "open-questions" }
+  | { kind: "open-activity" };
 
 function listIntent(viewModel: ViewModel, key: string): Intent {
   switch (key) {
@@ -100,6 +101,8 @@ function runIntent(viewModel: ViewModel, key: string): Intent {
       return { kind: "land" };
     case "Q":
       return { kind: "open-questions" };
+    case "L":
+      return { kind: "open-activity" };
     default:
       return { kind: "none" };
   }

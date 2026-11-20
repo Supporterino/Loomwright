@@ -1,9 +1,29 @@
 import { Box, Text } from "ink";
 import type { ReactElement } from "react";
+import { activityLineText } from "../controls/activity-pane.ts";
 import type { ActivityLine } from "../model/view-model.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
 import { colorProps } from "./style.ts";
+
+export interface ActivityLinesProps {
+  readonly lines: readonly ActivityLine[];
+  readonly glyphs: GlyphSet;
+}
+
+/** Renders exactly the given lines; the caller owns every slice and line budget. */
+export function ActivityLines({ lines, glyphs }: ActivityLinesProps): ReactElement | null {
+  if (lines.length === 0) return null;
+  return (
+    <Box flexDirection="column">
+      {lines.map((line) => (
+        <Text key={line.seq} wrap="truncate">
+          {activityLineText(line, glyphs)}
+        </Text>
+      ))}
+    </Box>
+  );
+}
 
 export interface ActivityTailProps {
   readonly lines: readonly ActivityLine[];
@@ -26,18 +46,5 @@ export function ActivityTail({
   // No rows to show but activity exists: render nothing rather than a false empty state.
   if (count === 0) return null;
   const shown = lines.slice(Math.max(0, lines.length - count));
-  return (
-    <Box flexDirection="column">
-      {shown.map((line) => {
-        // The ref goes before the text: the text is already capped, so a trailing ref is what Ink truncates away.
-        const ref = line.logRef === undefined ? "" : `${glyphs.arrow} ${line.logRef} `;
-        return (
-          <Text key={line.seq} wrap="truncate">
-            {line.step} {glyphs.bullet} {line.kind} {glyphs.bullet} {ref}
-            {line.text}
-          </Text>
-        );
-      })}
-    </Box>
-  );
+  return <ActivityLines lines={shown} glyphs={glyphs} />;
 }

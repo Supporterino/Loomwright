@@ -344,6 +344,19 @@ describe("replay is read-only", () => {
     expect(replayKey(view, "c", key({ ctrl: true })).quit).toBe(true);
   });
 
+  test("replay scrolls the pane but launches nothing", async () => {
+    const view = viewOf(await readReplayFile(FIXTURE));
+    // The log navigation keys are not writes: none produces the read-only notice.
+    for (const input of ["L", "j", "k", "g", "G", "f"]) {
+      const outcome = replayKey(view, input, key());
+      expect(outcome.quit, input).toBe(false);
+      expect(outcome.notice, input).toBeNull();
+    }
+    const tab = replayKey(view, "", key({ tab: true }));
+    expect(tab.quit).toBe(false);
+    expect(tab.notice).toBeNull();
+  });
+
   test("? opens the help panel in replay and Esc closes it", async () => {
     const path = tempFile(
       "implementing.jsonl",

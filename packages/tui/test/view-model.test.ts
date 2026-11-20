@@ -1017,7 +1017,7 @@ describe("scroll windows", () => {
     const run = runState({ tasks });
     const input = runInput(run, [], { rows: 24, selectedTaskId: "task-0" });
     const first = buildViewModel(input);
-    expect(first.taskWindow).toEqual({ offset: 0, size: 21, total: 30 });
+    expect(first.taskWindow).toEqual({ offset: 0, size: 17, total: 30 });
 
     let selected = "task-0";
     let offset = first.taskWindow.offset;
@@ -1055,12 +1055,28 @@ describe("scroll windows", () => {
     const twelve = Array.from({ length: 12 }, (_, index) =>
       taskState({ id: `task-${index}`, title: `Task ${index}` }),
     );
-    // A graph that fits leaves the remaining rows to the tail.
+    // The four-row floor wins over the graph, so all twelve still fit with the tail intact.
     const fits = buildViewModel(
       runInput(runState({ tasks: twelve }), [], { rows: 24, selectedTaskId: null }),
     );
-    expect(fits.taskWindow.size).toBe(21);
+    expect(fits.taskWindow.size).toBe(12);
     expect(singlePaneTailRows(fits)).toBe(9);
+  });
+
+  test("the overview never loses the tail", () => {
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    const input = runInput(run, [], { rows: 24, selectedTaskId: null });
+    const view = buildViewModel(input);
+    expect(view.taskWindow).toEqual({ offset: 0, size: 17, total: 24 });
+    expect(singlePaneTailRows(view)).toBe(4);
+
+    // The graph scrolls instead of taking the tail's floor away.
+    const scrolled = buildViewModel({ ...input, selectedTaskId: "task-23" });
+    expect(scrolled.taskWindow.offset).toBe(7);
+    expect(scrolled.taskWindow.offset + scrolled.taskWindow.size).toBe(24);
   });
 });
 

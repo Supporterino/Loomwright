@@ -138,9 +138,9 @@ export interface RunDetail {
   readonly reword: RewordAvailability;
 }
 
-/** A panel is built by its owning module (intake, approval, questions, confirm, help). */
+/** A panel is built by its owning module (intake, approval, questions, confirm, help, activity). */
 export interface PanelView {
-  readonly kind: "intake" | "approval" | "questions" | "confirm" | "help";
+  readonly kind: "intake" | "approval" | "questions" | "confirm" | "help" | "activity";
   readonly title: string;
   readonly lines: readonly string[];
   readonly keys: readonly KeyHint[];
@@ -427,6 +427,9 @@ function footerFor(input: ViewModelInput, run: RunDetail | null): readonly KeyHi
   return input.screen === "list" ? listFooter(input) : runFooter(input, run);
 }
 
+/** The overview's compact tail never drops below four rows; a shorter terminal scrolls the graph. */
+export const TAIL_FLOOR = 4;
+
 /** Rows left for the tail in one pane: header, notice, graph title and rows, footer. */
 export function singlePaneTailRows(viewModel: ViewModel): number {
   const run = viewModel.run;
@@ -485,7 +488,10 @@ export function buildViewModel(input: ViewModelInput): ViewModel {
   const headerRows = run?.phase === "awaiting-approval" ? 2 : 1;
   const footerRows = 1;
   const listSize = Math.max(0, input.rows - 1 - footerRows - noticeRows);
-  const graphSize = Math.max(0, input.rows - headerRows - noticeRows - 1 - footerRows);
+  const graphSize = Math.min(
+    run?.tasks.length ?? 0,
+    Math.max(0, input.rows - headerRows - noticeRows - 2 - TAIL_FLOOR),
+  );
 
   const listIndex = list.findIndex((item) => item.id === input.selectedRunId);
   const taskIndex = run?.tasks.findIndex((task) => task.id === input.selectedTaskId) ?? -1;

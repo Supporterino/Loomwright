@@ -4,10 +4,17 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { StatusDocument } from "@loomwright/core/factory";
 import { RunState, TaskState } from "@loomwright/core/state/run";
-import { collectFacts } from "../src/model/facts.ts";
-import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/model/view-model.ts";
+import { activityPanePanel, openActivityPane } from "../src/controls/activity-pane.ts";
+import { collectFacts, type EventFacts } from "../src/model/facts.ts";
+import {
+  type ActivityLine,
+  buildViewModel,
+  type ViewModel,
+  type ViewModelInput,
+} from "../src/model/view-model.ts";
 import { lastOffset } from "../src/model/viewport.ts";
 import { emptyWorkspace } from "../src/strings.ts";
+import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
 import { renderFrame } from "../src/views/frame.tsx";
 import { SIZES, STATES } from "./frame-states.ts";
 
@@ -205,5 +212,119 @@ describe("the frame never exceeds the terminal", () => {
     );
     const text = await renderFrame(view, { columns: 80, rows: 24 }, { ascii: true });
     expect(text.split("\n").length).toBeLessThanOrEqual(24);
+  });
+});
+
+function activityLines(count: number): ActivityLine[] {
+  return Array.from({ length: count }, (_, index) => ({
+    seq: index + 1,
+    step: index % 4 === 0 ? "run" : "first",
+    kind: index % 4 === 0 ? "log" : "agent",
+    text: `activity line ${index + 1}`,
+    ...(index === count - 1 ? { logRef: ".factory/logs/add-health/task.log" } : {}),
+  }));
+}
+
+function factsWith(lines: readonly ActivityLine[]): EventFacts {
+  return { gates: {}, agents: {}, retries: {}, activity: lines };
+}
+
+function activityPaneView(columns: number, rows: number): ViewModel {
+  const run = runState({
+    tasks: [
+      taskState({ id: "first", title: "Health endpoint", repo: "app" }),
+      taskState({ id: "second", title: "Wire client", repo: "api", deps: ["first"] }),
+    ],
+  });
+  const input = vmInput({
+    screen: "run",
+    columns,
+    rows,
+    status: statusDoc([run]),
+    runs: [run],
+    selectedRunId: run.id,
+    facts: factsWith(activityLines(24)),
+  });
+  const base = buildViewModel(input);
+  if (base.run === null) throw new Error("the activity pane needs a run");
+  return buildViewModel({
+    ...input,
+    panel: activityPanePanel({
+      run: base.run,
+      state: openActivityPane(base.run),
+      glyphs: ASCII_GLYPHS,
+      rows,
+    }),
+  });
+}
+
+describe("the activity pane fills the frame", () => {
+  for (const size of SIZES) {
+    const file = join(framesDir, `activity-run-${size.columns}x${size.rows}.txt`);
+    test(`activity-run at ${size.columns}x${size.rows}`, async () => {
+      const actual = await renderFrame(activityPaneView(size.columns, size.rows), size, {
+        ascii: true,
+      });
+      expect(actual.includes("\u001b[")).toBe(false);
+      expect(actual).toMatch(/^[\t\n -~]*$/u);
+      const lines = actual.split("\n");
+      expect(lines).toHaveLength(size.rows);
+      // The pane's bottom border is the row above the footer: the pane fills the height.
+      expect(lines.at(-2)).toMatch(/^\+-+\+$/u);
+      if (process.env.UPDATE_FRAMES === "1") {
+        mkdirSync(framesDir, { recursive: true });
+        writeFileSync(file, `${actual}\n`);
+        return;
+      }
+      const expected = readFileSync(file, "utf8").replace(/\n$/u, "");
+      expect(actual, `activity-run ${size.columns}x${size.rows}`).toBe(expected);
+    });
+  }
+});
+
+function longRunView(count: number, selectedTaskId: string | null): ViewModel {
+  const tasks = Array.from({ length: count }, (_, index) =>
+    taskState({ id: `task-${index}`, title: `Task ${index}` }),
+  );
+  const run = runState({ tasks });
+  return buildViewModel(
+    vmInput({
+      screen: "run",
+      columns: 80,
+      rows: 24,
+      status: statusDoc([run]),
+      runs: [run],
+      selectedRunId: run.id,
+      selectedTaskId,
+      facts: factsWith(
+        Array.from({ length: 5 }, (_, index) => ({
+          seq: index + 1,
+          step: "run",
+          kind: "log",
+          text: `tail line ${index + 1}`,
+        })),
+      ),
+    }),
+  );
+}
+
+describe("the overview never loses the tail", () => {
+  test("the overview never loses the tail", async () => {
+    const view = longRunView(24, null);
+    expect(view.taskWindow).toEqual({ offset: 0, size: 17, total: 24 });
+
+    const text = await renderFrame(view, { columns: 80, rows: 24 }, { ascii: true });
+    const lines = text.split("\n");
+    expect(lines).toHaveLength(24);
+    expect(lines.at(-1)).toContain("q quit");
+    // Five lines exist; the four-row floor keeps the newest four.
+    expect(text).toContain("tail line 5");
+    expect(text).toContain("tail line 2");
+    expect(text).not.toContain("tail line 1");
+
+    // The graph scrolls with the selection instead of taking the tail's floor away.
+    const scrolled = longRunView(24, "task-23");
+    expect(scrolled.taskWindow.offset).toBe(7);
+    expect(scrolled.taskWindow.offset + scrolled.taskWindow.size).toBe(24);
   });
 });

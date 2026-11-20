@@ -6,9 +6,12 @@ import { keyHint } from "./strings.ts";
 const HELP_LINES: readonly string[] = [
   "n start a new change",
   "Tab intake text/file mode",
+  "Tab cycle the log scope",
   "Enter open the selected run or task; confirm",
   "Esc back out of a panel; cancel",
   "j / k move the selection",
+  "PgUp / PgDn page; g / G first or last",
+  "L open the activity log; f toggle log follow",
   "a approve and run",
   "A approve only",
   "w reword",
