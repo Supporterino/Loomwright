@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import {
   type ActivityLine,
   singlePaneTailRows,
+  TAIL_FLOOR,
   taskDetailGateRows,
   taskDetailTailRows,
   twoPaneTailRows,
@@ -34,6 +35,8 @@ interface SinglePaneBudget {
 /**
  * The restyle adds a blank line and an `Activity` title the view-model budget does not know about.
  * When the tail would overflow, the graph gives up the rows instead: the tail keeps its floor.
+ * Only a budget below chrome plus the floor is a shortfall; a tail that already overflows needs
+ * no task rows.
  */
 function singlePaneBudget(viewModel: ViewModel): SinglePaneBudget {
   const window = viewModel.taskWindow;
@@ -43,7 +46,8 @@ function singlePaneBudget(viewModel: ViewModel): SinglePaneBudget {
   const chrome = 2;
   const shownTasks = Math.min(run.tasks.length, window.size);
   const overflow = Math.max(0, run.activity.length - Math.max(0, budget - chrome));
-  const removed = Math.min(chrome, shownTasks, overflow);
+  const shortfall = Math.max(0, chrome + TAIL_FLOOR - budget);
+  const removed = Math.min(chrome, shownTasks, overflow, shortfall);
   const size = Math.max(0, window.size - removed);
   const index = run.tasks.findIndex((task) => task.selected);
   return {

@@ -599,6 +599,32 @@ describe("run view layout", () => {
     expect(text).not.toContain("no activity yet");
   });
 
+  test("2 tasks and 20 activity lines still render both task rows and the four-row tail floor at 80x24", async () => {
+    const run = runState({
+      tasks: [
+        taskState({ id: "first", title: "Health endpoint", repo: "app" }),
+        taskState({ id: "second", title: "Wire client", repo: "api", deps: ["first"] }),
+      ],
+    });
+    resetSeq();
+    const events = Array.from({ length: 20 }, (_, index) =>
+      event("progress.line", { level: "normal", text: `activity-${index + 1}` }),
+    );
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, rows: 24 }));
+    // The tail already overflows its 17 rows after the title and blank line, so the graph gives up
+    // nothing and both of its rows stay.
+    expect(singlePaneTailRows(view)).toBe(19);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("first pending app attempt 0 Health endpoint");
+    expect(text).toContain("second pending api attempt 0 Wire client");
+    for (const newest of ["activity-17", "activity-18", "activity-19", "activity-20"]) {
+      expect(text).toContain(newest);
+    }
+  });
+
   test("the tail renders nothing rather than no activity when zero rows are left", async () => {
     const tasks = Array.from({ length: 24 }, (_, index) =>
       taskState({ id: `task-${index}`, title: `Task ${index}` }),
