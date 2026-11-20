@@ -380,13 +380,28 @@ describe("a driven run explains why w is inert", () => {
     expect(view.footer).toContainEqual({ key: "w", label: "reword", enabled: false, reason });
   });
 
-  test("a driven run explains why w is inert at the 80-column minimum width", async () => {
+  test("an inert w reason is clipped so q quit, ? help and L log stay at 80 columns", async () => {
     const lock: ActiveLock = { changeId: RUN, pid: 4242, host: "host", since: ISO };
     const view = runView({ phase: "implementing" }, { active: lock, driverAlive: true });
     const text = await renderFrame(view, { columns: 80, rows: 24 }, { ascii: true });
     const footer = text.split("\n").at(-1) ?? "";
+    expect(footer.length).toBeLessThanOrEqual(80);
     expect(footer).toContain("w reword");
-    expect(footer).toContain("add-health is being driven by pid 4242");
+    expect(footer).toContain("add-health is being driven by");
+    expect(footer).toContain("x abort");
+    expect(footer).toContain("L log");
+    expect(footer).toContain("? help");
+    expect(footer).toContain("q quit");
+  });
+
+  test("the full inert reason survives when the footer has the room", async () => {
+    const lock: ActiveLock = { changeId: RUN, pid: 4242, host: "host", since: ISO };
+    const view = runView({ phase: "implementing" }, { active: lock, driverAlive: true });
+    const reason = "add-health is being driven by pid 4242; stop it first";
+    const text = await renderFrame(view, { columns: 120, rows: 40 }, { ascii: true });
+    const footer = text.split("\n").at(-1) ?? "";
+    expect(footer).toContain(`w reword - ${reason}`);
+    expect(footer).toContain("q quit");
   });
 });
 

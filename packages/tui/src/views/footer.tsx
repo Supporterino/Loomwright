@@ -13,8 +13,12 @@ export interface KeyFooterProps {
   readonly columns: number;
 }
 
-/** Inert hints first, so their reason survives the clip on a narrow footer; then the enabled ones. */
-function hintParts(hints: readonly KeyHint[], glyphs: GlyphSet): readonly string[] {
+/**
+ * Inert hints first, with their reason clipped to the room the enabled hints leave: the enabled
+ * keys stay whole, so `q quit` and `? help` never fall off a narrow footer.
+ */
+function footerText(hints: readonly KeyHint[], glyphs: GlyphSet, columns: number): string {
+  const separator = ` ${glyphs.bullet} `;
   const inert: string[] = [];
   const enabled: string[] = [];
   for (const hint of hints) {
@@ -24,11 +28,17 @@ function hintParts(hints: readonly KeyHint[], glyphs: GlyphSet): readonly string
       inert.push(`${hint.key} ${hint.label} ${dash(glyphs)} ${hint.reason}`);
     }
   }
-  return [...inert, ...enabled];
+  const enabledText = enabled.join(separator);
+  if (inert.length === 0) return enabledText;
+  if (enabledText === "") return clip(inert.join(separator), columns, glyphs);
+  const room = columns - enabledText.length - separator.length;
+  if (room <= 0) return enabledText;
+  const inertText = clip(inert.join(separator), room, glyphs);
+  return inertText === "" ? enabledText : `${inertText}${separator}${enabledText}`;
 }
 
 export function KeyFooter({ hints, glyphs, depth, columns }: KeyFooterProps): ReactElement {
-  const text = hintParts(hints, glyphs).join(` ${glyphs.bullet} `);
+  const text = footerText(hints, glyphs, columns);
   return (
     <Text {...colorProps("muted", depth)} wrap="truncate">
       {clip(text, columns, glyphs)}

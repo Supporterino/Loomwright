@@ -71,7 +71,9 @@ Confirming launches the reword child detached through the same launcher and logs
 `.factory/logs/`; a non-zero exit shows the exit code and the log tail in the panel and leaves it
 actionable again. A run whose driver is alive shows `w` inert with the CLI's reason naming the pid
 (`<id> is being driven by pid <n>; stop it first`), and another change holding the lock is named
-instead (`<other> is the active change; finish or abort it before rewording <id>`).
+instead (`<other> is the active change; finish or abort it before rewording <id>`). A footer too
+narrow for the reason clips it to the room the enabled keys leave, so `q` and `?` stay visible;
+pressing `w` shows the full reason as a notice.
 
 ## The activity log
 

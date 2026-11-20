@@ -21,4 +21,4 @@
 
 
 
-w reword - add-health is being driven by pid 4242; stop it first - x abort - ...
+w reword - add-health is being driven by ... - x abort - L log - ? help - q quit
