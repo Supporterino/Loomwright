@@ -21,7 +21,7 @@ export function singlePaneTailRows(viewModel: ViewModel): number {
   const run = viewModel.run;
   if (run === null) return 0;
   const headerRows = run.phase === "awaiting-approval" ? 2 : 1;
-  const noticeRows = viewModel.notice === null ? 0 : 1;
+  const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
   const graphRows = 1 + run.tasks.length;
   return Math.max(0, viewModel.rows - headerRows - noticeRows - graphRows - 1);
 }

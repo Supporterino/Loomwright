@@ -19,6 +19,7 @@ import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/mode
 import { createTerminalSession, type TerminalSession } from "../src/session.ts";
 import { emptyWorkspace } from "../src/strings.ts";
 import { renderFrame } from "../src/views/frame.tsx";
+import { singlePaneTailRows } from "../src/views/run-view.tsx";
 
 const ISO = "2026-11-17T10:00:00.000Z";
 const RUN = "add-health";
@@ -474,6 +475,28 @@ describe("run view layout", () => {
     );
     expect(text).not.toContain("hidden line");
     expect(text).not.toContain("no activity yet");
+  });
+
+  test("a multi-line failure notice counts its rows so the newest activity stays visible", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = Array.from({ length: 12 }, (_, index) =>
+      event("progress.line", { level: "normal", text: `activity-${index + 1}` }),
+    );
+    const notice = [
+      `land ${RUN} exited with code 5`,
+      "spawn log: .factory/logs/land.log",
+      ...Array.from({ length: 10 }, (_, index) => `log line ${index + 1}`),
+    ].join("\n");
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, notice, rows: 24 }));
+    // 24 rows - header - 12 notice rows - graph (title + 1 task) - footer.
+    expect(singlePaneTailRows(view)).toBe(8);
+    const text = await frame(view, 80, 24, true);
+    expect(text).toContain(`land ${RUN} exited with code 5`);
+    expect(text).toContain("log line 10");
+    expect(text).toContain("activity-12");
   });
 
   test("the activity tail says no activity yet only when there are no lines", async () => {
