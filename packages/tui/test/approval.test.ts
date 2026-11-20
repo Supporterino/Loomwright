@@ -28,13 +28,14 @@ import {
   shortCommit,
 } from "../src/approval/overlay.ts";
 import { initialQuestions } from "../src/controls/questions.tsx";
-import { syncApproval, type UiData } from "../src/entry.tsx";
+import { approvalKeyRoute, syncApproval, type UiData, viewOf } from "../src/entry.tsx";
 import { initialIntake } from "../src/intake/dialog.tsx";
 import { collectFacts } from "../src/model/facts.ts";
 import type { KeyInput } from "../src/model/keys.ts";
 import { buildViewModel, type RunDetail, type ViewModelInput } from "../src/model/view-model.ts";
 import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
 import { TOKENS } from "../src/theme/tokens.ts";
+import { renderFrame } from "../src/views/frame.tsx";
 
 const ISO = "2026-11-18T10:00:00.000Z";
 const RUN = "add-health";
@@ -256,6 +257,7 @@ function uiData(run: RunState, overrides: Partial<UiData> = {}): UiData {
     notice: null,
     intake: null,
     approval: null,
+    approvalCollapsed: false,
     questions: null,
     confirmation: null,
     help: false,
@@ -343,7 +345,7 @@ describe("the approval overlay follows run state, not a stale snapshot", () => {
 });
 
 describe("a missing identity disables approval", () => {
-  test("the CLI message shows, a/A/R are unavailable and w stays with findings", () => {
+  test("a missing identity disables approval: the CLI message shows and a/A/R are unavailable", () => {
     const run = runState({
       specFindings: [
         {
@@ -361,16 +363,24 @@ describe("a missing identity disables approval", () => {
     expect(available).toEqual({
       approve: false,
       "approve-only": false,
-      reword: true,
       reapprove: false,
     });
+    expect(Object.keys(available)).not.toContain("reword");
 
     const text = panelText(detail(run, pendingEvents()), { kind: "idle" }, given);
     expect(text).toContain(MISSING_IDENTITY);
-    expect(text).toContain("w reword");
     expect(text).not.toContain("a approve and run");
     expect(text).not.toContain("A approve only");
     expect(text).not.toContain("R reapprove");
+    // `w` is gone for every identity, not just the missing one.
+    expect(text).not.toContain("w reword");
+
+    const withIdentity = panelText(
+      detail(run, pendingEvents()),
+      { kind: "idle" },
+      evidence({ findings: 1 }),
+    );
+    expect(withIdentity).not.toContain("w reword");
   });
 
   test("an action key for an unavailable action stays idle", () => {
@@ -378,10 +388,7 @@ describe("a missing identity disables approval", () => {
     if (state === null) throw new Error("the overlay did not open");
     const available = approvalAvailable(evidence({ identity: "", findings: 1 }));
     expect(approvalKeys(state, "a", key(), available).state).toEqual({ kind: "idle" });
-    expect(approvalKeys(state, "w", key(), available).state).toEqual({
-      kind: "confirming",
-      action: "reword",
-    });
+    expect(approvalKeys(state, "w", key(), available).state).toBe(state);
   });
 });
 
@@ -439,21 +446,29 @@ describe("approve only changes what the overlay says", () => {
 });
 
 describe("the actions are gated by their evidence", () => {
-  test("no findings and no spec commit leaves only a and A, and the footer lists only those", () => {
+  test("the actions are gated by their evidence: no commit leaves only a and A", () => {
     const given = evidence({ findings: 0, specCommit: null });
     expect(approvalAvailable(given)).toEqual({
       approve: true,
       "approve-only": true,
-      reword: false,
       reapprove: false,
     });
 
+    const panel = approvalPanel({
+      run: detail(runState(), pendingEvents()),
+      evidence: given,
+      state: { kind: "idle" },
+      glyphs: ASCII_GLYPHS,
+    });
+    expect(panel.keys.map((hint) => `${hint.key} ${hint.label}`)).toEqual([
+      "a approve and run",
+      "A approve only",
+      "Esc collapse",
+      "q quit",
+    ]);
     const text = panelText(detail(runState(), pendingEvents()), { kind: "idle" }, given);
-    expect(text).toContain("a approve and run");
-    expect(text).toContain("A approve only");
     expect(text).not.toContain("w reword");
     expect(text).not.toContain("R reapprove");
-    expect(text).toContain("q quit");
   });
 
   test("a grant in the stream offers reapprove and a commit names it in the confirmation", () => {
@@ -486,6 +501,88 @@ describe("q quits from the gate", () => {
   });
 });
 
+describe("Esc leaves the idle gate but never a running action", () => {
+  test("the overlay collapses to the banner and reopens", async () => {
+    const run = runState();
+    const idle = { kind: "idle" } as const;
+    const open = viewOf(uiData(run, { approval: idle }), ASCII_GLYPHS);
+    expect(open.panel?.kind).toBe("approval");
+
+    const collapsed = viewOf(
+      uiData(run, {
+        approval: idle,
+        approvalCollapsed: true,
+        snapshot: reduce(grantedEvents()),
+      }),
+      ASCII_GLYPHS,
+    );
+    expect(collapsed.panel).toBeNull();
+
+    const banner = await renderFrame(collapsed, { columns: 120, rows: 40 }, { ascii: true });
+    expect(banner).toContain("! awaiting approval");
+    expect(banner).toContain("a approve and run");
+    expect(banner).toContain("A approve only");
+    expect(banner).toContain("R reapprove");
+
+    expect(
+      approvalKeyRoute({ screen: "run", approval: idle, approvalCollapsed: true }, key(), "a"),
+    ).toBe("reopen");
+    expect(approvalKeys(idle, "a", key()).state).toEqual({ kind: "confirming", action: "approve" });
+    expect(
+      approvalKeyRoute(
+        { screen: "run", approval: idle, approvalCollapsed: false },
+        key({ escape: true }),
+        "",
+      ),
+    ).toBe("collapse");
+  });
+
+  test("Esc is inert while an action is in flight", () => {
+    const run = detail(runState(), pendingEvents());
+    const states: readonly ApprovalState[] = [
+      { kind: "confirming", action: "approve" },
+      { kind: "launching", action: "approve" },
+      approvalStarted({ kind: "launching", action: "approve-only" }, LOG),
+    ];
+    for (const state of states) {
+      const outcome = approvalKeys(state, "", key({ escape: true }));
+      expect(outcome.state).toBe(state);
+      expect(outcome.launch).toBeUndefined();
+      expect(outcome.resume).toBeUndefined();
+
+      const text = panelText(run, state);
+      expect(text).toContain("Esc waits for the action");
+      expect(text).toContain("q quit");
+      expect(
+        approvalKeyRoute(
+          { screen: "run", approval: state, approvalCollapsed: false },
+          key({ escape: true }),
+          "",
+        ),
+      ).toBe("overlay");
+    }
+  });
+});
+
+describe("the gate no longer offers reword", () => {
+  test("w does nothing at the gate and no state names it", () => {
+    const idle: ApprovalState = { kind: "idle" };
+    expect(approvalKeys(idle, "w", key()).state).toBe(idle);
+    expect(Object.keys(approvalAvailable(evidence()))).not.toContain("reword");
+
+    const run = detail(runState(), pendingEvents());
+    const states: readonly ApprovalState[] = [
+      idle,
+      { kind: "confirming", action: "approve" },
+      { kind: "launching", action: "approve" },
+      approvalStarted({ kind: "launching", action: "approve-only" }, LOG),
+      { kind: "failed", action: "approve", code: 1, tail: [] },
+      { kind: "done" },
+    ];
+    for (const state of states) expect(panelText(run, state)).not.toContain("w reword");
+  });
+});
+
 describe("each action has its own confirmation", () => {
   const MATRIX: readonly {
     readonly action: ApprovalActionKind;
@@ -501,11 +598,6 @@ describe("each action has its own confirmation", () => {
       action: "approve-only",
       key: "A",
       expected: ["nothing is implemented", "r", `loomwright approve ${RUN}`],
-    },
-    {
-      action: "reword",
-      key: "w",
-      expected: ["architect session", "may take long"],
     },
     {
       action: "reapprove",
@@ -529,9 +621,9 @@ describe("each action has its own confirmation", () => {
       for (const part of expected) expect(text).toContain(part);
     });
 
-    test(`${action} cancels with Esc and produces no launch`, () => {
+    test(`${action} cancels with n and produces no launch`, () => {
       const state = { kind: "confirming", action } as const;
-      const cancelled = approvalKeys(state, "", key({ escape: true }));
+      const cancelled = approvalKeys(state, "n", key());
       expect(cancelled.state).toEqual({ kind: "idle" });
       expect(cancelled.launch).toBeUndefined();
     });
@@ -550,10 +642,9 @@ describe("the overlay closes on the outcome", () => {
     const expected = {
       approve: ["queued", "implementing"],
       "approve-only": ["queued"],
-      reword: ["design", "awaiting-approval"],
       reapprove: ["awaiting-approval", "queued"],
     } as const;
-    for (const action of ["approve", "approve-only", "reword", "reapprove"] as const) {
+    for (const action of ["approve", "approve-only", "reapprove"] as const) {
       const waiting = approvalStarted({ kind: "launching", action }, LOG);
       expect(waiting.kind).toBe("waiting");
       if (waiting.kind !== "waiting") return;
@@ -574,12 +665,6 @@ describe("the overlay closes on the outcome", () => {
     expect(approvalProgress(waiting, { phase: "queued", granted: false })).toEqual(waiting);
   });
 
-  test("reword closes on the next phase without a grant", () => {
-    const waiting = approvalStarted({ kind: "launching", action: "reword" }, LOG);
-    expect(approvalProgress(waiting, { phase: "design", granted: false })).toEqual({
-      kind: "done",
-    });
-  });
   test("approve only closes once the grant and queued phase are both known", () => {
     const waiting = approvalStarted({ kind: "launching", action: "approve-only" }, LOG);
     const granted = approvalProgress(waiting, { phase: "awaiting-approval", granted: true });
@@ -617,7 +702,7 @@ describe("a non-zero child exit restores the actionable overlay", () => {
 
   test("a failed child keeps the spawn log path above its tail", () => {
     const failed = approvalExited(
-      approvalStarted({ kind: "launching", action: "reword" }, LOG),
+      approvalStarted({ kind: "launching", action: "approve" }, LOG),
       2,
       ["boom"],
     );

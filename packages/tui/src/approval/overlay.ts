@@ -10,7 +10,7 @@ import { keyHint, LABELS } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import { type ColorDepth, colorFor, TOKENS } from "../theme/tokens.ts";
 
-export type ApprovalActionKind = "approve" | "approve-only" | "reword" | "reapprove";
+export type ApprovalActionKind = "approve" | "approve-only" | "reapprove";
 
 /** The exact CLI message; the overlay must not invent a shorter one. */
 export const MISSING_IDENTITY = "git user.email is not set; it records who approved";
@@ -21,7 +21,7 @@ export interface ApprovalEvidence {
    * (replay has no workspace, so it must not claim the identity is missing).
    */
   readonly identity?: string;
-  /** `run.specFindings.length`. */
+  /** `run.specFindings.length`; retained for the shared frame fixture, nothing at the gate reads it. */
   readonly findings: number;
   /** Only from `approval.granted`; `approval.requested` has no approver yet. */
   readonly specCommit: string | null;
@@ -32,8 +32,6 @@ export function approvalAvailable(evidence: ApprovalEvidence): Record<ApprovalAc
   return {
     approve: identity,
     "approve-only": identity,
-    // Reword writes no approval, so it does not need the identity.
-    reword: evidence.findings > 0,
     reapprove: identity && evidence.specCommit !== null,
   };
 }
@@ -64,21 +62,18 @@ export type ApprovalState =
 const WAITING_FOR = {
   approve: ["queued", "implementing"],
   "approve-only": ["queued"],
-  reword: ["design", "awaiting-approval"],
   reapprove: ["awaiting-approval", "queued"],
 } as const satisfies Readonly<Record<ApprovalActionKind, readonly Phase[]>>;
 
 const GRANTED_NEEDED = {
   approve: true,
   "approve-only": true,
-  reword: false,
   reapprove: true,
 } as const satisfies Readonly<Record<ApprovalActionKind, boolean>>;
 
 const ALL_AVAILABLE = {
   approve: true,
   "approve-only": true,
-  reword: true,
   reapprove: true,
 } as const satisfies Readonly<Record<ApprovalActionKind, boolean>>;
 
@@ -114,7 +109,7 @@ export interface ApprovalProgress {
   readonly granted: boolean;
 }
 
-/** Closes only after the outcome is known; reword needs no grant. */
+/** Closes only after the outcome is known. */
 export function approvalProgress(state: ApprovalState, progress: ApprovalProgress): ApprovalState {
   if (state.kind !== "waiting") return state;
   const sawGranted = state.sawGranted || progress.granted;
@@ -171,8 +166,6 @@ function actionForKey(input: string): ApprovalActionKind | null {
       return "approve";
     case "A":
       return "approve-only";
-    case "w":
-      return "reword";
     case "R":
       return "reapprove";
     default:
@@ -202,7 +195,8 @@ export function approvalKeys(
     if (key.return || (!key.ctrl && input === "y")) {
       return { state: { kind: "launching", action: state.action }, launch: state.action };
     }
-    if (key.escape || (!key.ctrl && input === "n")) return { state: { kind: "idle" } };
+    // `n` is the only cancel; Esc is inert so a key pressed by reflex cannot abort the action.
+    if (!key.ctrl && input === "n") return { state: { kind: "idle" } };
     return { state };
   }
   const action = actionForKey(input);
@@ -221,8 +215,6 @@ function actionLabel(action: ApprovalActionKind): string {
       return "approve and run";
     case "approve-only":
       return "approve only";
-    case "reword":
-      return "reword";
     case "reapprove":
       return "reapprove";
     default: {
@@ -247,8 +239,6 @@ function confirmation(input: ApprovalInput): string[] {
         "confirm approve only: nothing is implemented",
         `press r (resume) later or run \`loomwright approve ${run.id}\``,
       ];
-    case "reword":
-      return ["confirm reword: this starts the architect session", "and may take long"];
     case "reapprove": {
       const commit = input.evidence.specCommit;
       return [
@@ -301,19 +291,26 @@ function stateLines(input: ApprovalInput, glyphs: GlyphSet): string[] {
   }
 }
 
+function inertEsc(reason: string): PanelView["keys"][number] {
+  return { key: "Esc", label: "waits for the action", enabled: false, reason };
+}
+
 function panelKeys(input: ApprovalInput): PanelView["keys"] {
   const { state, evidence } = input;
   const keys: PanelView["keys"][number][] = [];
   if (state.kind === "confirming") {
-    keys.push(keyHint("Enter", "confirm"), keyHint("Esc", "cancel"));
-  } else if (state.kind === "waiting") {
-    if (state.action === "approve-only") keys.push(keyHint("r", "resume"));
+    keys.push(keyHint("Enter", "confirm"), keyHint("n", "cancel"), inertEsc("press Enter or n"));
+  } else if (state.kind === "launching" || state.kind === "waiting") {
+    if (state.kind === "waiting" && state.action === "approve-only") {
+      keys.push(keyHint("r", "resume"));
+    }
+    keys.push(inertEsc("the child is still running"));
   } else if (state.kind === "idle" || state.kind === "failed") {
     const available = approvalAvailable(evidence);
     if (available.approve) keys.push(keyHint("a", "approve and run"));
     if (available["approve-only"]) keys.push(keyHint("A", "approve only"));
-    if (available.reword) keys.push(keyHint("w", "reword"));
     if (available.reapprove) keys.push(keyHint("R", "reapprove"));
+    keys.push(keyHint("Esc", "collapse"));
   }
   // `q` quits from every state, so the footer names it wherever the overlay is open.
   keys.push(keyHint("q", "quit"));

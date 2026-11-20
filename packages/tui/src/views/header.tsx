@@ -19,6 +19,7 @@ function dash(glyphs: GlyphSet): string {
 }
 
 export function RunHeader({ run, glyphs, depth }: RunHeaderProps): ReactElement {
+  const showReapprove = run.approval !== null && run.approval.specCommit !== null;
   return (
     <Box flexDirection="column">
       <Text wrap="truncate">
@@ -36,8 +37,9 @@ export function RunHeader({ run, glyphs, depth }: RunHeaderProps): ReactElement 
         <Text {...colorProps("approval", depth)} wrap="truncate">
           {joinFields(glyphs, [
             `${glyphs.approval} awaiting approval`,
-            "a approve",
+            "a approve and run",
             "A approve only",
+            ...(showReapprove ? ["R reapprove"] : []),
           ])}
         </Text>
       ) : null}

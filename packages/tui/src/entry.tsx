@@ -231,6 +231,11 @@ export interface UiData {
   readonly intake: IntakeState | null;
   /** The approval overlay, or null when the selected run is not at the gate. */
   readonly approval: ApprovalState | null;
+  /**
+   * The user hid the overlay with Esc; the run view's coral banner stays. Optional so `UiData`
+   * literals owned by other tasks stay valid; every reader normalises it with `=== true`.
+   */
+  readonly approvalCollapsed?: boolean;
   /** The questions pane, or null when it is closed. */
   readonly questions: QuestionsState | null;
   /**
@@ -291,7 +296,9 @@ export function syncApproval(data: UiData): UiData {
     if (panelOpen(data)) return data;
     if (phase === null) return data;
     const opened = approvalForPhase(phase, null);
-    return opened === null ? data : { ...data, approval: opened, identity: null };
+    return opened === null
+      ? data
+      : { ...data, approval: opened, approvalCollapsed: false, identity: null };
   }
   // Another process may approve while the overlay sits idle: clear it once the run leaves the
   // gate, but keep a launch that is still waiting for its own outcome.
@@ -300,7 +307,7 @@ export function syncApproval(data: UiData): UiData {
     phase !== null &&
     phase !== "awaiting-approval"
   ) {
-    return { ...data, approval: null };
+    return { ...data, approval: null, approvalCollapsed: false };
   }
   if (data.approval.kind !== "waiting") return data;
   const next = approvalProgress(data.approval, {
@@ -308,10 +315,34 @@ export function syncApproval(data: UiData): UiData {
     granted: grantedCommit(data.snapshot) !== null,
   });
   if (next === data.approval) return data;
-  return { ...data, approval: next.kind === "done" ? null : next };
+  return { ...data, approval: next.kind === "done" ? null : next, approvalCollapsed: false };
 }
 
-function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
+/**
+ * The collapsed overlay is one key away: `a`/`A`/`R` reopen it and the next press confirms. Esc
+ * leaves an actionable overlay but is inert while nothing can be done with it.
+ */
+export type ApprovalKeyRoute = "overlay" | "collapse" | "reopen" | "run";
+
+export function approvalKeyRoute(
+  data: Pick<UiData, "screen" | "approval" | "approvalCollapsed">,
+  key: KeyInput,
+  input: string,
+): ApprovalKeyRoute {
+  if (data.approval === null) return "run";
+  if (data.screen !== "run") return "overlay";
+  if (data.approvalCollapsed === true) {
+    if (key.escape) return "overlay"; // already collapsed: the key goes nowhere
+    if (!key.ctrl && (input === "a" || input === "A" || input === "R")) return "reopen";
+    return "run";
+  }
+  if (key.escape && (data.approval.kind === "idle" || data.approval.kind === "failed")) {
+    return "collapse";
+  }
+  return "overlay";
+}
+
+export function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
   const baseInput: ViewModelInput = {
     source: "live",
     screen: data.screen,
@@ -345,7 +376,7 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
       }),
     });
   }
-  if (data.approval !== null && data.screen === "run") {
+  if (data.approval !== null && data.screen === "run" && data.approvalCollapsed !== true) {
     if (base.run === null) return base;
     const run = selectedRunState(data);
     const panel = approvalPanel({
@@ -393,6 +424,7 @@ function initialData(
     taskOffset: 0,
     intake: null,
     approval: null,
+    approvalCollapsed: false,
     questions: null,
     activity: null,
     confirmation: null,
@@ -620,6 +652,7 @@ export function landSettled(data: UiData, id: string, refreshed: LandRefresh): U
     runs: refreshed.runs,
     pendingLand: null,
     activity: null,
+    approvalCollapsed: false,
   };
   if (refreshed.status.runs.some((run) => run.id === id)) return next;
   return {
@@ -632,6 +665,7 @@ export function landSettled(data: UiData, id: string, refreshed: LandRefresh): U
     notice: landedNotice(id),
     intake: null,
     approval: null,
+    approvalCollapsed: false,
     questions: null,
     activity: null,
     confirmation: null,
@@ -852,6 +886,7 @@ function Interactive({
         notice: null,
         intake: null,
         approval: null,
+        approvalCollapsed: false,
         questions: null,
         activity: null,
         confirmation: null,
@@ -993,9 +1028,6 @@ function Interactive({
           action = { kind, id };
           break;
         case "approve-only":
-          action = { kind, id };
-          break;
-        case "reword":
           action = { kind, id };
           break;
         case "reapprove":
@@ -1219,21 +1251,37 @@ function Interactive({
       return;
     }
     if (state.approval !== null) {
-      const run = selectedRunState(state);
-      if (run !== undefined) {
-        const outcome = approvalKeys(
-          state.approval,
-          input,
-          key,
-          approvalAvailable(evidenceOf(state)),
-        );
-        if (outcome.state !== state.approval) {
-          setData((current) => ({ ...current, approval: outcome.state }));
-        }
-        if (outcome.launch !== undefined) launchApproval(run.id, outcome.launch);
-        if (outcome.resume === true) applyControl({ kind: "resume", id: run.id });
+      // A panel opened from the collapsed run view owns the keys; nothing would reopen there.
+      const route =
+        state.approvalCollapsed === true && panelOpen(state)
+          ? "run"
+          : approvalKeyRoute(state, key, input);
+      if (route === "collapse") {
+        setData((current) => ({ ...current, approvalCollapsed: true }));
+        return;
       }
-      return;
+      if (route === "reopen") {
+        setData((current) => ({ ...current, approvalCollapsed: false }));
+        return;
+      }
+      if (route === "overlay") {
+        const run = selectedRunState(state);
+        if (run !== undefined) {
+          const outcome = approvalKeys(
+            state.approval,
+            input,
+            key,
+            approvalAvailable(evidenceOf(state)),
+          );
+          if (outcome.state !== state.approval) {
+            setData((current) => ({ ...current, approval: outcome.state }));
+          }
+          if (outcome.launch !== undefined) launchApproval(run.id, outcome.launch);
+          if (outcome.resume === true) applyControl({ kind: "resume", id: run.id });
+        }
+        return;
+      }
+      // Collapsed and not an approval key: the run keys own it again.
     }
     if (state.intake !== null) {
       if (key.escape) {
@@ -1393,6 +1441,7 @@ function Interactive({
           facts: collectFacts([]),
           notice: null,
           approval: null,
+          approvalCollapsed: false,
           questions: null,
           confirmation: null,
           help: false,

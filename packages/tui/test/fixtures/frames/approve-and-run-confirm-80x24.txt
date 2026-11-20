@@ -9,7 +9,7 @@
 | confirm approve and run:                                                     |
 | the approval is recorded, the spec is committed                              |
 | and implementation starts locally                                            |
-| Enter confirm - Esc cancel - q quit                                          |
+| Enter confirm - n cancel - Esc waits for the action - q quit                 |
 +------------------------------------------------------------------------------+
 
 
@@ -21,4 +21,4 @@
 
 
 
-Enter confirm - Esc cancel - q quit
+Enter confirm - n cancel - q quit
