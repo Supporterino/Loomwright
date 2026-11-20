@@ -579,16 +579,9 @@ function rewordFrame(size: FrameSize, count: number, text: string, offset: numbe
     rows: size.rows,
     columns: size.columns,
   });
-  // `PanelBox` repeats the keys inside the border and Ink clips that row with a Unicode ellipsis
-  // when it is one cell too wide; the frame footer carries the same keys and clips with ASCII "...".
-  // The short ASCII snapshot keeps the footer and drops the duplicate row until PanelBox clips
-  // panel lines itself.
-  const keys = panel.keys
-    .map((hint) => `${hint.key} ${hint.label}`)
-    .join(` ${ASCII_GLYPHS.bullet} `);
-  if (keys.length <= size.columns - 4) return buildViewModel({ ...input, panel });
-  const view = buildViewModel({ ...input, panel: { ...panel, keys: [] } });
-  return { ...view, footer: panel.keys };
+  // `PanelBox` repeats the keys inside the border and the frame footer carries the same keys; both
+  // clip with ASCII "..." and the fixture test asserts the whole frame stays printable ASCII.
+  return buildViewModel({ ...input, panel });
 }
 
 function tasks12(size: FrameSize): ViewModel {

@@ -493,4 +493,16 @@ describe("the panel opens only where the CLI accepts reword", () => {
     expect(view.title).toBe(`Reword - ${RUN}`);
     expect(view.keys.map((hint) => hint.key)).toContain("Ctrl-J");
   });
+
+  test("the reword keys row fits the panel's inner width and advertises no q quit", () => {
+    const run = detail();
+    const state = openReword(run);
+    if (state === null) throw new Error("the reword panel did not open");
+    const view = panel(run, state);
+    expect(view.keys.map((hint) => hint.key)).not.toContain("q");
+    const row = view.keys.map((hint) => `${hint.key} ${hint.label}`).join(" - ");
+    // The 80-column frame leaves 76 cells inside the panel's border and padding.
+    expect(row.length).toBeLessThanOrEqual(76);
+    expect(row).toMatch(/^[\t\n -~]*$/u);
+  });
 });

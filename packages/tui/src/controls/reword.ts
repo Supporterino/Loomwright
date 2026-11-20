@@ -214,7 +214,6 @@ function keysFor(run: RunDetail, state: RewordState, glyphs: GlyphSet): PanelVie
     confirm,
     keyHint("Esc", "back"),
     keyHint(scrollKey(glyphs), "scroll"),
-    keyHint("q", "quit"),
   ];
 }
 

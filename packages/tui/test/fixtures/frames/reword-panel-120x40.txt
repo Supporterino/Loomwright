@@ -9,7 +9,7 @@
 | prompt> apply finding 2                                                                                              |
 | reword add-health --prompt apply finding 2                                                                           |
 |                                                                                                                      |
-| Ctrl-J newline - Enter confirm - Esc back - Up/Down PgUp/PgDn scroll - q quit                                        |
+| Ctrl-J newline - Enter confirm - Esc back - Up/Down PgUp/PgDn scroll                                                 |
 +----------------------------------------------------------------------------------------------------------------------+
 
 
@@ -37,4 +37,4 @@
 
 
 
-Ctrl-J newline - Enter confirm - Esc back - Up/Down PgUp/PgDn scroll - q quit
+Ctrl-J newline - Enter confirm - Esc back - Up/Down PgUp/PgDn scroll
