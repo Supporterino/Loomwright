@@ -45,12 +45,11 @@ export function ActivityTail({
   depth,
   maxLines = 20,
 }: ActivityTailProps): ReactElement | null {
+  // No row to spend: not even the empty state may render, or the frame grows past the terminal.
+  if (maxLines <= 0) return null;
   if (lines.length === 0) {
     return <Text {...colorProps("muted", depth)}>no activity yet</Text>;
   }
-  const count = Math.max(0, maxLines);
-  // No rows to show but activity exists: render nothing rather than a false empty state.
-  if (count === 0) return null;
-  const shown = lines.slice(Math.max(0, lines.length - count));
+  const shown = lines.slice(Math.max(0, lines.length - maxLines));
   return <ActivityLines lines={shown} glyphs={glyphs} depth={depth} />;
 }

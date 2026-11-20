@@ -836,6 +836,32 @@ describe("task detail", () => {
     expect(text).toContain("Gates - 2 hidden");
     expect(text).not.toContain("lint fail");
   });
+
+  test("a 12-line failure notice with an empty task detail fits at 80x24", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "pending" })],
+    });
+    resetSeq();
+    const notice = [
+      `resume ${RUN} exited with code 5`,
+      "spawn log: .factory/logs/resume.log",
+      ...Array.from({ length: 10 }, (_, index) => `log line ${index + 1}`),
+    ].join("\n");
+    const view = buildViewModel(runInput(run, [], { selectedTaskId: "first", notice, rows: 24 }));
+    // The capped notice leaves the detail its eleven always-rendered rows.
+    expect(taskDetailGateRows(view)).toBe(0);
+    expect(taskDetailTailRows(view)).toBe(0);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines[0]).toContain(RUN);
+    expect(lines.at(-1)).toContain("q quit");
+    // The header, every fact and the empty gate state survive; the tail spends no row on its own.
+    expect(text).toContain(`resume ${RUN} exited with code 5`);
+    expect(text).toContain("task     first - Health endpoint");
+    expect(text).toContain("no gate results");
+    expect(text).not.toContain("no activity yet");
+  });
 });
 
 describe("footer", () => {

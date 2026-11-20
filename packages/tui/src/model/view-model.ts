@@ -439,6 +439,24 @@ function headerRows(run: RunDetail | null): number {
   return 1;
 }
 
+/**
+ * A notice keeps the exit code and log path (its first two rows) and the newest tail rows. A
+ * failure notice can be twelve rows and would otherwise leave no room for a task detail.
+ */
+function capNotice(notice: string, maxRows: number): string | null {
+  const lines = notice.split("\n");
+  if (lines.length <= maxRows) return notice;
+  if (maxRows <= 0) return null;
+  const head = lines.slice(0, Math.min(2, maxRows));
+  const tailRows = maxRows - head.length;
+  return [...head, ...(tailRows === 0 ? [] : lines.slice(-tailRows))].join("\n");
+}
+
+/** Rows a detail's notice may take before it pushes the always-rendered detail rows off screen. */
+function detailNoticeRows(rows: number, header: number): number {
+  return Math.max(0, rows - header - 1 - DETAIL_MIN_ROWS);
+}
+
 /** Rows left for the tail in one pane: header, notice, graph title and rows, footer. */
 export function singlePaneTailRows(viewModel: ViewModel): number {
   const run = viewModel.run;
@@ -459,6 +477,9 @@ export function twoPaneTailRows(viewModel: ViewModel): number {
 /** The detail rows that are never windowed: eight facts plus the `Gates` and `Activity` titles. */
 const DETAIL_FIXED_ROWS = 10;
 
+/** The detail's minimum: the fixed rows plus the `no gate results` row an empty gate list renders. */
+const DETAIL_MIN_ROWS = DETAIL_FIXED_ROWS + 1;
+
 /** The detail tail keeps this many rows; the gate list may only grow into the ones above. */
 const DETAIL_TAIL_FLOOR = 4;
 
@@ -468,11 +489,21 @@ function detailBodyRows(viewModel: ViewModel, run: RunDetail): number {
   return Math.max(0, viewModel.rows - headerRows(run) - noticeRows - 1);
 }
 
+/** Fixed rows plus the empty states an empty gate list or activity tail still renders. */
+function detailFixedRows(detail: TaskDetail): number {
+  return (
+    DETAIL_FIXED_ROWS + (detail.gates.length === 0 ? 1 : 0) + (detail.activity.length === 0 ? 1 : 0)
+  );
+}
+
 /** Rows the gate list may render, the last one counting the hidden gates; the tail keeps its floor. */
 export function taskDetailGateRows(viewModel: ViewModel): number {
   const run = viewModel.run;
   if (run === null || run.detail === null) return 0;
-  return Math.max(0, detailBodyRows(viewModel, run) - DETAIL_FIXED_ROWS - DETAIL_TAIL_FLOOR);
+  return Math.max(
+    0,
+    detailBodyRows(viewModel, run) - detailFixedRows(run.detail) - DETAIL_TAIL_FLOOR,
+  );
 }
 
 /** Rows left for the detail tail: the body minus the fixed rows and the gates that fit. */
@@ -482,7 +513,7 @@ export function taskDetailTailRows(viewModel: ViewModel): number {
   const gates = run.detail.gates.length;
   // An empty gate list still renders its `no gate results` row.
   const gateRows = gates === 0 ? 1 : Math.min(gates, taskDetailGateRows(viewModel));
-  return Math.max(0, detailBodyRows(viewModel, run) - DETAIL_FIXED_ROWS - gateRows);
+  return Math.max(0, detailBodyRows(viewModel, run) - detailFixedRows(run.detail) - gateRows);
 }
 
 export function buildViewModel(input: ViewModelInput): ViewModel {
@@ -503,14 +534,19 @@ export function buildViewModel(input: ViewModelInput): ViewModel {
 
   const entry = ordered.find((candidate) => candidate.run.id === input.selectedRunId);
   const run = entry === undefined ? null : runDetail(entry, input);
-  const notice =
+  const header = headerRows(run);
+  const rawNotice =
     input.notice ??
     (input.source === "replay" ? replayNotice : null) ??
     (list.length === 0 ? emptyWorkspace : null);
+  // A detail always needs its fixed rows; a long notice is windowed so it cannot push them away.
+  const notice =
+    rawNotice === null || run === null || run.detail === null
+      ? rawNotice
+      : capNotice(rawNotice, detailNoticeRows(input.rows, header));
 
   // Every growing region gets a budget; the footer and a one-row title are never spent on rows.
   const noticeRows = notice === null ? 0 : notice.split("\n").length;
-  const header = headerRows(run);
   const footerRows = 1;
   const listSize = Math.max(0, input.rows - 1 - footerRows - noticeRows);
   const graphSize = Math.min(

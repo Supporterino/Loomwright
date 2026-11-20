@@ -1123,8 +1123,9 @@ describe("scroll windows", () => {
     expect(view.taskWindow.size).toBe(16);
     expect(singlePaneTailRows(view)).toBe(4);
     expect(twoPaneTailRows(view)).toBe(21);
-    expect(taskDetailGateRows(view)).toBe(7);
-    expect(taskDetailTailRows(view)).toBe(10);
+    // The empty gate list and activity tail each keep a row, leaving the same tail floor.
+    expect(taskDetailGateRows(view)).toBe(5);
+    expect(taskDetailTailRows(view)).toBe(8);
   });
 
   test("the overview never loses the tail", () => {
