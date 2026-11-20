@@ -8,6 +8,7 @@ import type { RunState, TaskState } from "@loomwright/core/state/run";
 import { totalTokens } from "@loomwright/core/usage/usage";
 import type { Phase, RunSnapshot, TaskStatus } from "@loomwright/protocol";
 import { emptyWorkspace, keyHint, replayNotice } from "../strings.ts";
+import { linesInScope, type ScopeTask } from "./activity-scope.ts";
 import type { EventFacts } from "./facts.ts";
 import { flat } from "./format.ts";
 
@@ -290,13 +291,13 @@ function findingRows(run: RunState): SpecFindingRow[] {
   }));
 }
 
-function taskDetail(row: TaskRow, facts: EventFacts): TaskDetail {
+function taskDetail(row: TaskRow, facts: EventFacts, tasks: readonly ScopeTask[]): TaskDetail {
   return {
     task: row,
     agent: facts.agents[row.id] ?? null,
     retries: facts.retries[row.id] ?? 0,
     gates: facts.gates[row.id] ?? [],
-    activity: facts.activity.filter((line) => line.step === row.id),
+    activity: linesInScope(tasks, facts.activity, { kind: "task", taskId: row.id }),
   };
 }
 
@@ -335,6 +336,7 @@ function rewordAvailability(run: RunState, input: ViewModelInput): RewordAvailab
 function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
   const { run } = entry;
   const tasks = run.tasks.map((task) => taskRow(task, input.snapshot, input.selectedTaskId));
+  const scopeTasks: ScopeTask[] = tasks.map(({ id, repo }) => ({ id, repo }));
   const selected = tasks.find((task) => task.id === input.selectedTaskId) ?? null;
   return {
     id: run.id,
@@ -346,7 +348,7 @@ function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
     lock: roleOf(run.id, input.status),
     tasks,
     selectedTaskId: input.selectedTaskId,
-    detail: selected === null ? null : taskDetail(selected, input.facts),
+    detail: selected === null ? null : taskDetail(selected, input.facts, scopeTasks),
     activity: input.facts.activity,
     questions: questionRows(run, input.snapshot),
     approval: approvalView(run, input.snapshot),
