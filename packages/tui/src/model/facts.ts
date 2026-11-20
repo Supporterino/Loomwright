@@ -29,9 +29,16 @@ function attemptText(attempt: number | undefined): string {
   return attempt === undefined ? "" : ` (attempt ${attempt})`;
 }
 
-/** Readable text stays one line: a payload's newlines never split an activity row. */
+/**
+ * Readable text stays one line and carries no terminal controls: a payload's newlines never split
+ * an activity row, and its escape sequences never reach the terminal (an `ESC[2J` or `OSC 52`
+ * would clear the screen, write the clipboard or draw a fake prompt).
+ */
 function flat(text: string): string {
-  return text.replace(/\s*[\r\n]+\s*/g, " ").trim();
+  return text
+    .replace(/[^\P{Cc}\t\n]/gu, "")
+    .replace(/\s*[\r\n]+\s*/g, " ")
+    .trim();
 }
 
 function isRef(value: unknown): value is { readonly path: string } {

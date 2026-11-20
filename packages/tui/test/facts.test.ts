@@ -271,6 +271,30 @@ describe("every run event folds into the activity facts", () => {
     for (const line of facts.activity) expect(line.text).not.toContain("\n");
   });
 
+  test("control characters are stripped: a payload's escape sequences never reach the terminal", () => {
+    const facts = collectFacts([
+      event(1, "progress.line", { level: "normal", text: "\u001b[2Jcleared\u0007" }),
+      event(2, "agent.activity", {
+        step: "1.1",
+        detail: "\u001b]52;c;SGVsbG8=\u0007clipboard",
+        kind: "tool",
+      }),
+      event(3, "question.raised", {
+        step: "design",
+        question: "tab\tkept\u009b",
+        status: "unanswered",
+      }),
+    ]);
+
+    const isControl = (character: string): boolean =>
+      /\p{Cc}/u.test(character) && character !== "\t" && character !== "\n";
+    for (const line of facts.activity) expect([...line.text].some(isControl)).toBe(false);
+    for (const line of facts.activity) expect(line.text).not.toContain("\n");
+    expect(facts.activity[0]?.text).toBe("[2Jcleared");
+    expect(facts.activity[1]?.text).toBe("]52;c;SGVsbG8=clipboard");
+    expect(facts.activity[2]?.text).toBe("tab\tkept (unanswered)");
+  });
+
   test("the task detail stays task-scoped: only its source lines, while the run tail keeps both", () => {
     const run = RunState.parse({
       version: 1,
