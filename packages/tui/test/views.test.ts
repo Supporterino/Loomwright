@@ -15,7 +15,12 @@ import { runTui } from "../src/entry.tsx";
 import type { LaunchAction, Launcher } from "../src/launch/launcher.ts";
 import { collectFacts } from "../src/model/facts.ts";
 import { applyKey } from "../src/model/keys.ts";
-import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/model/view-model.ts";
+import {
+  buildViewModel,
+  taskDetailGateRows,
+  type ViewModel,
+  type ViewModelInput,
+} from "../src/model/view-model.ts";
 import { createTerminalSession, type TerminalSession } from "../src/session.ts";
 import { emptyWorkspace } from "../src/strings.ts";
 import { renderFrame } from "../src/views/frame.tsx";
@@ -768,6 +773,45 @@ describe("task detail", () => {
     expect(text).not.toContain("gate-8");
     expect(text).toContain("13 more gates");
     expect(text).toContain("activity-20");
+  });
+
+  test("a 12-line failure notice at 80x24 folds the hidden gate count into the Gates title", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "failed" })],
+    });
+    resetSeq();
+    const events = [
+      event("gate.finished", {
+        name: "lint",
+        type: "lint",
+        status: "fail",
+        durationMs: 1_200,
+        step: "first",
+      }),
+      event("gate.finished", {
+        name: "test",
+        type: "test",
+        status: "pass",
+        durationMs: 3_400,
+        step: "first",
+      }),
+    ];
+    const notice = [
+      `land ${RUN} exited with code 5`,
+      "spawn log: .factory/logs/land.log",
+      ...Array.from({ length: 10 }, (_, index) => `log line ${index + 1}`),
+    ].join("\n");
+    const view = buildViewModel(
+      runInput(run, events, { selectedTaskId: "first", notice, rows: 24 }),
+    );
+    // 24 rows - header - 12 notice rows - footer leaves exactly the fixed detail budget.
+    expect(taskDetailGateRows(view)).toBe(0);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("Gates - 2 hidden");
+    expect(text).not.toContain("lint fail");
   });
 });
 

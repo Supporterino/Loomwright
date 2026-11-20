@@ -36,10 +36,10 @@ interface GateWindow {
 
 /**
  * The rows that fit, cutting the tail of the list; the final row counts what it hides so a gate
- * result is never silently dropped.
+ * result is never silently dropped. With no row to spare the count moves into the title instead.
  */
 function windowGates(gates: readonly GateRow[], rows: number): GateWindow {
-  if (rows <= 0) return { shown: [], more: 0 };
+  if (rows <= 0) return { shown: [], more: gates.length };
   if (gates.length <= rows) return { shown: gates, more: 0 };
   const shown = gates.slice(0, rows - 1);
   return { shown, more: gates.length - shown.length };
@@ -91,6 +91,8 @@ export function TaskDetail({
   const statusWidth = gates.reduce((width, gate) => Math.max(width, gate.status.length), 0);
   const widths = { name: nameWidth, status: statusWidth };
   const gateWindow = windowGates(gates, gateRows);
+  // No gate row fits: the count folds into the title row the fixed budget already pays for.
+  const foldedGates = gateRows <= 0 && gates.length > 0;
   return (
     <Box flexDirection="column">
       {facts.map((fact) => (
@@ -99,7 +101,7 @@ export function TaskDetail({
           <Text {...(fact.bold ? { bold: true } : {})}>{fact.value}</Text>
         </Text>
       ))}
-      <Text bold>Gates</Text>
+      <Text bold>{foldedGates ? `Gates ${glyphs.bullet} ${gateWindow.more} hidden` : "Gates"}</Text>
       {gates.length === 0 ? (
         <Text {...colorProps("muted", depth)}>no gate results</Text>
       ) : (
@@ -112,7 +114,7 @@ export function TaskDetail({
               {gateLine(gate.name, gate.status, formatElapsed(gate.durationMs), widths)}
             </Text>
           ))}
-          {gateWindow.more === 0 ? null : (
+          {gateWindow.more === 0 || foldedGates ? null : (
             <Text {...colorProps("muted", depth)}>{`${gateWindow.more} more gates`}</Text>
           )}
         </>
