@@ -214,6 +214,22 @@ describe("a failed child is visible", () => {
     expect(tailLog(join(ws, "missing.log"))).toEqual([]);
   });
 
+  test("a failed land's log tail carries no escape sequences", () => {
+    const ws = workspace();
+    const logPath = join(ws, "spawn.log");
+    writeFileSync(
+      logPath,
+      "\u001b[2Jcleared\u0007\n\u001b]52;c;SGVsbG8=\u0007clip\u009b\tkept\r\nplain\n",
+    );
+
+    const tail = tailLog(logPath);
+
+    expect(tail).toEqual(["[2Jcleared", "]52;c;SGVsbG8=clip\tkept", "plain"]);
+    const isControl = (character: string): boolean =>
+      /\p{Cc}/u.test(character) && character !== "\t" && character !== "\n";
+    for (const line of tail) expect([...line].some(isControl)).toBe(false);
+  });
+
   test("a failed spawn is visible: error resolves a non-zero exit and the tail", async () => {
     const ws = workspace();
     const calls: SpawnCall[] = [];

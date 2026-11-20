@@ -7,6 +7,7 @@ import { type ChildProcess, spawn as defaultSpawn } from "node:child_process";
 import { appendFileSync, closeSync, fstatSync, mkdirSync, openSync, readSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import process from "node:process";
+import { stripControls } from "../model/format.ts";
 
 export type LaunchAction =
   | { readonly kind: "run-text"; readonly text: string }
@@ -158,7 +159,8 @@ export function tailLog(logPath: string, lines = 10): readonly string[] {
   } catch {
     return [];
   }
-  const rows = text.split(/\r?\n/u);
+  // Gate and agent output reaches a notice as-is, so a tail line never carries a terminal control.
+  const rows = text.split(/\r?\n/u).map(stripControls);
   if (rows.at(-1) === "") rows.pop();
   return rows.slice(-lines);
 }

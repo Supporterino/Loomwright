@@ -26,13 +26,19 @@ export function formatPercent(part: number, whole: number): string {
 }
 
 /**
+ * `text` without the C0/C1 controls that drive a terminal; tab and newline survive because they
+ * only lay text out (an `ESC[2J` or `OSC 52` would clear the screen or write the clipboard).
+ */
+export function stripControls(text: string): string {
+  return text.replace(/[^\P{Cc}\t\n]/gu, "");
+}
+
+/**
  * Readable text stays one line and carries no terminal controls: a payload's newlines never split
- * a row, and its escape sequences never reach the terminal (an `ESC[2J` or `OSC 52` would clear
- * the screen, write the clipboard or draw a fake prompt).
+ * a row, and its escape sequences never reach the terminal.
  */
 export function flat(text: string): string {
-  return text
-    .replace(/[^\P{Cc}\t\n]/gu, "")
+  return stripControls(text)
     .replace(/\s*[\r\n]+\s*/g, " ")
     .trim();
 }
