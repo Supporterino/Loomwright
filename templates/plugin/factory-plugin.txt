@@ -1902,7 +1902,7 @@ function expandScripts(state, dir, scripts, keys) {
       block(`script \`${key}\` expands into itself`);
     state.expanding.add(expansion);
     try {
-      checkScript(state, body);
+      scoped(state, () => checkScript(state, body));
     } finally {
       state.expanding.delete(expansion);
     }
@@ -2037,7 +2037,7 @@ function checkMake(state, args) {
         if (found)
           block(`make ${target}: ${found}`);
       } else
-        checkScript(state, line.replaceAll(DOLLAR, "$"));
+        scoped(state, () => checkScript(state, line.replaceAll(DOLLAR, "$")));
     }
   };
   for (const t of targets.length > 0 ? targets : first === undefined ? [] : [first])
@@ -2566,7 +2566,7 @@ function unwrap(state, words, stdin) {
       if (base === "flock") {
         const c = rest.indexOf("-c");
         if (c !== -1) {
-          checkScript(state, rest[c + 1] ?? "");
+          scoped(state, () => checkScript(state, rest[c + 1] ?? ""));
           return [];
         }
         i += 1;
@@ -2580,7 +2580,7 @@ function unwrap(state, words, stdin) {
       let i = 0;
       while (i < rest.length && (rest[i] ?? "").startsWith("-"))
         i += /^-(n|d)$/.test(rest[i] ?? "") ? 2 : 1;
-      checkScript(state, rest.slice(i).join(" "));
+      scoped(state, () => checkScript(state, rest.slice(i).join(" ")));
       return [];
     }
     return w;

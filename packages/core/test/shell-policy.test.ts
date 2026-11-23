@@ -30,6 +30,7 @@ const FILES: Record<string, string> = {
   [`${WT}/scripts/block-comment.ts`]: "/* git push */\nexport const x = 1;\n",
   [`${WT}/scripts/commented.sh`]:
     "#!/bin/bash\nset -e\n# git push is handled by the release workflow\necho ok\n",
+  [`${WT}/Makefile`]: "jump:\n\tcd sub\n",
 };
 const ctx: ShellContext = {
   cwd: WT,
@@ -491,6 +492,40 @@ describe("package scripts", () => {
       expect(checkShell(cmd, realCtx)).toEqual({ allowed: true });
     }
     expect(checkShell("bun add login", scriptsCtx)).toEqual({ allowed: true });
+  });
+});
+
+describe("a child shell's `cd` does not move the outer shell's directory", () => {
+  const reason = (cmd: string, context: ShellContext = ctx): string => {
+    const v = checkShell(cmd, context);
+    expect(v.allowed).toBe(false);
+    if (v.allowed) throw new Error(`expected \`${cmd}\` to be blocked`);
+    return v.reason;
+  };
+
+  test("a `cd` inside watch or flock -c does not move the outer shell's directory", () => {
+    for (const cmd of [
+      "watch 'cd sub' ; echo x > ../escaped.txt",
+      "flock -c 'cd sub' ; echo x > ../escaped.txt",
+    ])
+      expect(reason(cmd)).toContain("outside the session directory");
+  });
+
+  test("a `cd` inside a package script body does not move the outer shell's directory", () => {
+    const pkg = JSON.stringify({ scripts: { jump: "cd sub" } });
+    const context: ShellContext = {
+      ...ctx,
+      readFile: (abs) => (abs === `${WT}/package.json` ? pkg : FILES[abs]),
+    };
+    expect(reason("npm run jump ; echo x > ../escaped.txt", context)).toContain(
+      "outside the session directory",
+    );
+  });
+
+  test("a `cd` inside a make recipe does not move the outer shell's directory", () => {
+    expect(reason("make jump ; echo x > ../escaped.txt")).toContain(
+      "outside the session directory",
+    );
   });
 });
 

@@ -725,7 +725,8 @@ function expandScripts(
     if (state.expanding.has(expansion)) block(`script \`${key}\` expands into itself`);
     state.expanding.add(expansion);
     try {
-      checkScript(state, body);
+      // The script runs in its own shell, so a `cd` inside it must not move this one.
+      scoped(state, () => checkScript(state, body));
     } finally {
       state.expanding.delete(expansion);
     }
@@ -873,7 +874,7 @@ function checkMake(state: State, args: readonly string[]): void {
       if (/\$[({]/.test(line)) {
         const found = scanText(line);
         if (found) block(`make ${target}: ${found}`);
-      } else checkScript(state, line.replaceAll(DOLLAR, "$"));
+      } else scoped(state, () => checkScript(state, line.replaceAll(DOLLAR, "$")));
     }
   };
   for (const t of targets.length > 0 ? targets : first === undefined ? [] : [first]) visit(t);
@@ -1454,7 +1455,8 @@ function unwrap(state: State, words: string[], stdin: string | undefined | null)
       if (base === "flock") {
         const c = rest.indexOf("-c");
         if (c !== -1) {
-          checkScript(state, rest[c + 1] ?? "");
+          // `flock -c` runs the text in a child shell, so its `cd` stays there.
+          scoped(state, () => checkScript(state, rest[c + 1] ?? ""));
           return [];
         }
         i += 1; // lock file
@@ -1467,7 +1469,8 @@ function unwrap(state: State, words: string[], stdin: string | undefined | null)
       let i = 0;
       while (i < rest.length && (rest[i] ?? "").startsWith("-"))
         i += /^-(n|d)$/.test(rest[i] ?? "") ? 2 : 1;
-      checkScript(state, rest.slice(i).join(" "));
+      // `watch` runs the text in a child shell, so its `cd` stays there.
+      scoped(state, () => checkScript(state, rest.slice(i).join(" ")));
       return [];
     }
     return w;
