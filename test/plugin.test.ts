@@ -344,7 +344,12 @@ describe("plugin guards", () => {
     expect(() => create({ command: "id", env: {} })).toThrow("only through a factory agent");
 
     process.env.AI_FACTORY_SCRUB = "ANTHROPIC_API_KEY";
-    process.env.AI_FACTORY_SANDBOX = process.platform === "darwin" ? "seatbelt" : "off";
+    // A gate that wrapped this suite passes the marker down: keep it, since macOS cannot nest
+    // sandbox-exec. Otherwise force the profile this test asserts.
+    const saved = process.env.AI_FACTORY_SANDBOX;
+    const inherited = saved === "wrapped";
+    const profile = process.platform === "darwin" && !inherited;
+    process.env.AI_FACTORY_SANDBOX = profile ? "seatbelt" : inherited ? "wrapped" : "off";
     try {
       // A write the parser cannot see; the sandbox must stop it.
       const command = `echo inside > ok.txt; python3 -c "open('../escape.txt','w').write('x')"`;
@@ -360,11 +365,11 @@ describe("plugin guards", () => {
       create(event);
       expect(event.env).toEqual({
         PATH: "/usr/bin:/bin",
-        ...(process.platform === "darwin" ? { AI_FACTORY_SANDBOX: "wrapped" } : {}),
+        ...(profile ? { AI_FACTORY_SANDBOX: "wrapped" } : {}),
       });
       // The same command again needs its own guard pass.
       expect(() => create({ command, env: {} })).toThrow("only through a factory agent");
-      if (process.platform === "darwin") {
+      if (profile) {
         expect(event.command).toStartWith(
           "export AI_FACTORY_SANDBOX=wrapped; exec '/usr/bin/sandbox-exec' -p",
         );
@@ -375,7 +380,8 @@ describe("plugin guards", () => {
       }
     } finally {
       delete process.env.AI_FACTORY_SCRUB;
-      delete process.env.AI_FACTORY_SANDBOX;
+      if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
+      else process.env.AI_FACTORY_SANDBOX = saved;
     }
   });
 

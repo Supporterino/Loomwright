@@ -192,14 +192,21 @@ describe("runGates (single repo, override commands)", () => {
   test("gates run without credentials, with pushes blocked, and (macOS) sandboxed", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-test";
     const saved = process.env.AI_FACTORY_SANDBOX;
-    // The factory's own workspace may run this suite with the sandbox off; force the profile.
-    if (process.platform === "darwin") process.env.AI_FACTORY_SANDBOX = "seatbelt";
+    // A gate that wrapped this suite passes the marker down: keep it, since macOS cannot nest
+    // sandbox-exec. Otherwise force the profile this test asserts.
+    const inherited = saved === "wrapped";
+    const profile = process.platform === "darwin" && !inherited;
+    if (profile) process.env.AI_FACTORY_SANDBOX = "seatbelt";
     mkdirSync(join(fx.root, ".factory"), { recursive: true });
     try {
       const report = await run({
         format: `test "$AI_FACTORY_AGENT" = 1 && test -z "$ANTHROPIC_API_KEY"`,
         lint: "git config --get-regexp '^url\\.ai-factory-push-blocked' >/dev/null",
-        types: process.platform === "darwin" ? "! touch .factory/gate-was-here" : "true",
+        types: profile
+          ? "! touch .factory/gate-was-here"
+          : inherited
+            ? 'test "$AI_FACTORY_SANDBOX" = off'
+            : "true",
         testAffected: "true",
       });
       expect(report.results.map((r) => [r.type, r.status])).toEqual([
@@ -220,6 +227,8 @@ describe("runGates (single repo, override commands)", () => {
     "a gate that is already inside a profile is not wrapped again",
     async () => {
       const saved = process.env.AI_FACTORY_SANDBOX;
+      // Inside a wrapped gate the outer profile is the only one this run may use.
+      const inherited = saved === "wrapped";
       try {
         process.env.AI_FACTORY_SANDBOX = "wrapped";
         const unwrapped = await run({
@@ -231,15 +240,17 @@ describe("runGates (single repo, override commands)", () => {
         });
         expect(unwrapped.results.find((r) => r.type === "format")?.status).toBe("pass");
 
-        process.env.AI_FACTORY_SANDBOX = "seatbelt";
-        const wrapped = await run({
-          format: 'test "$AI_FACTORY_SANDBOX" = wrapped',
-          lint: "skip",
-          types: "skip",
-          test: "skip",
-          testAffected: "skip",
-        });
-        expect(wrapped.results.find((r) => r.type === "format")?.status).toBe("pass");
+        if (!inherited) {
+          process.env.AI_FACTORY_SANDBOX = "seatbelt";
+          const wrapped = await run({
+            format: 'test "$AI_FACTORY_SANDBOX" = wrapped',
+            lint: "skip",
+            types: "skip",
+            test: "skip",
+            testAffected: "skip",
+          });
+          expect(wrapped.results.find((r) => r.type === "format")?.status).toBe("pass");
+        }
       } finally {
         if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
         else process.env.AI_FACTORY_SANDBOX = saved;
