@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Factory, StatusDocument } from "@loomwright/core/factory";
 import type { ActiveLock } from "@loomwright/core/state/active";
 import { RunState, TaskState } from "@loomwright/core/state/run";
@@ -11,7 +14,7 @@ import {
   RunEvent as RunEventSchema,
   reduce,
 } from "@loomwright/protocol";
-import { runTui } from "../src/entry.tsx";
+import { REPLAY_READ_ONLY, runTui } from "../src/entry.tsx";
 import type { LaunchAction, Launcher } from "../src/launch/launcher.ts";
 import { collectFacts } from "../src/model/facts.ts";
 import { applyKey } from "../src/model/keys.ts";
@@ -73,6 +76,19 @@ function taskState(overrides: Record<string, unknown>): TaskState {
     status: "pending",
     ...overrides,
   });
+}
+
+function specFinding(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    severity: "must",
+    file: "src/app.ts",
+    line: 42,
+    what: "does the thing",
+    problem: "the thing breaks",
+    fix: "fix the thing",
+    impact: "the thing stays broken",
+    ...overrides,
+  };
 }
 
 function usageSummary(tokens: number, cost: number): UsageSummary {
@@ -1395,13 +1411,15 @@ interface DrivenRun {
 
 /**
  * Runs the interactive UI with fake stdio, drives keys until it quits and returns what Ink
- * wrote. With `CI` set Ink only writes the final frame, so a run asserts on that frame.
+ * wrote. With `CI` set Ink only writes the final frame, so a run asserts on that frame. A
+ * `replay` path drives the read-only replay view instead of the live workspace.
  */
 async function driveTui(
   factory: Factory,
   drive: (input: FakeInput, output: FakeOutput) => Promise<void>,
   launcher?: Launcher,
   frames = false,
+  replay?: string,
 ): Promise<DrivenRun> {
   const input = new FakeInput();
   const output = new FakeOutput();
@@ -1424,7 +1442,8 @@ async function driveTui(
     Object.defineProperty(process, "stdin", { value: input, configurable: true });
     Object.defineProperty(process, "stdout", { value: output, configurable: true });
     const code = runTui({
-      workspace: "/workspace",
+      workspace: replay === undefined ? "/workspace" : null,
+      ...(replay === undefined ? {} : { replay }),
       once: false,
       ascii: true,
       columns: 80,
@@ -1899,5 +1918,140 @@ describe("the interactive entry", () => {
     expect(result.code).toBe(0);
     expect(afterBackspace).toContain("answer>");
     expect(afterBackspace).not.toContain("answer> x");
+  });
+
+  test("w on a paused run with findings opens the reword panel", async () => {
+    const run = runState({ phase: "paused", specFindings: [specFinding()] });
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the paused run view", () =>
+          output.text().includes(`${RUN} paused`),
+        );
+        await pressUntil(input, "w", "the reword panel", () =>
+          output.text().includes(`Reword - ${RUN}`),
+        );
+        expect(output.text()).toContain("1. must");
+        expect(output.text()).toContain("src/app.ts:42");
+        // q types into the prompt, so Ctrl-C is the way out of the panel.
+        input.press("\u0003");
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.writes.join("")).toContain(`Reword - ${RUN}`);
+  });
+
+  test("w on a driven run shows the reason as a notice", async () => {
+    const run = runState({ phase: "implementing", specFindings: [specFinding()] });
+    const lock: ActiveLock = { changeId: RUN, pid: 4242, host: "host", since: ISO };
+    const reason = `${RUN} is being driven by pid 4242; stop it first`;
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }], { active: lock }), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the driven run view", () =>
+          output.text().includes(`${RUN} implementing`),
+        );
+        await pressUntil(input, "w", "the inert notice", () => output.text().includes(reason));
+        input.press("q");
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.writes.join("")).toContain(reason);
+  });
+
+  test("w on a design run does nothing", async () => {
+    const run = runState({ phase: "design", specFindings: [specFinding()] });
+    let after = "";
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the design run view", () =>
+          output.text().includes(`${RUN} design`),
+        );
+        const mark = output.writes.length;
+        input.press("w");
+        await pause();
+        after = output.writes.slice(mark).join("");
+        // q only quits if w did not open the reword prompt.
+        input.press("q");
+        await pause();
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(after).not.toContain(`Reword - ${RUN}`);
+  });
+
+  test("w on a done run does nothing", async () => {
+    const run = runState({ phase: "done", specFindings: [specFinding()] });
+    let after = "";
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the done run view", () =>
+          output.text().includes(`${RUN} done`),
+        );
+        const mark = output.writes.length;
+        input.press("w");
+        await pause();
+        after = output.writes.slice(mark).join("");
+        // q only quits if w did not open the reword prompt.
+        input.press("q");
+        await pause();
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(after).not.toContain(`Reword - ${RUN}`);
+  });
+
+  test("replay shows the read-only notice when w is pressed", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-replay-"));
+    const path = join(dir, "implementing.jsonl");
+    writeFileSync(
+      path,
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"implementing"}}',
+        "",
+      ].join("\n"),
+    );
+    try {
+      const result = await driveTui(
+        listFactory(statusDoc([]), []),
+        async (input, output) => {
+          await until(() => output.text().includes(`${RUN} implementing`), "the replayed run view");
+          input.press("w");
+          await until(() => output.text().includes(REPLAY_READ_ONLY), "the read-only notice");
+          input.press("q");
+        },
+        undefined,
+        true,
+        path,
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.writes.join("")).toContain(REPLAY_READ_ONLY);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

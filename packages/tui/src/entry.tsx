@@ -1892,6 +1892,7 @@ async function runReplay(options: TerminalOptions, replay: string): Promise<numb
           stdin: process.stdin,
           patchConsole: false,
           exitOnCtrlC: false,
+          debug: options.frames === true,
         });
         await instance.waitUntilExit();
       },
