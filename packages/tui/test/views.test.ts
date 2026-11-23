@@ -628,7 +628,7 @@ describe("run view layout", () => {
     expect(text).not.toContain("no activity yet");
   });
 
-  test("an 80x24 frame keeps its four-row tail by shrinking the graph", async () => {
+  test("the tail keeps its floor on a short terminal: 80x24 keeps four rows by shrinking the graph", async () => {
     const tasks = Array.from({ length: 24 }, (_, index) =>
       taskState({ id: `task-${index}`, title: `Task ${index}` }),
     );

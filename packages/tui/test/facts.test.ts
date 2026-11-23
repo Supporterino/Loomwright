@@ -137,7 +137,7 @@ function usageSummary(): UsageSummary {
 }
 
 describe("every run event folds into the activity facts", () => {
-  test("every event type is folded: each non-heartbeat type has a line and no type is dropped", () => {
+  test("every event type is exercised: each non-heartbeat type has a line and no type is dropped", () => {
     const nonHeartbeats = EVENT_TYPES.filter((type) => type !== "heartbeat");
     const events = nonHeartbeats.map((type, index) => event(index + 1, type, PAYLOADS[type]));
     // A burst of consecutive heartbeats at the end coalesces into one line.
