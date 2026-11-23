@@ -2732,18 +2732,26 @@ function checkSimple(state, cmd, stdin) {
       break;
     }
     const operand = args[i];
-    if (c)
-      return checkScript(state, operand ?? "");
-    if (!fromStdin && operand !== undefined)
-      return checkScriptFile(state, operand, "shell");
-    if (heredoc !== undefined)
-      return checkScript(state, heredoc);
-    if (inputFile !== undefined)
-      return checkScriptFile(state, inputFile, "shell");
+    if (c) {
+      scoped(state, () => checkScript(state, operand ?? ""));
+      return;
+    }
+    if (!fromStdin && operand !== undefined) {
+      scoped(state, () => checkScriptFile(state, operand, "shell"));
+      return;
+    }
+    if (heredoc !== undefined) {
+      scoped(state, () => checkScript(state, heredoc));
+      return;
+    }
+    if (inputFile !== undefined) {
+      scoped(state, () => checkScriptFile(state, inputFile, "shell"));
+      return;
+    }
     if (stdin === null)
       block(`pipes generated input into ${base}`);
     if (stdin !== undefined)
-      checkScript(state, stdin);
+      scoped(state, () => checkScript(state, stdin));
     return;
   }
   if (base === "source" || base === ".") {
@@ -2825,8 +2833,10 @@ function checkSimple(state, cmd, stdin) {
     checkSed(state, args);
   if (base === "script") {
     const c = args.findIndex((a) => a === "-c" || a === "--command");
-    if (c !== -1)
-      return checkScript(state, args[c + 1] ?? "");
+    if (c !== -1) {
+      scoped(state, () => checkScript(state, args[c + 1] ?? ""));
+      return;
+    }
   }
   if (base === "fd" || base === "fdfind") {
     const x = args.findIndex((a) => ["-x", "--exec", "-X", "--exec-batch"].includes(a));
@@ -2836,7 +2846,7 @@ function checkSimple(state, cmd, stdin) {
     }
   }
   if (head.includes("/"))
-    checkScriptFile(state, head, "shell");
+    scoped(state, () => checkScriptFile(state, head, "shell"));
   switch (base) {
     case "git":
       return checkGit(state, args);
@@ -3072,10 +3082,14 @@ function checkPipeline(state, pipeline, inherited) {
 }
 function scoped(state, fn) {
   const cwd = state.cwd;
+  const aliases = new Map(state.aliases);
   try {
     fn();
   } finally {
     state.cwd = cwd;
+    state.aliases.clear();
+    for (const [name, value] of aliases)
+      state.aliases.set(name, value);
   }
 }
 function checkScriptAst(state, script, inherited) {

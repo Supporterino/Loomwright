@@ -408,6 +408,20 @@ describe("package scripts", () => {
     });
   });
 
+  test("an alias defined inside npx -c, sh -c or a subshell does not leak to the outer script", () => {
+    for (const cmd of [
+      "npx -c 'alias git=echo' ; git push",
+      "pnpx --call='alias git=echo' ; git push",
+      "sh -c 'alias git=echo' ; git push",
+      "script -c 'alias git=echo' ; git push",
+      "(alias git=echo) ; git push",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+    expect(reason("npx -c 'alias npm=echo' ; npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+  });
+
   test("the call flag is inspected in its `-c=<text>` and clustered spellings", () => {
     for (const cmd of ["npx -c='git push'", "pnpx -c='git push'", "npx -yc='git push'"])
       expect(reason(cmd, scriptsCtx)).toContain("git push");

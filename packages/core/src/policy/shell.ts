@@ -1620,12 +1620,24 @@ function checkSimple(
       break;
     }
     const operand = args[i];
-    if (c) return checkScript(state, operand ?? "");
-    if (!fromStdin && operand !== undefined) return checkScriptFile(state, operand, "shell");
-    if (heredoc !== undefined) return checkScript(state, heredoc);
-    if (inputFile !== undefined) return checkScriptFile(state, inputFile, "shell");
+    if (c) {
+      scoped(state, () => checkScript(state, operand ?? ""));
+      return;
+    }
+    if (!fromStdin && operand !== undefined) {
+      scoped(state, () => checkScriptFile(state, operand, "shell"));
+      return;
+    }
+    if (heredoc !== undefined) {
+      scoped(state, () => checkScript(state, heredoc));
+      return;
+    }
+    if (inputFile !== undefined) {
+      scoped(state, () => checkScriptFile(state, inputFile, "shell"));
+      return;
+    }
     if (stdin === null) block(`pipes generated input into ${base}`);
-    if (stdin !== undefined) checkScript(state, stdin);
+    if (stdin !== undefined) scoped(state, () => checkScript(state, stdin));
     return;
   }
   if (base === "source" || base === ".") {
@@ -1700,7 +1712,10 @@ function checkSimple(
   if (base === "sed" || base === "gsed") checkSed(state, args);
   if (base === "script") {
     const c = args.findIndex((a) => a === "-c" || a === "--command");
-    if (c !== -1) return checkScript(state, args[c + 1] ?? "");
+    if (c !== -1) {
+      scoped(state, () => checkScript(state, args[c + 1] ?? ""));
+      return;
+    }
   }
   if (base === "fd" || base === "fdfind") {
     const x = args.findIndex((a) => ["-x", "--exec", "-X", "--exec-batch"].includes(a));
@@ -1713,7 +1728,7 @@ function checkSimple(
       return;
     }
   }
-  if (head.includes("/")) checkScriptFile(state, head, "shell");
+  if (head.includes("/")) scoped(state, () => checkScriptFile(state, head, "shell"));
 
   switch (base) {
     case "git":
@@ -1951,13 +1966,16 @@ function checkPipeline(
   });
 }
 
-/** Subshells and substitutions do not change the parent's directory. */
+/** Subshells and substitutions change neither the parent's directory nor its aliases. */
 function scoped(state: State, fn: () => void): void {
   const cwd = state.cwd;
+  const aliases = new Map(state.aliases);
   try {
     fn();
   } finally {
     state.cwd = cwd;
+    state.aliases.clear();
+    for (const [name, value] of aliases) state.aliases.set(name, value);
   }
 }
 
