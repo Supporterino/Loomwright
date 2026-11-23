@@ -209,7 +209,7 @@ describe("documentation", () => {
     expect(read("docs/decisions/README.md")).toContain("| [0046](0046-typed-event-stream.md)");
   });
 
-  test("ADR-0049 routes the package-runner aliases through the checks", () => {
+  test("the ADR exists and is indexed (ADR-0049)", () => {
     const adr = read("docs/decisions/0049-package-runner-aliases.md");
     expect(adr.startsWith("# 0049 — ")).toBe(true);
     expect(adr).toContain("## Context");
@@ -217,6 +217,7 @@ describe("documentation", () => {
     expect(adr).toContain("## Consequences");
     expect(adr).toContain("npx");
     expect(adr).toContain("pnpx");
+    expect(adr).toContain("routed, not blocked");
     expect(adr).not.toContain("Loomwright");
     expect(read("docs/decisions/README.md")).toContain("| [0049](0049-package-runner-aliases.md)");
   });
@@ -410,10 +411,25 @@ describe("compatibility surface", () => {
     expect(isHistoricalSnapshot("test/fixtures/install-0.13.0.json")).toBe(false);
   });
 
-  test("the workspace sandbox setting is pinned to off (ADR-0041)", () => {
+  test("the ADR says superseded and the setting stays off (ADR-0041)", () => {
     const config = read("factory.config.jsonc");
     expect(config).toContain('"security": { "sandbox": "off" }');
     expect(config).toContain("ADR-0041");
+
+    const adr = read("docs/decisions/0041-unsandboxed-workspace.md");
+    expect(adr).toContain("The nesting guard supersedes this exception");
+    expect(adr).toContain("manual, post-landing edit of the protected `factory.config.jsonc`");
+    expect(adr).not.toContain("Loomwright");
+  });
+
+  test("ADR-0026 names the off-macOS residual", () => {
+    const adr = read("docs/decisions/0026-hardening-and-sandbox.md");
+    expect(adr).toContain("heuristic");
+    expect(adr).toContain("glob expansion and other-language source scans");
+    expect(adr).toContain(
+      "the shell parser and the edit-scope check are the only backstop on hosts without a sandbox",
+    );
+    expect(adr).not.toContain("Loomwright");
   });
 });
 
