@@ -483,6 +483,20 @@ describe("package scripts", () => {
     expect(reason("npx --color npm publish", scriptsCtx)).toContain("publishing is not allowed");
   });
 
+  test("an empty short-flag value does not hide the wrapped command", () => {
+    for (const cmd of [
+      "npx -p= npm publish",
+      "npx -w= npm publish",
+      "npx -C= npm publish",
+      "npx -yp= npm publish",
+      "pnpx -p= npm publish",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of ["npx -p= npm install -g left-pad", "npx -L= npm install -g left-pad"])
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    expect(checkShell("npx -p= tsc --version", realCtx)).toEqual({ allowed: true });
+  });
+
   test("a `cd` inside npx -c call text does not move the outer shell's directory", () => {
     for (const cmd of [
       "npx -c 'cd sub' ; echo x > ../escaped.txt",

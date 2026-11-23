@@ -1833,7 +1833,7 @@ function checkPackageManager(state, tool, args, outer) {
           return;
         }
         if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
-          if (letters.slice(j + 1).replace(/^=/, "") === "")
+          if (letters.slice(j + 1) === "")
             i++;
           break;
         }

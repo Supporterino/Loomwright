@@ -616,8 +616,9 @@ function checkPackageManager(
           return;
         }
         if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
-          // `-w<value>` attaches the value; a bare flag takes the next word.
-          if (letters.slice(j + 1).replace(/^=/, "") === "") i++;
+          // Any remainder after the letter is the attached value, including `-w=` (empty value);
+          // only a bare letter takes the next word.
+          if (letters.slice(j + 1) === "") i++;
           break;
         }
       }
