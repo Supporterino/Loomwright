@@ -366,6 +366,25 @@ describe("package scripts", () => {
     expect(checkShell("bunx tsc", scriptsCtx)).toEqual({ allowed: true });
   });
 
+  test("npx and pnpx inspect the wrapped command instead of stopping at the alias", () => {
+    expect(reason("npx sh -c 'git push'", scriptsCtx)).toContain("git push");
+    expect(reason("pnpx sh -c 'git push'", scriptsCtx)).toContain("git push");
+    for (const cmd of ["npx npm publish", "pnpx npm publish", "npx -p npm@latest npm publish"])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of ["npx npm install -g left-pad", "pnpx npm install --global left-pad"])
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    expect(reason("npx -p typescript -c 'npm publish'", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx --call='npm publish'", scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of [
+      "npx vitest run",
+      "npx --no-install tsc --noEmit",
+      "npx -p typescript tsc --version",
+    ])
+      expect(checkShell(cmd, realCtx)).toEqual({ allowed: true });
+  });
+
   test("bun x passes piped, redirected and here-doc input to the wrapped interpreter", () => {
     expect(reason("printf 'git push' | bun x sh", scriptsCtx)).toContain("git push");
     expect(reason("printf 'git push' | bunx bash", scriptsCtx)).toContain("git push");

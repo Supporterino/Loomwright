@@ -1648,7 +1648,17 @@ function checkRecursiveSearch(state, base, args) {
       block(`searches \`${root}\`, which contains secret file \`${found}\`; search specific directories instead`);
   }
 }
-var PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx"]);
+var PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx", "npx", "pnpx"]);
+var NPX_VALUE_FLAGS = new Set([
+  "-p",
+  "--package",
+  "--shell",
+  "--prefix",
+  "--userconfig",
+  "--registry",
+  "--cache",
+  "--node-options"
+]);
 var BUN_GLOBAL_SUBCOMMANDS = new Set([
   "install",
   "i",
@@ -1697,6 +1707,47 @@ function bunRunScript(args, start) {
 function checkPackageManager(state, tool, args, outer) {
   if (tool === "bunx") {
     checkPackageManager(state, "bun", ["x", ...args], outer);
+    return;
+  }
+  if (tool === "npx" || tool === "pnpx") {
+    let i = 0;
+    for (;i < args.length; i++) {
+      const a = args[i] ?? "";
+      if (a === "--") {
+        i++;
+        break;
+      }
+      if (!a.startsWith("-") || a === "-")
+        break;
+      if (a === "-c" || a === "--call") {
+        const text = args[i + 1];
+        if (text !== undefined)
+          checkScript(state, text);
+        return;
+      }
+      if (a.startsWith("--call=")) {
+        checkScript(state, a.slice("--call=".length));
+        return;
+      }
+      if (!a.includes("=") && NPX_VALUE_FLAGS.has(a))
+        i++;
+    }
+    const wrapped = args.slice(i);
+    if (wrapped.length === 0)
+      return;
+    if (++state.depth > 25)
+      block("command nests too deeply to inspect");
+    try {
+      scoped(state, () => checkSimple(state, {
+        kind: "simple",
+        assigns: [],
+        words: wrapped,
+        redirects: [...outer.redirects],
+        substitutions: []
+      }, outer.stdin));
+    } finally {
+      state.depth--;
+    }
     return;
   }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;

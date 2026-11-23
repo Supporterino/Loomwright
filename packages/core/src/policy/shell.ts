@@ -397,7 +397,19 @@ function checkRecursiveSearch(state: State, base: string, args: readonly string[
 }
 
 /** Package managers whose global installs and publishing the guard refuses. */
-const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx"]);
+const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx", "npx", "pnpx"]);
+
+/** `npx`/`pnpx` options that take a value, so the value is not the wrapped command. */
+const NPX_VALUE_FLAGS = new Set([
+  "-p",
+  "--package",
+  "--shell",
+  "--prefix",
+  "--userconfig",
+  "--registry",
+  "--cache",
+  "--node-options",
+]);
 /** Bun subcommands where `-g` means a global install; `bun test -g` filters test names. */
 const BUN_GLOBAL_SUBCOMMANDS = new Set([
   "install",
@@ -466,6 +478,51 @@ function checkPackageManager(
   // `bunx` is Bun's documented alias for `bun x`: whatever it wraps gets the same checks.
   if (tool === "bunx") {
     checkPackageManager(state, "bun", ["x", ...args], outer);
+    return;
+  }
+  // `npx` and `pnpx` are package runners: skip the alias's own flags and inspect what it wraps.
+  // `-c`/`--call` carries a shell command line instead of a wrapped command.
+  if (tool === "npx" || tool === "pnpx") {
+    let i = 0;
+    for (; i < args.length; i++) {
+      const a = args[i] ?? "";
+      if (a === "--") {
+        i++;
+        break;
+      }
+      if (!a.startsWith("-") || a === "-") break;
+      if (a === "-c" || a === "--call") {
+        const text = args[i + 1];
+        if (text !== undefined) checkScript(state, text);
+        return;
+      }
+      if (a.startsWith("--call=")) {
+        checkScript(state, a.slice("--call=".length));
+        return;
+      }
+      if (!a.includes("=") && NPX_VALUE_FLAGS.has(a)) i++;
+    }
+    const wrapped = args.slice(i);
+    if (wrapped.length === 0) return;
+    if (++state.depth > 25) block("command nests too deeply to inspect");
+    // A subprocess cannot change this shell's directory, so a wrapped `cd` must not either.
+    try {
+      scoped(state, () =>
+        checkSimple(
+          state,
+          {
+            kind: "simple",
+            assigns: [],
+            words: wrapped,
+            redirects: [...outer.redirects],
+            substitutions: [],
+          },
+          outer.stdin,
+        ),
+      );
+    } finally {
+      state.depth--;
+    }
     return;
   }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;

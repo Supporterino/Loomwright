@@ -202,6 +202,7 @@ describe("plugin bundle", () => {
   test("the regenerated bundle is committed and a root build matches it (run `bun run build:plugin`)", async () => {
     const bundle = readFileSync(PLUGIN_OUT, "utf8");
     expect(bundle).toContain("expands into itself");
+    expect(bundle).toContain("npx");
     expect(bundle).toBe(await bundlePlugin());
   });
 

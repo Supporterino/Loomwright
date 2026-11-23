@@ -209,6 +209,18 @@ describe("documentation", () => {
     expect(read("docs/decisions/README.md")).toContain("| [0046](0046-typed-event-stream.md)");
   });
 
+  test("ADR-0049 routes the package-runner aliases through the checks", () => {
+    const adr = read("docs/decisions/0049-package-runner-aliases.md");
+    expect(adr.startsWith("# 0049 — ")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).toContain("npx");
+    expect(adr).toContain("pnpx");
+    expect(adr).not.toContain("Loomwright");
+    expect(read("docs/decisions/README.md")).toContain("| [0049](0049-package-runner-aliases.md)");
+  });
+
   test("docs/events.md covers the contract", () => {
     const events = read("docs/events.md");
     for (const topic of [
