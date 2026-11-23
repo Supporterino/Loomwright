@@ -96,11 +96,12 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
     return <Text>No run selected.</Text>;
   }
   const single = singlePaneBudget(viewModel);
-  // One column of padding on each side; the right pane spends a column on its left padding but
-  // Ink still gives its content the full remainder, as the 120-column fixtures show.
+  // One column of padding on each side; the right pane spends one more on its left padding, so its
+  // content gets the remainder minus that column. Counting it here keeps a full-width line out of
+  // Ink's own truncation, which always ends in the non-ASCII ellipsis.
   const inner = Math.max(0, viewModel.columns - 2);
   const leftWidth = Math.max(0, Math.floor(inner / 2) - 1);
-  const rightWidth = Math.max(0, inner - leftWidth);
+  const rightWidth = Math.max(0, inner - leftWidth - 1);
   return (
     <Box flexDirection="column" paddingX={1}>
       <RunHeader run={run} glyphs={glyphs} depth={depth} />

@@ -535,7 +535,9 @@ describe("run view layout", () => {
         "run - run - started in design",
         "run - phase - intake -> design",
         "loomwright - install - install started",
-        "loomwright - install - install finished in 1.2s: bun install",
+        // The two-pane right pane is one column narrower than the leftover width (its left
+        // padding), so at 120 columns this line clips its tail and only the head is visible.
+        "loomwright - install - install finished in 1.2s",
         "run - log - design: 3 capabilities planned",
       ]) {
         expect(text).toContain(line);
@@ -1090,6 +1092,33 @@ describe("an ASCII activity line clips with ASCII", () => {
     expect(text).not.toContain("…");
     expect(text).toContain("...");
   });
+
+  // The right pane spends one column on its left padding, so its content is one cell narrower than
+  // the leftover width. A line that fills the old budget must be clipped here with the ASCII mark,
+  // inside the pane, or Ink re-cuts it with `…` and the ASCII promise breaks.
+  for (const { columns, detailLength, paneWidth } of [
+    { columns: 100, detailLength: 35, paneWidth: 49 },
+    { columns: 120, detailLength: 45, paneWidth: 59 },
+  ]) {
+    test(`a right-pane line that fills the budget at ${columns} columns clips with ASCII`, async () => {
+      const run = runState({ phase: "design" });
+      resetSeq();
+      const events = [
+        event("agent.activity", {
+          step: "first",
+          kind: "tool",
+          detail: "x".repeat(detailLength),
+        }),
+      ];
+      const view = buildViewModel(runInput(run, events, { selectedTaskId: null, columns }));
+      const text = await frame(view, columns, 40, true);
+      expect(text).toMatch(/^[\t\n -~]*$/u);
+      expect(text).not.toContain("…");
+      const line = text.split("\n").find((row) => row.includes("first - tool")) ?? "";
+      expect(line.length - line.indexOf("first")).toBe(paneWidth);
+      expect(line.endsWith("...")).toBe(true);
+    });
+  }
 
   test("a gate.started line with a long command at 120 columns clips in the list preview", async () => {
     const run = runState({
