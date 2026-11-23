@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { createSingleRepoFixture, type Fixture } from "../../../test/fixtures/workspaces.ts";
 import { cli } from "../../../test/helpers.ts";
@@ -18,10 +20,10 @@ function recorder(name: string, seen: string[][]): Command {
   };
 }
 
-function capturingIo(cwd: string): { io: Io; out: string[] } {
+function capturingIo(cwd: string): { io: Io; out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
-  return { io: { cwd, out: (text) => out.push(text), err: (text) => err.push(text) }, out };
+  return { io: { cwd, out: (text) => out.push(text), err: (text) => err.push(text) }, out, err };
 }
 
 describe("CLI usage", () => {
@@ -78,11 +80,13 @@ describe("CLI usage", () => {
   });
 
   test("a file named -h is not help", async () => {
-    const seen: string[][] = [];
-    const { io, out } = capturingIo(fx.root);
-    const code = await runCli(["run", "--request", "-h"], io, [recorder("run", seen)]);
-    expect(code).toBe(ExitCode.Ok);
-    expect(seen.at(-1)).toEqual(["--request", "-h"]);
+    writeFileSync(join(fx.root, "-h"), "Add a health endpoint\n");
+    const { io, out, err } = capturingIo(fx.root);
+    // The real `run` command parses `-h` as the `--request` value and reads the request from
+    // that file; it then stops at the install check, which only a non-empty request reaches.
+    const code = await runCli(["run", "--request", "-h"], io);
+    expect(code).toBe(ExitCode.Precondition);
+    expect(err.join("\n")).toContain("loomwright is not installed here");
     expect(out.join("\n")).not.toContain("Usage: loomwright");
   });
 
