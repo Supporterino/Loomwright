@@ -399,17 +399,108 @@ function checkRecursiveSearch(state: State, base: string, args: readonly string[
 /** Package managers whose global installs and publishing the guard refuses. */
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx", "npx", "pnpx"]);
 
-/** `npx`/`pnpx` options that take a value, so the value is not the wrapped command. */
+/**
+ * `npx`/`pnpx` options that take a value, so the value is not the wrapped command. These are
+ * npm's value-taking config definitions; `--fetch-*` is matched by prefix below. A value flag
+ * missing here would make its value look like the wrapped command and hide a blocked command.
+ */
 const NPX_VALUE_FLAGS = new Set([
   "-p",
-  "--package",
-  "--shell",
-  "--prefix",
-  "--userconfig",
-  "--registry",
+  "--_auth",
+  "--access",
+  "--also",
+  "--audit-level",
+  "--auth-type",
+  "--before",
+  "--browser",
+  "--ca",
   "--cache",
+  "--cache-max",
+  "--cache-min",
+  "--cafile",
+  "--call",
+  "--cert",
+  "--cidr",
+  "--cpu",
+  "--depth",
+  "--diff",
+  "--diff-dst-prefix",
+  "--diff-src-prefix",
+  "--diff-unified",
+  "--editor",
+  "--expect-result-count",
+  "--fetch-retries",
+  "--fetch-retry-factor",
+  "--fetch-retry-maxtimeout",
+  "--fetch-retry-mintimeout",
+  "--fetch-timeout",
+  "--git",
+  "--globalconfig",
+  "--heading",
+  "--https-proxy",
+  "--include",
+  "--init-author-email",
+  "--init-author-name",
+  "--init-author-url",
+  "--init-license",
+  "--init-module",
+  "--init-type",
+  "--init-version",
+  "--init.author.email",
+  "--init.author.name",
+  "--init.author.url",
+  "--init.license",
+  "--init.module",
+  "--init.version",
+  "--install-strategy",
+  "--key",
+  "--libc",
+  "--local-address",
+  "--location",
+  "--lockfile-version",
+  "--loglevel",
+  "--logs-dir",
+  "--logs-max",
+  "--maxsockets",
+  "--message",
+  "--node-gyp",
   "--node-options",
+  "--noproxy",
+  "--omit",
+  "--only",
+  "--os",
+  "--otp",
+  "--pack-destination",
+  "--package",
+  "--prefix",
+  "--preid",
+  "--provenance-file",
+  "--proxy",
+  "--registry",
+  "--replace-registry-host",
+  "--save-prefix",
+  "--sbom-format",
+  "--sbom-type",
+  "--scope",
+  "--script-shell",
+  "--searchexclude",
+  "--searchlimit",
+  "--searchopts",
+  "--searchstaleness",
+  "--shell",
+  "--tag",
+  "--tag-version-prefix",
+  "--umask",
+  "--user-agent",
+  "--userconfig",
+  "--viewer",
+  "--which",
+  "--workspace",
 ]);
+/** npm's `--color` takes `always`, `true` or `false`; otherwise it is a bare boolean. */
+const NPX_COLOR_VALUES = new Set(["always", "true", "false"]);
+/** Single-letter npm flags that take a value (npm reads a cluster letter by letter). */
+const NPX_SHORT_VALUE_FLAGS = new Set(["m", "C", "L", "p", "w"]);
 /** Bun subcommands where `-g` means a global install; `bun test -g` filters test names. */
 const BUN_GLOBAL_SUBCOMMANDS = new Set([
   "install",
@@ -507,7 +598,9 @@ function checkPackageManager(
           checkScriptText(state, a.slice("--call=".length), outer);
           return;
         }
-        if (NPX_VALUE_FLAGS.has(a)) i++;
+        const next = args[i + 1] ?? "";
+        if (a === "--color" && NPX_COLOR_VALUES.has(next)) i++;
+        else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-"))) i++;
         continue;
       }
       // npm reads a single-dash cluster as its letters (`-yp <pkg>` is `-y -p <pkg>`), so expand
@@ -522,8 +615,8 @@ function checkPackageManager(
           if (text !== undefined) checkScriptText(state, text, outer);
           return;
         }
-        if (ch === "p") {
-          // `-p<value>` attaches the package; a bare `-p` takes the next word.
+        if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
+          // `-w<value>` attaches the value; a bare flag takes the next word.
           if (letters.slice(j + 1).replace(/^=/, "") === "") i++;
           break;
         }

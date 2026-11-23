@@ -1651,14 +1651,99 @@ function checkRecursiveSearch(state, base, args) {
 var PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx", "npx", "pnpx"]);
 var NPX_VALUE_FLAGS = new Set([
   "-p",
-  "--package",
-  "--shell",
-  "--prefix",
-  "--userconfig",
-  "--registry",
+  "--_auth",
+  "--access",
+  "--also",
+  "--audit-level",
+  "--auth-type",
+  "--before",
+  "--browser",
+  "--ca",
   "--cache",
-  "--node-options"
+  "--cache-max",
+  "--cache-min",
+  "--cafile",
+  "--call",
+  "--cert",
+  "--cidr",
+  "--cpu",
+  "--depth",
+  "--diff",
+  "--diff-dst-prefix",
+  "--diff-src-prefix",
+  "--diff-unified",
+  "--editor",
+  "--expect-result-count",
+  "--fetch-retries",
+  "--fetch-retry-factor",
+  "--fetch-retry-maxtimeout",
+  "--fetch-retry-mintimeout",
+  "--fetch-timeout",
+  "--git",
+  "--globalconfig",
+  "--heading",
+  "--https-proxy",
+  "--include",
+  "--init-author-email",
+  "--init-author-name",
+  "--init-author-url",
+  "--init-license",
+  "--init-module",
+  "--init-type",
+  "--init-version",
+  "--init.author.email",
+  "--init.author.name",
+  "--init.author.url",
+  "--init.license",
+  "--init.module",
+  "--init.version",
+  "--install-strategy",
+  "--key",
+  "--libc",
+  "--local-address",
+  "--location",
+  "--lockfile-version",
+  "--loglevel",
+  "--logs-dir",
+  "--logs-max",
+  "--maxsockets",
+  "--message",
+  "--node-gyp",
+  "--node-options",
+  "--noproxy",
+  "--omit",
+  "--only",
+  "--os",
+  "--otp",
+  "--pack-destination",
+  "--package",
+  "--prefix",
+  "--preid",
+  "--provenance-file",
+  "--proxy",
+  "--registry",
+  "--replace-registry-host",
+  "--save-prefix",
+  "--sbom-format",
+  "--sbom-type",
+  "--scope",
+  "--script-shell",
+  "--searchexclude",
+  "--searchlimit",
+  "--searchopts",
+  "--searchstaleness",
+  "--shell",
+  "--tag",
+  "--tag-version-prefix",
+  "--umask",
+  "--user-agent",
+  "--userconfig",
+  "--viewer",
+  "--which",
+  "--workspace"
 ]);
+var NPX_COLOR_VALUES = new Set(["always", "true", "false"]);
+var NPX_SHORT_VALUE_FLAGS = new Set(["m", "C", "L", "p", "w"]);
 var BUN_GLOBAL_SUBCOMMANDS = new Set([
   "install",
   "i",
@@ -1730,7 +1815,10 @@ function checkPackageManager(state, tool, args, outer) {
           checkScriptText(state, a.slice("--call=".length), outer);
           return;
         }
-        if (NPX_VALUE_FLAGS.has(a))
+        const next = args[i + 1] ?? "";
+        if (a === "--color" && NPX_COLOR_VALUES.has(next))
+          i++;
+        else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-")))
           i++;
         continue;
       }
@@ -1744,7 +1832,7 @@ function checkPackageManager(state, tool, args, outer) {
             checkScriptText(state, text, outer);
           return;
         }
-        if (ch === "p") {
+        if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
           if (letters.slice(j + 1).replace(/^=/, "") === "")
             i++;
           break;

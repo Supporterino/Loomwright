@@ -426,6 +426,39 @@ describe("package scripts", () => {
     expect(checkShell("npx -yp typescript tsc --version", realCtx)).toEqual({ allowed: true });
   });
 
+  test("every npm config flag with a value is skipped before the wrapped command", () => {
+    for (const cmd of [
+      "npx --workspace . npm publish",
+      "npx -w . npm publish",
+      "npx --loglevel warn npm publish",
+      "npx --tag latest npm publish",
+      "npx --before 2020-01-01 npm publish",
+      "npx --browser firefox npm publish",
+      "npx --otp 123456 npm publish",
+      "npx --user-agent agent npm publish",
+      "npx --https-proxy http://proxy npm publish",
+      "npx --proxy http://proxy npm publish",
+      "npx --local-address 127.0.0.1 npm publish",
+      "npx --maxsockets 5 npm publish",
+      "npx --fetch-retries 3 npm publish",
+      "npx --fetch-timeout=1000 npm publish",
+      "npx --color always npm publish",
+      "npx --location global npm publish",
+      "npx -C ./prefix npm publish",
+      "pnpx --workspace . npm publish",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of [
+      "npx --omit dev npm install -g left-pad",
+      "npx --include dev npm install -g left-pad",
+      "npx -m message npm install -g left-pad",
+      "npx -L global npm install -g left-pad",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    expect(checkShell("npx --workspace . tsc --version", realCtx)).toEqual({ allowed: true });
+    expect(reason("npx --color npm publish", scriptsCtx)).toContain("publishing is not allowed");
+  });
+
   test("a `cd` inside npx -c call text does not move the outer shell's directory", () => {
     for (const cmd of [
       "npx -c 'cd sub' ; echo x > ../escaped.txt",
