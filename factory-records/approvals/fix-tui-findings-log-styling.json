@@ -1,0 +1,33 @@
+{
+  "changeId": "fix-tui-findings-log-styling",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "9f03fc4490f37de1e9d4b82d2cf106ef0531f3e4",
+  "hash": "0b5286e9c07a09b71e9b70abaeb1fe98a747798f872864af4c740301e8464712",
+  "approvedAt": "2026-11-23T09:01:30.548Z",
+  "history": [
+    {
+      "hash": "3d62ad31f2cbad23dcbe138e592e7a90fb61031fca1069af8698ef12b7c4880b",
+      "specCommit": "2f1820f17818e6fe93ffc36afab5f53e5ea4681f",
+      "at": "2026-11-20T12:08:04.176Z",
+      "reason": "manual re-approval"
+    },
+    {
+      "hash": "7b34fb2e3de0da6994f8716bf29f845c6635c233c4c45e5a7bfe2a25e16fa379",
+      "specCommit": "1fa1109fda6330d36fa9a4d253d52d23a66b781a",
+      "at": "2026-11-20T15:16:23.907Z",
+      "reason": "manual re-approval"
+    },
+    {
+      "hash": "bfaf8a44face9dc73d3812964b08a490f2d64cd3fed9584e88482439d1efdafd",
+      "specCommit": "f627176a63ac5bc861a399d5c6e229470bcf5b5b",
+      "at": "2026-11-20T17:07:43.003Z",
+      "reason": "manual re-approval"
+    },
+    {
+      "hash": "62f6d48a03f0e14d704eac778456568ff7079200b0d7e03190e23d85111af577",
+      "specCommit": "9463c58dd20fbcb4efb5de51c546710a3a11d91f",
+      "at": "2026-11-20T19:26:39.125Z",
+      "reason": "manual re-approval"
+    }
+  ]
+}
