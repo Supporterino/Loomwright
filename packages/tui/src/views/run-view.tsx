@@ -66,18 +66,26 @@ function ActivitySection({
   depth,
   maxLines,
   spaced,
+  columns,
 }: {
   readonly lines: readonly ActivityLine[];
   readonly glyphs: GlyphSet;
   readonly depth: ColorDepth;
   readonly maxLines: number;
   readonly spaced: boolean;
+  readonly columns: number;
 }): ReactElement {
   return (
     <>
       {spaced ? <Text> </Text> : null}
       <Text bold>Activity</Text>
-      <ActivityTail lines={lines} glyphs={glyphs} depth={depth} maxLines={maxLines} />
+      <ActivityTail
+        lines={lines}
+        glyphs={glyphs}
+        depth={depth}
+        maxLines={maxLines}
+        columns={columns}
+      />
     </>
   );
 }
@@ -88,6 +96,11 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
     return <Text>No run selected.</Text>;
   }
   const single = singlePaneBudget(viewModel);
+  // One column of padding on each side; the right pane spends a column on its left padding but
+  // Ink still gives its content the full remainder, as the 120-column fixtures show.
+  const inner = Math.max(0, viewModel.columns - 2);
+  const leftWidth = Math.max(0, Math.floor(inner / 2) - 1);
+  const rightWidth = Math.max(0, inner - leftWidth);
   return (
     <Box flexDirection="column" paddingX={1}>
       <RunHeader run={run} glyphs={glyphs} depth={depth} />
@@ -98,10 +111,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
       )}
       {twoPane ? (
         <Box flexDirection="row">
-          <Box
-            flexDirection="column"
-            width={Math.max(0, Math.floor((viewModel.columns - 2) / 2) - 1)}
-          >
+          <Box flexDirection="column" width={leftWidth}>
             <TaskGraph
               tasks={run.tasks}
               window={viewModel.taskWindow}
@@ -117,6 +127,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
                 depth={depth}
                 maxLines={Math.max(0, twoPaneTailRows(viewModel) - 2)}
                 spaced={true}
+                columns={rightWidth}
               />
             ) : (
               <TaskDetail
@@ -125,6 +136,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
                 depth={depth}
                 maxLines={taskDetailTailRows(viewModel)}
                 gateRows={taskDetailGateRows(viewModel)}
+                columns={rightWidth}
               />
             )}
           </Box>
@@ -138,6 +150,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
             depth={depth}
             maxLines={single.tailRows}
             spaced={true}
+            columns={inner}
           />
         </Box>
       ) : (
@@ -147,6 +160,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
           depth={depth}
           maxLines={taskDetailTailRows(viewModel)}
           gateRows={taskDetailGateRows(viewModel)}
+          columns={inner}
         />
       )}
     </Box>

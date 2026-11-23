@@ -33,7 +33,8 @@ export function TaskGraph({ tasks, window, glyphs, depth }: TaskGraphProps): Rea
           <Text {...colorProps(statusToken(task.status), depth)}>
             {statusGlyph(task.status, glyphs)}
           </Text>
-          ] {task.id} {task.status} {task.repo} attempt {task.attempt} {truncate(task.title, 40)}
+          ] {task.id} {task.status} {task.repo} attempt {task.attempt}{" "}
+          {truncate(task.title, 40, glyphs)}
         </Text>
       ))}
     </Box>

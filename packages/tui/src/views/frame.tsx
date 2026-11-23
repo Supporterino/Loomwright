@@ -24,6 +24,8 @@ export interface FrameSize {
 
 export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
   const run = viewModel.run;
+  // The preview's right pane spends a column of padding before its activity lines.
+  const previewColumns = Math.max(0, viewModel.columns - Math.floor(viewModel.columns / 2) - 1);
   return (
     <Box flexDirection="column" width={viewModel.columns} height={viewModel.rows}>
       <Box flexDirection="column" flexGrow={1}>
@@ -48,6 +50,7 @@ export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
                   glyphs={glyphs}
                   depth={depth}
                   maxLines={twoPaneTailRows(viewModel)}
+                  columns={previewColumns}
                 />
               </Box>
             </Box>

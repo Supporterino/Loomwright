@@ -1,4 +1,5 @@
 /** Plain text formatting for the view-model: no colour, no terminal access. */
+import type { GlyphSet } from "../theme/glyphs.ts";
 
 /** `1h02m`, `3m12s`, `8s`; negative or invalid spans read as zero. */
 export function formatElapsed(ms: number): string {
@@ -43,10 +44,14 @@ export function flat(text: string): string {
     .trim();
 }
 
-/** Cuts text to `width` cells, ending in an ellipsis when anything was dropped. */
-export function truncate(text: string, width: number): string {
+/**
+ * Cuts text to `width` cells, ending in the frame's ellipsis when anything was dropped. Ink's own
+ * truncation is always `…`, so the mark follows the glyph set to keep an ASCII frame printable.
+ */
+export function truncate(text: string, width: number, glyphs: GlyphSet): string {
   if (width <= 0) return "";
   if (text.length <= width) return text;
-  if (width === 1) return "…";
-  return `${text.slice(0, width - 1)}…`;
+  const mark = glyphs.bullet === "-" ? "..." : "…";
+  if (width <= mark.length) return mark.slice(0, width);
+  return `${text.slice(0, width - mark.length)}${mark}`;
 }

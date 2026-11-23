@@ -35,6 +35,7 @@ import {
   pausedFindings,
   replayNotice,
 } from "../src/strings.ts";
+import { ASCII_GLYPHS, UNICODE_GLYPHS } from "../src/theme/glyphs.ts";
 
 const ISO = "2026-11-17T10:00:00.000Z";
 const RUN = "add-health";
@@ -185,8 +186,9 @@ describe("format", () => {
     expect(formatTokensShort(999)).toBe("999");
     expect(formatPercent(1, 4)).toBe("25%");
     expect(formatPercent(1, 0)).toBe("0%");
-    expect(truncate("health endpoint", 6)).toBe("healt…");
-    expect(truncate("short", 10)).toBe("short");
+    expect(truncate("health endpoint", 6, UNICODE_GLYPHS)).toBe("healt…");
+    expect(truncate("short", 10, UNICODE_GLYPHS)).toBe("short");
+    expect(truncate("health endpoint", 6, ASCII_GLYPHS)).toBe("hea...");
   });
 });
 

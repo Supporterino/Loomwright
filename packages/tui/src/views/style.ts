@@ -1,5 +1,6 @@
 /** Shared view helpers: colour lookup, separators and the status/phase glyph mapping. */
 import type { Phase } from "@loomwright/protocol";
+import { truncate } from "../model/format.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import { type ColorDepth, TOKENS, type TokenName } from "../theme/tokens.ts";
 
@@ -45,11 +46,7 @@ export function factLine(label: string, value: string, width: number): string {
 
 /** Cuts to `room` cells with the frame's ellipsis; Ink's own is always `…`, even in ASCII. */
 export function clip(text: string, room: number, glyphs: GlyphSet): string {
-  if (room <= 0) return "";
-  if (text.length <= room) return text;
-  const mark = glyphs.bullet === "-" ? "..." : "…";
-  if (room <= mark.length) return mark.slice(0, room);
-  return `${text.slice(0, room - mark.length)}${mark}`;
+  return truncate(text, room, glyphs);
 }
 
 export function statusGlyph(status: string, glyphs: GlyphSet): string {

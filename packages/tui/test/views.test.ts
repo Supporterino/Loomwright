@@ -1062,6 +1062,87 @@ describe("an ASCII panel clips its body with ASCII", () => {
   });
 });
 
+describe("an ASCII activity line clips with ASCII", () => {
+  const longCommand = `bun test ${"packages/tui/src/views ".repeat(8)}`;
+
+  function gateView(): ViewModel {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = [
+      event("gate.started", { name: "test", type: "test", command: longCommand, step: "first" }),
+    ];
+    return buildViewModel(runInput(run, events, { selectedTaskId: null }));
+  }
+
+  test("a gate.started line with a long command at 80 columns clips with '...'", async () => {
+    const text = await frame(gateView(), 80, 24, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("...");
+    for (const line of text.split("\n")) expect(line.length).toBeLessThanOrEqual(80);
+  });
+
+  test("a gate.started line with a long command at 120 columns clips in the two-pane run view", async () => {
+    const text = await frame(gateView(), 120, 40, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("...");
+  });
+
+  test("a gate.started line with a long command at 120 columns clips in the list preview", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = [
+      event("gate.started", { name: "test", type: "test", command: longCommand, step: "first" }),
+    ];
+    const view = buildViewModel(runInput(run, events, { screen: "list", selectedTaskId: null }));
+    const text = await frame(view, 120, 40, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("...");
+  });
+});
+
+describe("an ASCII task title clips with ASCII", () => {
+  test("a title over 40 characters clips with '...' in the graph and the detail", async () => {
+    const title = "A task title long enough to need clipping in both the graph and the detail pane";
+    const run = runState({
+      tasks: [taskState({ id: "first", title, repo: "app" })],
+    });
+    const graph = await frame(
+      buildViewModel(runInput(run, [], { selectedTaskId: null })),
+      80,
+      24,
+      true,
+    );
+    expect(graph).toMatch(/^[\t\n -~]*$/u);
+    expect(graph).not.toContain("…");
+    const graphRow = graph.split("\n").find((line) => line.includes("attempt 0"));
+    expect(graphRow).toBeDefined();
+    expect(graphRow).toContain(title.slice(0, 37));
+    expect(graphRow?.endsWith("...")).toBe(true);
+    expect(graphRow?.length).toBeLessThanOrEqual(80);
+
+    const detail = await frame(
+      buildViewModel(runInput(run, [], { selectedTaskId: "first" })),
+      80,
+      24,
+      true,
+    );
+    expect(detail).toMatch(/^[\t\n -~]*$/u);
+    expect(detail).not.toContain("…");
+    const detailRow = detail.split("\n").find((line) => line.trimStart().startsWith("task "));
+    expect(detailRow).toBeDefined();
+    expect(detailRow).toContain(title.slice(0, 53));
+    expect(detailRow?.endsWith("...")).toBe(true);
+    expect(detailRow?.length).toBeLessThanOrEqual(80);
+  });
+});
+
 describe("the terminal session", () => {
   test("a crash restores the terminal", () => {
     const writes: string[] = [];

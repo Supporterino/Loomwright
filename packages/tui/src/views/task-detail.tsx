@@ -15,6 +15,8 @@ export interface TaskDetailProps {
   readonly maxLines: number;
   /** Rows the gate list may use; the last one counts the gates it hides. */
   readonly gateRows: number;
+  /** The columns the detail may use; it clips its activity tail to them. */
+  readonly columns: number;
 }
 
 /** The fact labels; the widest one sets the column the values line up in. */
@@ -56,7 +58,7 @@ function factsOf(detail: TaskDetailView, glyphs: GlyphSet): readonly Fact[] {
   return [
     {
       label: "task",
-      value: `${task.id} ${glyphs.bullet} ${truncate(task.title, 56)}`,
+      value: `${task.id} ${glyphs.bullet} ${truncate(task.title, 56, glyphs)}`,
       bold: true,
     },
     { label: "status", value: task.status, bold: false },
@@ -83,6 +85,7 @@ export function TaskDetail({
   depth,
   maxLines,
   gateRows,
+  columns,
 }: TaskDetailProps): ReactElement {
   const { gates, activity } = detail;
   const facts = factsOf(detail, glyphs);
@@ -120,7 +123,13 @@ export function TaskDetail({
         </>
       )}
       <Text bold>Activity</Text>
-      <ActivityTail lines={activity} glyphs={glyphs} depth={depth} maxLines={maxLines} />
+      <ActivityTail
+        lines={activity}
+        glyphs={glyphs}
+        depth={depth}
+        maxLines={maxLines}
+        columns={columns}
+      />
     </Box>
   );
 }
