@@ -14,9 +14,10 @@ describe("the status --watch suite is deterministic", () => {
   test(`repeated parallel runs stay green (${REPETITIONS} repetitions)`, () => {
     const failures: string[] = [];
     for (let repetition = 1; repetition <= REPETITIONS; repetition += 1) {
+      // No `-t` filter: every watch test must repeat, including the ones that do not mention watch.
       const run = spawnSync(
         process.execPath,
-        ["test", WATCH_SUITE, "--parallel", "--timeout", "60000", "-t", "status --watch"],
+        ["test", WATCH_SUITE, "--parallel", "--timeout", "60000"],
         { cwd: ROOT, encoding: "utf8" },
       );
       if (run.status !== 0) {
