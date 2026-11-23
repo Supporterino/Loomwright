@@ -453,6 +453,46 @@ describe("package scripts", () => {
     expect(checkShell("npm x tsc --version", realCtx)).toEqual({ allowed: true });
   });
 
+  test("npm exec reads -p as parseable, not npx's value-taking package flag", () => {
+    expect(reason("npm exec -p npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(reason("npm x -p npm install -g left-pad", scriptsCtx)).toContain(
+      "global installs change the machine",
+    );
+    expect(reason("npm exec -w . npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(reason("npm -p exec npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(checkShell("npm exec -p tsc --version", realCtx)).toEqual({ allowed: true });
+  });
+
+  test("an npm config alias that takes a value is skipped before the wrapped command", () => {
+    for (const cmd of [
+      "npx --enjoy-by 2020-01-01 npm publish",
+      "npx --reg http://evil npm publish",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    expect(checkShell("npx --enjoy-by 2020-01-01 tsc --version", realCtx)).toEqual({
+      allowed: true,
+    });
+    expect(checkShell("npx --reg http://registry tsc --version", realCtx)).toEqual({
+      allowed: true,
+    });
+  });
+
+  test("a runner option with ambiguous arity is inspected with and without a value", () => {
+    expect(reason("npx --not-a-real-option value npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx --not-a-real-option npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npm exec --not-a-real-option value npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx --browser npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(checkShell("npx --not-a-real-option value tsc --version", realCtx)).toEqual({
+      allowed: true,
+    });
+  });
+
   test("bun x passes piped, redirected and here-doc input to the wrapped interpreter", () => {
     expect(reason("printf 'git push' | bun x sh", scriptsCtx)).toContain("git push");
     expect(reason("printf 'git push' | bunx bash", scriptsCtx)).toContain("git push");
@@ -542,6 +582,23 @@ describe("package scripts", () => {
       "npx --fetch-timeout=1000 npm publish",
       "npx --color always npm publish",
       "npx --location global npm publish",
+      "npx --expires 30 npm publish",
+      "npx --min-release-age 7 npm publish",
+      "npx --password pw npm publish",
+      "npx --name token npm publish",
+      "npx --allow-git none npm publish",
+      "npx --allow-directory none npm publish",
+      "npx --allow-file none npm publish",
+      "npx --allow-remote none npm publish",
+      "npx --allow-scripts none npm publish",
+      "npx --scopes @scope npm publish",
+      "npx --orgs org npm publish",
+      "npx --packages pkg npm publish",
+      "npx --orgs-permission read-write npm publish",
+      "npx --packages-and-scopes-permission read-write npm publish",
+      "npx --token-description desc npm publish",
+      "npx --enjoy-by 2020-01-01 npm publish",
+      "npx --reg http://registry npm publish",
       "npx -C ./prefix npm publish",
       "pnpx --workspace . npm publish",
     ])
@@ -549,6 +606,8 @@ describe("package scripts", () => {
     for (const cmd of [
       "npx --omit dev npm install -g left-pad",
       "npx --include dev npm install -g left-pad",
+      "npx --expires 30 npm install -g left-pad",
+      "npx --reg http://registry npm install --global left-pad",
       "npx -m message npm install -g left-pad",
       "npx -L global npm install -g left-pad",
     ])

@@ -400,19 +400,24 @@ function checkRecursiveSearch(state: State, base: string, args: readonly string[
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx", "npx", "pnpx"]);
 
 /**
- * `npx`/`pnpx` options that take a value, so the value is not the wrapped command. These are
- * npm's value-taking config definitions; `--fetch-*` is matched by prefix below. A value flag
- * missing here would make its value look like the wrapped command and hide a blocked command.
+ * npm config options that take a value, so the value is not the wrapped command. Shared by
+ * `npx`/`pnpx` and `npm exec`; `--fetch-*` is matched by prefix below. Aliases that expand to a
+ * value option (`--enjoy-by` → `--before`, `--reg` → `--registry`) are listed too. An option
+ * whose arity is missing here is still inspected under both interpretations, so it cannot hide
+ * the wrapped command.
  */
-const NPX_VALUE_FLAGS = new Set([
-  "-p",
+const NPM_VALUE_FLAGS = new Set([
   "--_auth",
   "--access",
+  "--allow-directory",
+  "--allow-file",
+  "--allow-git",
+  "--allow-remote",
+  "--allow-scripts",
   "--also",
   "--audit-level",
   "--auth-type",
   "--before",
-  "--browser",
   "--ca",
   "--cache",
   "--cache-max",
@@ -428,7 +433,9 @@ const NPX_VALUE_FLAGS = new Set([
   "--diff-src-prefix",
   "--diff-unified",
   "--editor",
+  "--enjoy-by",
   "--expect-result-count",
+  "--expires",
   "--fetch-retries",
   "--fetch-retry-factor",
   "--fetch-retry-maxtimeout",
@@ -463,25 +470,34 @@ const NPX_VALUE_FLAGS = new Set([
   "--logs-max",
   "--maxsockets",
   "--message",
+  "--min-release-age",
+  "--name",
   "--node-gyp",
   "--node-options",
   "--noproxy",
   "--omit",
   "--only",
+  "--orgs",
+  "--orgs-permission",
   "--os",
   "--otp",
   "--pack-destination",
   "--package",
+  "--packages",
+  "--packages-and-scopes-permission",
+  "--password",
   "--prefix",
   "--preid",
   "--provenance-file",
   "--proxy",
+  "--reg",
   "--registry",
   "--replace-registry-host",
   "--save-prefix",
   "--sbom-format",
   "--sbom-type",
   "--scope",
+  "--scopes",
   "--script-shell",
   "--searchexclude",
   "--searchlimit",
@@ -490,6 +506,7 @@ const NPX_VALUE_FLAGS = new Set([
   "--shell",
   "--tag",
   "--tag-version-prefix",
+  "--token-description",
   "--umask",
   "--user-agent",
   "--userconfig",
@@ -498,9 +515,11 @@ const NPX_VALUE_FLAGS = new Set([
   "--workspace",
 ]);
 /** npm's `--color` takes `always`, `true` or `false`; otherwise it is a bare boolean. */
-const NPX_COLOR_VALUES = new Set(["always", "true", "false"]);
-/** Single-letter npm flags that take a value (npm reads a cluster letter by letter). */
-const NPX_SHORT_VALUE_FLAGS = new Set(["m", "C", "L", "p", "w"]);
+const NPM_COLOR_VALUES = new Set(["always", "true", "false"]);
+/** Single-letter npm config flags that take a value (npm reads a cluster letter by letter). */
+const NPM_SHORT_VALUE_FLAGS = new Set(["c", "C", "L", "m", "w"]);
+/** `npx` adds `-p`/`--package` and `-n`/`--node-arg`; `npm exec -p` is the boolean `--parseable`. */
+const NPX_SHORT_VALUE_FLAGS = new Set([...NPM_SHORT_VALUE_FLAGS, "n", "p"]);
 /** Bun subcommands where `-g` means a global install; `bun test -g` filters test names. */
 const BUN_GLOBAL_SUBCOMMANDS = new Set([
   "install",
@@ -565,98 +584,176 @@ interface NpmSubcommand {
   readonly word: string;
 }
 
-/** npm's subcommand, after the config options npm accepts before it (`npm -w . exec`). */
-function npmSubcommand(args: readonly string[]): NpmSubcommand | undefined {
-  for (let i = 0; i < args.length; i++) {
+/**
+ * npm's possible subcommands, after the config options npm accepts before it (`npm -w . exec`).
+ * An option whose arity is unknown is read both as a bare flag and as value-taking, so no
+ * spelling can hide `exec`.
+ */
+function npmSubcommands(args: readonly string[]): NpmSubcommand[] {
+  const found = new Map<number, NpmSubcommand>();
+  const seen = new Set<number>();
+  const pending = [0];
+  while (pending.length > 0) {
+    const i = pending.pop();
+    if (i === undefined || seen.has(i)) continue;
+    seen.add(i);
+    if (i >= args.length) continue;
     const a = args[i] ?? "";
-    if (!a.startsWith("-") || a === "-") return { index: i, word: a };
+    if (a === "--") {
+      const next = args[i + 1];
+      if (next !== undefined) found.set(i + 1, { index: i + 1, word: next });
+      continue;
+    }
+    if (!a.startsWith("-") || a === "-") {
+      found.set(i, { index: i, word: a });
+      continue;
+    }
     if (a.startsWith("--")) {
       const next = args[i + 1] ?? "";
-      if (a === "--color" && NPX_COLOR_VALUES.has(next)) i++;
-      else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-"))) i++;
+      if (a === "--color" && NPM_COLOR_VALUES.has(next)) pending.push(i + 2);
+      else if (a.includes("=")) pending.push(i + 1);
+      else if (NPM_VALUE_FLAGS.has(a) || a.startsWith("--fetch-")) pending.push(i + 2);
+      else pending.push(i + 1, i + 2);
       continue;
     }
     // npm reads a single-dash cluster letter by letter; a bare value letter takes the next word.
+    let next: number | undefined;
     const letters = a.slice(1);
     for (let j = 0; j < letters.length; j++) {
       const ch = letters[j] ?? "";
-      if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
-        if (letters.slice(j + 1) === "") i++;
+      if (NPM_SHORT_VALUE_FLAGS.has(ch)) {
+        next = letters.slice(j + 1) === "" ? i + 2 : i + 1;
         break;
       }
     }
+    pending.push(next ?? i + 1);
   }
-  return undefined;
+  return [...found.values()].sort((a, b) => a.index - b.index);
+}
+
+interface PackageRunnerFlags {
+  readonly long: ReadonlySet<string>;
+  readonly short: ReadonlySet<string>;
+}
+
+const NPX_RUNNER_FLAGS: PackageRunnerFlags = {
+  long: NPM_VALUE_FLAGS,
+  short: NPX_SHORT_VALUE_FLAGS,
+};
+/** `npm exec` shares npm's config table, where `-p` is the boolean `--parseable`. */
+const NPM_EXEC_RUNNER_FLAGS: PackageRunnerFlags = {
+  long: NPM_VALUE_FLAGS,
+  short: NPM_SHORT_VALUE_FLAGS,
+};
+
+interface RunnerScan {
+  readonly starts: readonly number[];
+  readonly calls: readonly string[];
 }
 
 /**
- * `npx`, `pnpx` and `npm exec` are package runners: skip their own flags and inspect the command
- * they wrap. `-c`/`--call` carries a shell command line instead of a wrapped command.
+ * Where a runner's wrapped command may start, plus any `-c`/`--call` text. An unknown long
+ * option is scanned both as a bare flag and as taking the next word, so an option missing from
+ * the value table cannot shift the command out of view.
  */
-function checkPackageRunner(state: State, args: readonly string[], outer: InheritedInput): void {
-  let i = 0;
-  for (; i < args.length; i++) {
+function scanRunnerArgs(args: readonly string[], flags: PackageRunnerFlags): RunnerScan {
+  const starts = new Set<number>();
+  const calls: string[] = [];
+  const seen = new Set<number>();
+  const pending = [0];
+  while (pending.length > 0) {
+    const i = pending.pop();
+    if (i === undefined || seen.has(i)) continue;
+    seen.add(i);
+    if (i >= args.length) {
+      starts.add(i);
+      continue;
+    }
     const a = args[i] ?? "";
     if (a === "--") {
-      i++;
-      break;
+      starts.add(i + 1);
+      continue;
     }
-    if (!a.startsWith("-") || a === "-") break;
+    if (!a.startsWith("-") || a === "-") {
+      starts.add(i);
+      continue;
+    }
     if (a.startsWith("--")) {
       if (a === "--call") {
-        const text = args[i + 1];
-        if (text !== undefined) checkScriptText(state, text, outer);
-        return;
+        calls.push(args[i + 1] ?? "");
+        continue;
       }
       if (a.startsWith("--call=")) {
-        checkScriptText(state, a.slice("--call=".length), outer);
-        return;
+        calls.push(a.slice("--call=".length));
+        continue;
       }
       const next = args[i + 1] ?? "";
-      if (a === "--color" && NPX_COLOR_VALUES.has(next)) i++;
-      else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-"))) i++;
+      if (a === "--color" && NPM_COLOR_VALUES.has(next)) pending.push(i + 2);
+      else if (a.includes("=")) pending.push(i + 1);
+      else if (flags.long.has(a) || a.startsWith("--fetch-")) pending.push(i + 2);
+      else pending.push(i + 1, i + 2);
       continue;
     }
     // npm reads a single-dash cluster as its letters (`-yp <pkg>` is `-y -p <pkg>`), so expand
     // it before choosing the wrapped command. `-c` takes the call text attached (`-c=<text>`,
     // `-c<text>`) or as the next word; skipping `-c=<text>` would run it unchecked.
     const letters = a.slice(1);
+    let next: number | undefined;
+    let called = false;
     for (let j = 0; j < letters.length; j++) {
       const ch = letters[j] ?? "";
       if (ch === "c") {
         const attached = letters.slice(j + 1).replace(/^=/, "");
-        const text = attached !== "" ? attached : args[i + 1];
-        if (text !== undefined) checkScriptText(state, text, outer);
-        return;
+        calls.push(attached !== "" ? attached : (args[i + 1] ?? ""));
+        called = true;
+        break;
       }
-      if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
+      if (flags.short.has(ch)) {
         // Any remainder after the letter is the attached value, including `-w=` (empty value);
         // only a bare letter takes the next word.
-        if (letters.slice(j + 1) === "") i++;
+        next = letters.slice(j + 1) === "" ? i + 2 : i + 1;
         break;
       }
     }
+    if (!called) pending.push(next ?? i + 1);
   }
-  const wrapped = args.slice(i);
-  if (wrapped.length === 0) return;
-  if (++state.depth > 25) block("command nests too deeply to inspect");
-  // A subprocess cannot change this shell's directory, so a wrapped `cd` must not either.
-  try {
-    scoped(state, () =>
-      checkSimple(
-        state,
-        {
-          kind: "simple",
-          assigns: [],
-          words: wrapped,
-          redirects: [...outer.redirects],
-          substitutions: [],
-        },
-        outer.stdin,
-      ),
-    );
-  } finally {
-    state.depth--;
+  return { starts: [...starts].sort((a, b) => a - b), calls };
+}
+
+/**
+ * `npx`, `pnpx` and `npm exec` are package runners: skip their own flags and inspect the command
+ * they wrap. `-c`/`--call` carries a shell command line instead of a wrapped command.
+ */
+function checkPackageRunner(
+  state: State,
+  args: readonly string[],
+  outer: InheritedInput,
+  flags: PackageRunnerFlags,
+): void {
+  const { starts, calls } = scanRunnerArgs(args, flags);
+  for (const text of calls) checkScriptText(state, text, outer);
+  for (const start of starts) {
+    const wrapped = args.slice(start);
+    if (wrapped.length === 0) continue;
+    if (++state.depth > 25) block("command nests too deeply to inspect");
+    // A subprocess cannot change this shell's directory, so a wrapped `cd` must not either.
+    try {
+      scoped(state, () =>
+        checkSimple(
+          state,
+          {
+            kind: "simple",
+            assigns: [],
+            words: wrapped,
+            redirects: [...outer.redirects],
+            substitutions: [],
+          },
+          outer.stdin,
+        ),
+      );
+    } finally {
+      state.depth--;
+    }
   }
 }
 
@@ -680,15 +777,14 @@ function checkPackageManager(
   // `npx` and `pnpx` are package runners: skip the alias's own flags and inspect what it wraps.
   // `npm exec` and its `x` alias are the same runner, reached through npm's own config options.
   if (tool === "npx" || tool === "pnpx") {
-    checkPackageRunner(state, args, outer);
+    checkPackageRunner(state, args, outer, NPX_RUNNER_FLAGS);
     return;
   }
   if (tool === "npm") {
-    const cmd = npmSubcommand(args);
-    if (cmd !== undefined && (cmd.word === "exec" || cmd.word === "x")) {
-      checkPackageRunner(state, args.slice(cmd.index + 1), outer);
-      return;
-    }
+    const runners = npmSubcommands(args).filter((c) => c.word === "exec" || c.word === "x");
+    for (const cmd of runners)
+      checkPackageRunner(state, args.slice(cmd.index + 1), outer, NPM_EXEC_RUNNER_FLAGS);
+    if (runners.length > 0) return;
   }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
   const sub = cmd?.word;
