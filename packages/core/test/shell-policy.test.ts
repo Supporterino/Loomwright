@@ -444,13 +444,23 @@ describe("package scripts", () => {
     expect(reason("npm x -- npm install -g left-pad", scriptsCtx)).toContain(
       "global installs change the machine",
     );
-    for (const cmd of ["npm x -c 'git push'", "npm exec -c='git push'", "npm x --call 'git push'"])
+    for (const cmd of [
+      "npm x -c 'git push'",
+      "npm exec -c='git push'",
+      "npm x --call 'git push'",
+      // npm reads `--call`/`-c` from the whole argv, so the options before `exec` count too.
+      "npm --call 'git push' exec",
+      "npm --call='git push' x",
+      "npm -c 'git push' exec",
+      "npm -c='git push' exec",
+    ])
       expect(reason(cmd, scriptsCtx)).toContain("git push");
     expect(reason("npm exec --call 'npm publish'", scriptsCtx)).toContain(
       "publishing is not allowed",
     );
     expect(checkShell("npm exec -- tsc --version", realCtx)).toEqual({ allowed: true });
     expect(checkShell("npm x tsc --version", realCtx)).toEqual({ allowed: true });
+    expect(checkShell("npm --call 'tsc --version' exec", realCtx)).toEqual({ allowed: true });
   });
 
   test("npm exec reads -p as parseable, not npx's value-taking package flag", () => {

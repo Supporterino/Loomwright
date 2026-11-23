@@ -782,8 +782,13 @@ function checkPackageManager(
   }
   if (tool === "npm") {
     const runners = npmSubcommands(args).filter((c) => c.word === "exec" || c.word === "x");
-    for (const cmd of runners)
+    for (const cmd of runners) {
+      // npm reads `--call`/`-c` from the whole argv, so the options before `exec` carry the same
+      // call text as the ones after it.
+      for (const text of scanRunnerArgs(args.slice(0, cmd.index), NPM_EXEC_RUNNER_FLAGS).calls)
+        checkScriptText(state, text, outer);
       checkPackageRunner(state, args.slice(cmd.index + 1), outer, NPM_EXEC_RUNNER_FLAGS);
+    }
     if (runners.length > 0) return;
   }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
