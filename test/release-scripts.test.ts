@@ -50,6 +50,14 @@ describe("release scripts", () => {
 });
 
 describe("release workflows", () => {
+  test("the release jobs check out full history so the docs tests can read the change base", () => {
+    const checkouts = RELEASE_WORKFLOW.split(/^ {6}- /m).filter((step) =>
+      step.startsWith("uses: actions/checkout@"),
+    );
+    expect(checkouts.length).toBeGreaterThan(0);
+    for (const step of checkouts) expect(step).toContain("fetch-depth: 0");
+  });
+
   test("sync-version keeps the version file in lockstep and the release plan checks the new package", () => {
     expect(RELEASE_WORKFLOW).toContain('npm view "@loomwright/cli@$VERSION"');
     expect(RELEASE_WORKFLOW).toContain("require('./packages/cli/package.json')");
