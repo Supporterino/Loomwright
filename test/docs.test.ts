@@ -463,6 +463,9 @@ describe("terminal UI documentation", () => {
     expect(adr).toContain("React **19.3.1**");
     expect(adr).toContain("approval.pending");
     expect(adr).toContain("--replay");
+    expect(adr).not.toContain("about 1 MB");
+    expect(adr).toMatch(/\d{1,3}(,\d{3})* bytes/);
+    expect(adr).toContain("wc -c");
     expect(adr).not.toContain("Loomwright");
 
     const next = read("docs/decisions/0048-tui-scroll-log-and-reword.md");
