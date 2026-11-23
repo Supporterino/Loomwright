@@ -1722,11 +1722,11 @@ function checkPackageManager(state, tool, args, outer) {
       if (a === "-c" || a === "--call") {
         const text = args[i + 1];
         if (text !== undefined)
-          checkScript(state, text);
+          checkScriptText(state, text, outer);
         return;
       }
       if (a.startsWith("--call=")) {
-        checkScript(state, a.slice("--call=".length));
+        checkScriptText(state, a.slice("--call=".length), outer);
         return;
       }
       if (!a.includes("=") && NPX_VALUE_FLAGS.has(a))
@@ -2935,10 +2935,11 @@ function literalOutput(cmd) {
     return cmd.redirects.find((r) => r.body !== undefined)?.body;
   return;
 }
-function checkPipeline(state, pipeline) {
+function checkPipeline(state, pipeline, inherited) {
   const { commands } = pipeline;
   commands.forEach((cmd, i) => {
     const prev = commands[i - 1];
+    const input = prev === undefined ? inherited : undefined;
     let stdin;
     if (prev !== undefined) {
       const prevWords = prev.kind === "simple" ? prev.words : [];
@@ -2950,12 +2951,15 @@ function checkPipeline(state, pipeline) {
         }
       }
       stdin = literalOutput(prev) ?? null;
+    } else if (input !== undefined) {
+      stdin = input.stdin;
     }
+    const redirects = input === undefined ? cmd.redirects : [...cmd.redirects, ...input.redirects];
     if (cmd.kind === "subshell") {
-      checkRedirects(state, cmd.redirects);
-      scoped(state, () => checkScriptAst(state, cmd.script));
+      checkRedirects(state, redirects);
+      scoped(state, () => checkScriptAst(state, cmd.script, input));
     } else {
-      checkSimple(state, cmd, stdin);
+      checkSimple(state, { ...cmd, redirects }, stdin);
     }
   });
 }
@@ -2967,15 +2971,19 @@ function scoped(state, fn) {
     state.cwd = cwd;
   }
 }
-function checkScriptAst(state, script) {
+function checkScriptAst(state, script, inherited) {
   if (++state.depth > 25)
     block("command nests too deeply to inspect");
   try {
     for (const p of script.pipelines)
-      checkPipeline(state, p);
+      checkPipeline(state, p, inherited);
   } finally {
     state.depth--;
   }
+}
+function checkScriptText(state, text, inherited) {
+  checkScriptAst(state, parseScript(text), inherited);
+  return;
 }
 function checkScript(state, text) {
   checkScriptAst(state, parseScript(text));

@@ -463,6 +463,12 @@ function bunRunScript(args: readonly string[], start: number): string | undefine
   return undefined;
 }
 
+/** The outer command's stdin and redirects, which a wrapped shell command inherits. */
+interface InheritedInput {
+  readonly redirects: readonly Redirect[];
+  readonly stdin: string | undefined | null;
+}
+
 /**
  * Global installs and publishing change the machine or the registry, never the worktree.
  * `bun` is both a runtime and a package manager, and the interpreter branch returns before the
@@ -473,7 +479,7 @@ function checkPackageManager(
   tool: string,
   args: readonly string[],
   /** The outer command's input: `bun x` hands its redirects and stdin to what it wraps. */
-  outer: { readonly redirects: readonly Redirect[]; readonly stdin: string | undefined | null },
+  outer: InheritedInput,
 ): void {
   // `bunx` is Bun's documented alias for `bun x`: whatever it wraps gets the same checks.
   if (tool === "bunx") {
@@ -493,11 +499,11 @@ function checkPackageManager(
       if (!a.startsWith("-") || a === "-") break;
       if (a === "-c" || a === "--call") {
         const text = args[i + 1];
-        if (text !== undefined) checkScript(state, text);
+        if (text !== undefined) checkScriptText(state, text, outer);
         return;
       }
       if (a.startsWith("--call=")) {
-        checkScript(state, a.slice("--call=".length));
+        checkScriptText(state, a.slice("--call=".length), outer);
         return;
       }
       if (!a.includes("=") && NPX_VALUE_FLAGS.has(a)) i++;
@@ -1794,11 +1800,18 @@ function literalOutput(cmd: Command): string | undefined {
   return undefined;
 }
 
-function checkPipeline(state: State, pipeline: Pipeline): void {
+function checkPipeline(
+  state: State,
+  pipeline: Pipeline,
+  /** Input a wrapping shell hands to the pipeline (`npx -c '<text>'`, `bun x`). */
+  inherited?: InheritedInput,
+): void {
   const { commands } = pipeline;
   commands.forEach((cmd, i) => {
     // stdin of a pipe stage: known text, null (generated, unknown) or undefined (none).
     const prev = commands[i - 1];
+    // Only a pipeline's first command reads the wrapping shell's stdin and redirects.
+    const input = prev === undefined ? inherited : undefined;
     let stdin: string | undefined | null;
     if (prev !== undefined) {
       const prevWords = prev.kind === "simple" ? prev.words : [];
@@ -1810,12 +1823,16 @@ function checkPipeline(state: State, pipeline: Pipeline): void {
         }
       }
       stdin = literalOutput(prev) ?? null;
+    } else if (input !== undefined) {
+      stdin = input.stdin;
     }
+    // The command's own redirects win over the wrapper's when both name an input.
+    const redirects = input === undefined ? cmd.redirects : [...cmd.redirects, ...input.redirects];
     if (cmd.kind === "subshell") {
-      checkRedirects(state, cmd.redirects);
-      scoped(state, () => checkScriptAst(state, cmd.script));
+      checkRedirects(state, redirects);
+      scoped(state, () => checkScriptAst(state, cmd.script, input));
     } else {
-      checkSimple(state, cmd, stdin);
+      checkSimple(state, { ...cmd, redirects }, stdin);
     }
   });
 }
@@ -1830,13 +1847,24 @@ function scoped(state: State, fn: () => void): void {
   }
 }
 
-function checkScriptAst(state: State, script: Script): void {
+function checkScriptAst(
+  state: State,
+  script: Script,
+  /** Input the script inherits from the shell that runs it. */
+  inherited?: InheritedInput,
+): void {
   if (++state.depth > 25) block("command nests too deeply to inspect");
   try {
-    for (const p of script.pipelines) checkPipeline(state, p);
+    for (const p of script.pipelines) checkPipeline(state, p, inherited);
   } finally {
     state.depth--;
   }
+}
+
+/** `npx -c '<text>'`: the text's shell inherits the alias's stdin and input redirects. */
+function checkScriptText(state: State, text: string, inherited: InheritedInput): undefined {
+  checkScriptAst(state, parseScript(text), inherited);
+  return undefined;
 }
 
 function checkScript(state: State, text: string): undefined {

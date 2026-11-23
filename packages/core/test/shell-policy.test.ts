@@ -394,6 +394,20 @@ describe("package scripts", () => {
     expect(checkShell("printf 'go test' | bun x sh", scriptsCtx)).toEqual({ allowed: true });
   });
 
+  test("npx and pnpx -c give the call text the alias's piped and redirected input", () => {
+    expect(reason("printf 'git push' | npx -c 'bash'", scriptsCtx)).toContain("git push");
+    expect(reason("printf 'git push' | pnpx --call 'bash'", scriptsCtx)).toContain("git push");
+    expect(reason("npx -c 'bash' < scripts/release.sh", scriptsCtx)).toContain("git push");
+    expect(reason("npx --call='bash' < scripts/release.sh", scriptsCtx)).toContain("git push");
+    expect(reason("npx -c 'bash' <<EOF\ngit push\nEOF", scriptsCtx)).toContain("git push");
+    expect(reason("printf 'git push' | npx -c '(bash)'", scriptsCtx)).toContain("git push");
+    expect(reason("cat x | npx -c 'sh'", scriptsCtx)).toContain("pipes generated input");
+    expect(checkShell("printf 'go test' | npx -c 'bash'", scriptsCtx)).toEqual({ allowed: true });
+    expect(checkShell("printf 'git push' | npx -c 'bash < scripts/test.sh'", scriptsCtx)).toEqual({
+      allowed: true,
+    });
+  });
+
   test("bun test -g filters test names instead of installing globally", () => {
     expect(checkShell("bun test -g health", realCtx)).toEqual({ allowed: true });
     expect(checkShell("bun --cwd . test -g health", realCtx)).toEqual({ allowed: true });
