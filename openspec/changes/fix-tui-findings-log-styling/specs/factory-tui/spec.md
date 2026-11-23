@@ -665,7 +665,8 @@ detail SHALL mark the selected row with the lilac focus token and bold, align ga
 run list SHALL show the summary on the row, dim the metadata, bold the selected row, colour the phase
 glyph with the existing phase token and mark findings with the gate glyph and label, not the coral
 hue. A run row SHALL stay one line at 80 columns and truncate rather than wrap. Panels SHALL have a
-bold title, a padded body and muted footer hints after a blank line; the
+bold title, a padded body and muted footer hints, separated by a blank line when the panel and the
+frame have the room; a full-height panel omits that line instead of exceeding `rows`; the
 approval overlay SHALL keep coral and every other panel SHALL use lilac. Empty states (`no activity
 yet`, `no gate results`, `No changes exist yet`) SHALL stay muted and honest. Every state SHALL remain
 readable with colour off and in ASCII, and no state SHALL paint a background or introduce a colour
