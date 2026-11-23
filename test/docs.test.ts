@@ -20,7 +20,17 @@ const CHANGE_DIR = `openspec/changes/${CHANGE_ID}`;
  * against it so a later ADR or index row cannot accidentally look like a change to history.
  */
 function changeBase(): string {
-  const added = git("log", "--diff-filter=A", "--format=%H", "--", `${CHANGE_DIR}/proposal.md`)
+  // `--full-history` disables path-limited history simplification: on a pull-request merge ref
+  // git otherwise walks only the parent that differs for this path and never reaches the commit
+  // that added it. Locally on a linear branch the flag changes nothing.
+  const added = git(
+    "log",
+    "--full-history",
+    "--diff-filter=A",
+    "--format=%H",
+    "--",
+    `${CHANGE_DIR}/proposal.md`,
+  )
     .split("\n")
     .filter(Boolean);
   const first = added[added.length - 1];
@@ -43,7 +53,9 @@ function changeTip(): string {
     .split("\n")
     .filter(Boolean);
   if (trailer !== undefined) return trailer;
-  const [touching] = git("log", "--format=%H", "--", CHANGE_DIR).split("\n").filter(Boolean);
+  const [touching] = git("log", "--full-history", "--format=%H", "--", CHANGE_DIR)
+    .split("\n")
+    .filter(Boolean);
   if (touching === undefined) throw new Error("the change is not in history");
   return touching;
 }
