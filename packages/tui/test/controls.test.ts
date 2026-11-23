@@ -366,6 +366,7 @@ describe("an answer is recorded, then confirmed", () => {
     expect(outcome.answer).toEqual({
       answer: "public /health",
       question: "Which endpoints should be public?",
+      rawQuestion: "Which endpoints should be public?",
     });
 
     const fake = fakeFactory();
@@ -376,6 +377,34 @@ describe("an answer is recorded, then confirmed", () => {
       { id: RUN, answer: "public /health", question: "Which endpoints should be public?" },
     ]);
     expect(fake.resumes).toEqual([]);
+  });
+
+  test("a two-line question sends its raw text to Factory.answer so the pipeline matches it", async () => {
+    const raw = "Which endpoints?\nShould health be public?";
+    const run = askRun([{ step: "design", question: raw, status: "unanswered" }]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "public /health");
+
+    const outcome = questionsKeys(run, typed, "Enter", key({ return: true }));
+    expect(outcome.answer).toEqual({
+      answer: "public /health",
+      question: "Which endpoints? Should health be public?",
+      rawQuestion: raw,
+    });
+
+    const fake = fakeFactory();
+    if (outcome.answer === undefined) throw new Error("the typed answer did not emit");
+    await recordAnswer(fake.factory, run.id, outcome.answer.answer, outcome.answer.rawQuestion);
+    expect(fake.answers).toEqual([{ id: RUN, answer: "public /health", question: raw }]);
+
+    // Display and the recorded-answer key stay flattened, so the row still flips to recorded.
+    const recorded = recordAnswerInState(run, outcome.state, "design", outcome.answer.question);
+    expect(recorded.recorded.has(recordKey("design", outcome.answer.question))).toBe(true);
+    const panel = panelText(run, recorded);
+    expect(panel).toContain(answerRecorded);
+    expect(panel).toContain("Which endpoints? Should health be public?");
   });
 
   test("blank answer does not emit and the row is recorded only after the call", () => {
@@ -528,6 +557,7 @@ describe("Ctrl-J inserts a newline", () => {
     expect(outcome.answer).toEqual({
       answer: "first\nsecond",
       question: "Which endpoints should be public?",
+      rawQuestion: "Which endpoints should be public?",
     });
     const panel = questionsPanel({ run, state: outcome.state, glyphs: UNICODE_GLYPHS });
     expect(panel.lines).toContain("answer> first");

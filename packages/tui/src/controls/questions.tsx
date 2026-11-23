@@ -42,7 +42,10 @@ export function recordKey(step: string, question: string): string {
 
 export interface AnswerRequest {
   readonly answer: string;
+  /** Flattened for display and the recorded-answer key. */
   readonly question: string;
+  /** The stored text sent to `Factory.answer`; a newline never survives flattening. */
+  readonly rawQuestion: string;
 }
 
 export interface QuestionsOutcome {
@@ -199,7 +202,10 @@ export function questionsKeys(
     if (state.recorded.has(recordKey(record.step, record.question))) return { state };
     const answer = state.text.trim();
     if (answer === "") return { state: { ...state, notice: "the answer is empty" } };
-    return { state, answer: { answer, question: record.question } };
+    return {
+      state,
+      answer: { answer, question: record.question, rawQuestion: record.rawQuestion },
+    };
   }
   if (deletesLast(key)) return { state: removeLast(state) };
   // Navigation stays inert while composing, even when the terminal reports a raw sequence.

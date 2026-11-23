@@ -87,7 +87,10 @@ export interface ActivityLine {
 
 export interface QuestionRow {
   readonly step: string;
+  /** Flattened for display and the recorded-answer key. */
   readonly question: string;
+  /** The stored text, newlines intact, so `Factory.answer` can match the clarification. */
+  readonly rawQuestion: string;
   readonly status: "answered" | "skipped" | "unanswered";
   readonly answer?: string;
   readonly questionsFile: string;
@@ -259,6 +262,7 @@ function questionRows(run: RunState, snapshot: RunSnapshot | null): QuestionRow[
   return records.map((question) => ({
     step: flat(question.step),
     question: flat(question.question),
+    rawQuestion: question.question,
     status: question.status,
     ...(question.answer === undefined ? {} : { answer: flat(question.answer) }),
     questionsFile,

@@ -1249,12 +1249,12 @@ function Interactive({
 
   /** Records the answer, then waits only for the short command write, never for the run. */
   const submitAnswer = useCallback(
-    (id: string, question: string, step: string, answer: string): void => {
+    (id: string, rawQuestion: string, question: string, step: string, answer: string): void => {
       if (isReadOnly(viewRef.current) || answering.current) return;
       answering.current = true;
       void (async () => {
         try {
-          await recordAnswer(factory, id, answer, question);
+          await recordAnswer(factory, id, answer, rawQuestion);
           recordedAnswers.current.set(
             id,
             withRecordedAnswer(recordedAnswers.current.get(id) ?? new Set(), step, question),
@@ -1448,7 +1448,13 @@ function Interactive({
         }
         if (outcome.answer !== undefined) {
           const record = run.questions[state.questions.selected];
-          submitAnswer(run.id, outcome.answer.question, record?.step ?? "", outcome.answer.answer);
+          submitAnswer(
+            run.id,
+            outcome.answer.rawQuestion,
+            outcome.answer.question,
+            record?.step ?? "",
+            outcome.answer.answer,
+          );
         }
       }
       return;
