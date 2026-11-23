@@ -351,17 +351,17 @@ export function approvalKeyRoute(
 }
 
 /**
- * `q` quits from the run list, the run view, help and the approval overlay, but a text field
- * open over them owns printable keys: the intake dialog, the answer composer and the reword
- * prompt append a bare `q`. Ctrl-C always quits so an interrupt still restores the terminal.
+ * `q` quits from every screen and panel, but a text field open over them owns printable keys: the
+ * intake dialog, the answer composer and the reword prompt append a bare `q`. Ctrl-C always quits
+ * so an interrupt still restores the terminal.
  */
 export function quitsOnKey(
-  data: Pick<UiData, "approval" | "intake" | "questions" | "reword">,
+  data: Pick<UiData, "intake" | "questions" | "reword">,
   input: string,
   key: KeyInput,
 ): boolean {
   if (key.ctrl && input === "c") return true;
-  if (key.ctrl || input !== "q" || data.approval === null) return false;
+  if (key.ctrl || input !== "q") return false;
   return !(
     data.intake !== null ||
     data.questions?.focus === "composer" ||

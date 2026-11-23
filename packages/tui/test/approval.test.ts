@@ -523,6 +523,22 @@ describe("q quits unless a text field owns the key", () => {
     ).toBe(true);
   });
 
+  test("q quits from the log pane, the questions list and a confirmation with no approval overlay", () => {
+    expect(
+      quitsOnKey(
+        uiData(run, {
+          activity: { scope: "run", taskId: null, offset: 0, follow: true },
+        }),
+        "q",
+        key(),
+      ),
+    ).toBe(true);
+    expect(quitsOnKey(uiData(run, { questions: initialQuestions }), "q", key())).toBe(true);
+    expect(quitsOnKey(uiData(run, { confirmation: { kind: "abort", id: RUN } }), "q", key())).toBe(
+      true,
+    );
+  });
+
   test("q types into the intake dialog opened over the collapsed banner instead of quitting", () => {
     expect(quitsOnKey(uiData(run, { approval: idle, intake: initialIntake }), "q", key())).toBe(
       false,
