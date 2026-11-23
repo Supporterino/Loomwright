@@ -566,7 +566,7 @@ describe("terminal UI documentation", () => {
     expect(cli).toContain("docs/tui.md");
   });
 
-  test("the ADR is valid and indexed", () => {
+  test("the size is measured, not estimated, and the ADR is valid and indexed", () => {
     const adr = read("docs/decisions/0047-tui.md");
     expect(adr.startsWith("# 0047 — ")).toBe(true);
     expect(adr).toContain("## Context");

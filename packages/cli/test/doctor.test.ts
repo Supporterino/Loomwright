@@ -204,7 +204,7 @@ esac
     expect(check?.fix).toContain("replaces the script lookup");
   });
 
-  test("warns when package.json cannot be parsed instead of hiding the gate script", async () => {
+  test("doctor reports an unreadable package.json instead of hiding the gate script", async () => {
     const root = await installed(createSingleRepoFixture, {
       app: { format: "true", types: "true", test: "true", testAffected: "true" },
     });

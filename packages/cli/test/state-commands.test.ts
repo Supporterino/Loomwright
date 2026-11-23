@@ -133,7 +133,7 @@ describe("status, retry and abort", () => {
     expect(json.active?.changeId).toBe("add-x");
   });
 
-  test("status --watch reprints frames until interrupted", async () => {
+  test("two observed frames, then abort: status --watch reprints frames until interrupted", async () => {
     const out: string[] = [];
     const frames = (): number => out.filter((line) => line.startsWith("updated ")).length;
     const controller = new AbortController();
@@ -153,7 +153,7 @@ describe("status, retry and abort", () => {
     expect((await cli(fx.root, "status", "add-x", "--watch", "--json")).code).toBe(ExitCode.Usage);
   });
 
-  test("a new event produces a frame", async () => {
+  test("an event-triggered frame is awaited by status --watch", async () => {
     const log = eventLogPath(fx.root, "add-x");
     mkdirSync(dirname(log), { recursive: true });
     writeFileSync(log, `${heartbeat(1)}\n`);

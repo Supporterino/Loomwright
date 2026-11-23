@@ -367,17 +367,29 @@ describe("package scripts", () => {
     expect(checkShell("bunx tsc", scriptsCtx)).toEqual({ allowed: true });
   });
 
-  test("npx and pnpx inspect the wrapped command instead of stopping at the alias", () => {
+  test("a shell through the alias is blocked", () => {
     expect(reason("npx sh -c 'git push'", scriptsCtx)).toContain("git push");
     expect(reason("pnpx sh -c 'git push'", scriptsCtx)).toContain("git push");
+  });
+
+  test("publishing through the alias is blocked", () => {
     for (const cmd of ["npx npm publish", "pnpx npm publish", "npx -p npm@latest npm publish"])
       expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+  });
+
+  test("a global install through the alias is blocked", () => {
     for (const cmd of ["npx npm install -g left-pad", "pnpx npm install --global left-pad"])
       expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+  });
+
+  test("the call flag is inspected", () => {
     expect(reason("npx -p typescript -c 'npm publish'", scriptsCtx)).toContain(
       "publishing is not allowed",
     );
     expect(reason("npx --call='npm publish'", scriptsCtx)).toContain("publishing is not allowed");
+  });
+
+  test("ordinary runner use stays allowed", () => {
     for (const cmd of [
       "npx vitest run",
       "npx --no-install tsc --noEmit",
