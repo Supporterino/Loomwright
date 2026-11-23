@@ -3168,7 +3168,9 @@ function onShellCreate(workspace, event) {
   }
   if (process.env.AI_FACTORY_SANDBOX === "seatbelt") {
     const shell = typeof event.shell === "string" && event.shell.startsWith("/") ? event.shell : "/bin/bash";
-    event.command = sandboxCommand(seatbeltProfile(sandboxPolicy(workspace, ctx)), shell, event.command);
+    event.command = `export AI_FACTORY_SANDBOX=wrapped; ${sandboxCommand(seatbeltProfile(sandboxPolicy(workspace, ctx)), shell, event.command)}`;
+    if (event.env !== undefined)
+      event.env.AI_FACTORY_SANDBOX = "wrapped";
   }
 }
 var entry_default = {

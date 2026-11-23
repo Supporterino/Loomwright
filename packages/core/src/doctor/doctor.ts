@@ -876,7 +876,8 @@ function checkSandbox(c: Checks, config: FactoryConfig): void {
       "off: agent shells and gates run unsandboxed",
       'set security.sandbox to "auto"',
     );
-  else if (sandboxEnabled(config.security.sandbox))
+  // Doctor reports the workspace setting; a doctor run inside a wrapped gate still says ok.
+  else if (sandboxEnabled(config.security.sandbox, process.platform, existsSync, {}))
     c.add("ok", "sandbox", "agent shells and gates run under macOS sandbox-exec");
   else
     c.add(

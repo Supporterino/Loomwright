@@ -191,6 +191,9 @@ describe("runGates (single repo, override commands)", () => {
 
   test("gates run without credentials, with pushes blocked, and (macOS) sandboxed", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-test";
+    const saved = process.env.AI_FACTORY_SANDBOX;
+    // The factory's own workspace may run this suite with the sandbox off; force the profile.
+    if (process.platform === "darwin") process.env.AI_FACTORY_SANDBOX = "seatbelt";
     mkdirSync(join(fx.root, ".factory"), { recursive: true });
     try {
       const report = await run({
@@ -208,8 +211,41 @@ describe("runGates (single repo, override commands)", () => {
       expect(existsSync(join(fx.root, ".factory/gate-was-here"))).toBe(false);
     } finally {
       delete process.env.ANTHROPIC_API_KEY;
+      if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
+      else process.env.AI_FACTORY_SANDBOX = saved;
     }
   });
+
+  test.skipIf(process.platform !== "darwin")(
+    "a gate that is already inside a profile is not wrapped again",
+    async () => {
+      const saved = process.env.AI_FACTORY_SANDBOX;
+      try {
+        process.env.AI_FACTORY_SANDBOX = "wrapped";
+        const unwrapped = await run({
+          format: 'test "$AI_FACTORY_SANDBOX" = off',
+          lint: "skip",
+          types: "skip",
+          test: "skip",
+          testAffected: "skip",
+        });
+        expect(unwrapped.results.find((r) => r.type === "format")?.status).toBe("pass");
+
+        process.env.AI_FACTORY_SANDBOX = "seatbelt";
+        const wrapped = await run({
+          format: 'test "$AI_FACTORY_SANDBOX" = wrapped',
+          lint: "skip",
+          types: "skip",
+          test: "skip",
+          testAffected: "skip",
+        });
+        expect(wrapped.results.find((r) => r.type === "format")?.status).toBe("pass");
+      } finally {
+        if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
+        else process.env.AI_FACTORY_SANDBOX = saved;
+      }
+    },
+  );
 
   test("a gate that commits is undone too", async () => {
     const head = await gitOut(fx.root, "rev-parse", "HEAD");

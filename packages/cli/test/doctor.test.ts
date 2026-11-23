@@ -112,6 +112,21 @@ esac
     expect(find(json, "run broken")).toMatchObject({ status: "fail" });
   });
 
+  test.skipIf(process.platform !== "darwin")(
+    "doctor reports the configured setting, not the nesting state",
+    async () => {
+      const root = await installed(createSingleRepoFixture, { app: passAll });
+      const saved = process.env.AI_FACTORY_SANDBOX;
+      process.env.AI_FACTORY_SANDBOX = "wrapped";
+      try {
+        expect(find(await report(root), "sandbox")).toMatchObject({ status: "ok" });
+      } finally {
+        if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
+        else process.env.AI_FACTORY_SANDBOX = saved;
+      }
+    },
+  );
+
   test("warns about proxy variables and checks the graphify env (audit C)", async () => {
     const root = await installed(createSingleRepoFixture, { app: passAll });
     process.env.HTTPS_PROXY = "http://proxy.example:3128";

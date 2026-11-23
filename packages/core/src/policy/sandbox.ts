@@ -14,12 +14,19 @@ export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 
 export type SandboxSetting = "auto" | "off";
 
-/** Whether to sandbox on this machine. */
+/**
+ * Whether to sandbox on this machine. `AI_FACTORY_SANDBOX` carries the state: `wrapped` means
+ * the current command already runs inside a profile and macOS cannot nest one, `off` means the
+ * setting is disabled for this process (for example the opencode server's).
+ */
 export function sandboxEnabled(
   setting: SandboxSetting,
   platform: NodeJS.Platform = process.platform,
   exists: (p: string) => boolean = existsSync,
+  env: NodeJS.ProcessEnv = process.env,
 ): boolean {
+  const marker = env.AI_FACTORY_SANDBOX;
+  if (marker === "wrapped" || marker === "off") return false;
   return setting !== "off" && platform === "darwin" && exists(SANDBOX_EXEC);
 }
 

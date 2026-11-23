@@ -104,11 +104,15 @@ async function runOne(input: RunGatesInput, gate: ResolvedGate): Promise<GateRes
   const before = await snapshot(input.worktree);
   const bins = gate.binDirs.map((b) => join(input.worktree, b));
   // Gates run code the agents wrote: no credentials, pushes blocked, sandboxed where possible.
+  const sandboxed = sandboxEnabled(input.config.security.sandbox);
   const env = {
     ...agentProcessEnv(),
     ...cacheEnv(input.root, input.repo.name),
     ...QUIET_ENV,
     ...(gate.env ?? {}),
+    // A wrapped child must not wrap again (macOS cannot nest sandbox-exec); an unwrapped one
+    // must not inherit the parent's marker and skip its own sandboxing.
+    AI_FACTORY_SANDBOX: sandboxed ? "wrapped" : "off",
     PATH: [...bins, process.env.PATH ?? ""].join(delimiter),
   };
   const argv = [
@@ -117,7 +121,7 @@ async function runOne(input: RunGatesInput, gate: ResolvedGate): Promise<GateRes
     gate.setup === undefined ? gate.command : `set -e\n${gate.setup}\n${gate.command}`,
   ];
   const res = await exec(
-    sandboxEnabled(input.config.security.sandbox)
+    sandboxed
       ? sandboxArgv(
           seatbeltProfile(
             checkoutPolicy(input.root, input.worktree, [join(input.root, ".factory", "cache")]),

@@ -315,11 +315,13 @@ function onShellCreate(workspace: string, event: ShellCreateEvent): void {
   if (process.env.AI_FACTORY_SANDBOX === "seatbelt") {
     const shell =
       typeof event.shell === "string" && event.shell.startsWith("/") ? event.shell : "/bin/bash";
-    event.command = sandboxCommand(
+    // Mark the wrapped command in the line itself: opencode may omit the shell event's `env`.
+    event.command = `export AI_FACTORY_SANDBOX=wrapped; ${sandboxCommand(
       seatbeltProfile(sandboxPolicy(workspace, ctx)),
       shell,
       event.command,
-    );
+    )}`;
+    if (event.env !== undefined) event.env.AI_FACTORY_SANDBOX = "wrapped";
   }
 }
 

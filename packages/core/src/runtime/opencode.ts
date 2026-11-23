@@ -82,7 +82,8 @@ export function serverEnv(
     OPENCODE_PASSWORD: password,
     OPENCODE_DB: join(root, ".factory", "opencode", "opencode.db"),
     AI_FACTORY_WORKSPACE: root,
-    // The plugin removes these from every shell it lets run, and sandboxes the shell.
+    // The plugin removes these from every shell it lets run, sandboxes the shell and marks it
+    // `AI_FACTORY_SANDBOX=wrapped` so a nested factory run does not wrap it again.
     AI_FACTORY_SCRUB: scrubList().join(","),
     AI_FACTORY_SANDBOX: sandboxEnabled(config.security.sandbox) ? "seatbelt" : "off",
     AI_FACTORY_GRAPH: join(root, "graphify-out", "graph.json"),

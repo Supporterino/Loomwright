@@ -332,11 +332,16 @@ describe("plugin guards", () => {
         >,
       };
       create(event);
-      expect(event.env).toEqual({ PATH: "/usr/bin:/bin" });
+      expect(event.env).toEqual({
+        PATH: "/usr/bin:/bin",
+        ...(process.platform === "darwin" ? { AI_FACTORY_SANDBOX: "wrapped" } : {}),
+      });
       // The same command again needs its own guard pass.
       expect(() => create({ command, env: {} })).toThrow("only through a factory agent");
       if (process.platform === "darwin") {
-        expect(event.command).toStartWith("exec '/usr/bin/sandbox-exec' -p");
+        expect(event.command).toStartWith(
+          "export AI_FACTORY_SANDBOX=wrapped; exec '/usr/bin/sandbox-exec' -p",
+        );
         spawnSync("/bin/sh", ["-c", event.command], { cwd: wt });
         expect(existsSync(join(wt, "ok.txt"))).toBe(true);
         expect(existsSync(join(wt, "..", "escape.txt"))).toBe(false);
@@ -345,6 +350,40 @@ describe("plugin guards", () => {
     } finally {
       delete process.env.AI_FACTORY_SCRUB;
       delete process.env.AI_FACTORY_SANDBOX;
+    }
+  });
+
+  test("the plugin marks the shell it wraps", async () => {
+    const create = hooks.get("shell.create.before") as unknown as (e: {
+      command: string;
+      shell?: string;
+      env?: Record<string, string | undefined>;
+    }) => unknown;
+    const saved = process.env.AI_FACTORY_SANDBOX;
+    try {
+      process.env.AI_FACTORY_SANDBOX = "seatbelt";
+      expect(
+        await call("impl", "implementer-app", "shell", { command: "echo marked" }),
+      ).toBeUndefined();
+      const wrappedEnv: Record<string, string | undefined> = { PATH: "/bin" };
+      const wrapped = { command: "echo marked", shell: "/bin/sh", env: wrappedEnv };
+      create(wrapped);
+      expect(wrapped.command).toContain("sandbox-exec");
+      expect(wrapped.command).toContain("AI_FACTORY_SANDBOX=wrapped");
+      expect(wrappedEnv).toEqual({ PATH: "/bin", AI_FACTORY_SANDBOX: "wrapped" });
+
+      process.env.AI_FACTORY_SANDBOX = "wrapped";
+      expect(
+        await call("impl", "implementer-app", "shell", { command: "echo plain" }),
+      ).toBeUndefined();
+      const plainEnv: Record<string, string | undefined> = { PATH: "/bin" };
+      const plain = { command: "echo plain", shell: "/bin/sh", env: plainEnv };
+      create(plain);
+      expect(plain.command).toBe("echo plain");
+      expect(plainEnv).toEqual({ PATH: "/bin" });
+    } finally {
+      if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
+      else process.env.AI_FACTORY_SANDBOX = saved;
     }
   });
 
