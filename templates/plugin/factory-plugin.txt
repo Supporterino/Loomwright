@@ -2982,7 +2982,7 @@ function checkScriptAst(state, script, inherited) {
   }
 }
 function checkScriptText(state, text, inherited) {
-  checkScriptAst(state, parseScript(text), inherited);
+  scoped(state, () => checkScriptAst(state, parseScript(text), inherited));
   return;
 }
 function checkScript(state, text) {

@@ -1863,7 +1863,8 @@ function checkScriptAst(
 
 /** `npx -c '<text>'`: the text's shell inherits the alias's stdin and input redirects. */
 function checkScriptText(state: State, text: string, inherited: InheritedInput): undefined {
-  checkScriptAst(state, parseScript(text), inherited);
+  // The text runs in a subprocess, so a `cd` inside it must not move the outer shell's directory.
+  scoped(state, () => checkScriptAst(state, parseScript(text), inherited));
   return undefined;
 }
 

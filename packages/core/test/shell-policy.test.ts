@@ -408,6 +408,14 @@ describe("package scripts", () => {
     });
   });
 
+  test("a `cd` inside npx -c call text does not move the outer shell's directory", () => {
+    for (const cmd of [
+      "npx -c 'cd sub' ; echo x > ../escaped.txt",
+      "npx --call='cd sub' ; echo x > ../escaped.txt",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("outside the session directory");
+  });
+
   test("bun test -g filters test names instead of installing globally", () => {
     expect(checkShell("bun test -g health", realCtx)).toEqual({ allowed: true });
     expect(checkShell("bun --cwd . test -g health", realCtx)).toEqual({ allowed: true });
