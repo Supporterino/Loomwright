@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { type Dirent, readdirSync, readFileSync } from "node:fs";
+import {
+  type Dirent,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { loadUsage } from "../src/usage/usage.ts";
 
 export interface Violation {
   file: string;
@@ -254,5 +264,19 @@ describe("a silent catch states why the failure is ignored", () => {
     expect(
       scanSilentCatches("fixture.ts", "try { work(); } catch (err) {\n  return err;\n}"),
     ).toEqual([]);
+  });
+
+  test("a deliberate fallback stays quiet", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "loomwright-silent-catch-"));
+    try {
+      mkdirSync(join(workspace, ".factory", "usage"), { recursive: true });
+      writeFileSync(join(workspace, ".factory", "usage", "add-x.json"), "{not json");
+      // The corrupt ledger reads as empty and the run continues; the catch says so in source.
+      expect(loadUsage(workspace, "add-x").entries).toEqual([]);
+      const usage = readFileSync(join(root, "packages/core/src/usage/usage.ts"), "utf8");
+      expect(usage).toContain("A corrupt ledger reads as empty: usage never blocks a run");
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
   });
 });

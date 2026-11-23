@@ -206,6 +206,12 @@ describe("plugin bundle", () => {
     expect(bundle).toBe(await bundlePlugin());
   });
 
+  test("the committed bundle carries the alias checks", () => {
+    const bundle = readFileSync(PLUGIN_OUT, "utf8");
+    expect(bundle).toContain("npx");
+    expect(bundle).toContain("pnpx");
+  });
+
   test("a subdirectory build matches the committed file", async () => {
     const bundleFrom = async (dir: string): Promise<string> => {
       const cwd = process.cwd();
