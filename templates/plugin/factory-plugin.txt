@@ -1719,18 +1719,37 @@ function checkPackageManager(state, tool, args, outer) {
       }
       if (!a.startsWith("-") || a === "-")
         break;
-      if (a === "-c" || a === "--call") {
-        const text = args[i + 1];
-        if (text !== undefined)
-          checkScriptText(state, text, outer);
-        return;
+      if (a.startsWith("--")) {
+        if (a === "--call") {
+          const text = args[i + 1];
+          if (text !== undefined)
+            checkScriptText(state, text, outer);
+          return;
+        }
+        if (a.startsWith("--call=")) {
+          checkScriptText(state, a.slice("--call=".length), outer);
+          return;
+        }
+        if (NPX_VALUE_FLAGS.has(a))
+          i++;
+        continue;
       }
-      if (a.startsWith("--call=")) {
-        checkScriptText(state, a.slice("--call=".length), outer);
-        return;
+      const letters = a.slice(1);
+      for (let j = 0;j < letters.length; j++) {
+        const ch = letters[j] ?? "";
+        if (ch === "c") {
+          const attached = letters.slice(j + 1).replace(/^=/, "");
+          const text = attached !== "" ? attached : args[i + 1];
+          if (text !== undefined)
+            checkScriptText(state, text, outer);
+          return;
+        }
+        if (ch === "p") {
+          if (letters.slice(j + 1).replace(/^=/, "") === "")
+            i++;
+          break;
+        }
       }
-      if (!a.includes("=") && NPX_VALUE_FLAGS.has(a))
-        i++;
     }
     const wrapped = args.slice(i);
     if (wrapped.length === 0)

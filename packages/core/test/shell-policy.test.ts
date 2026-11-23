@@ -408,6 +408,24 @@ describe("package scripts", () => {
     });
   });
 
+  test("the call flag is inspected in its `-c=<text>` and clustered spellings", () => {
+    for (const cmd of ["npx -c='git push'", "pnpx -c='git push'", "npx -yc='git push'"])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+    expect(reason("npx -p typescript -c='npm publish'", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx -yc='npm publish'", scriptsCtx)).toContain("publishing is not allowed");
+  });
+
+  test("a value-taking shorthand cluster does not hide the wrapped command", () => {
+    expect(reason("npx -yp typescript sh -c 'git push'", scriptsCtx)).toContain("git push");
+    expect(reason("pnpx -yp typescript sh -c 'git push'", scriptsCtx)).toContain("git push");
+    expect(reason("npx -yp typescript npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(checkShell("npx -yp typescript tsc --version", realCtx)).toEqual({ allowed: true });
+  });
+
   test("a `cd` inside npx -c call text does not move the outer shell's directory", () => {
     for (const cmd of [
       "npx -c 'cd sub' ; echo x > ../escaped.txt",

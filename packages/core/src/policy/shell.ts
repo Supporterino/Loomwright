@@ -497,16 +497,37 @@ function checkPackageManager(
         break;
       }
       if (!a.startsWith("-") || a === "-") break;
-      if (a === "-c" || a === "--call") {
-        const text = args[i + 1];
-        if (text !== undefined) checkScriptText(state, text, outer);
-        return;
+      if (a.startsWith("--")) {
+        if (a === "--call") {
+          const text = args[i + 1];
+          if (text !== undefined) checkScriptText(state, text, outer);
+          return;
+        }
+        if (a.startsWith("--call=")) {
+          checkScriptText(state, a.slice("--call=".length), outer);
+          return;
+        }
+        if (NPX_VALUE_FLAGS.has(a)) i++;
+        continue;
       }
-      if (a.startsWith("--call=")) {
-        checkScriptText(state, a.slice("--call=".length), outer);
-        return;
+      // npm reads a single-dash cluster as its letters (`-yp <pkg>` is `-y -p <pkg>`), so expand
+      // it before choosing the wrapped command. `-c` takes the call text attached (`-c=<text>`,
+      // `-c<text>`) or as the next word; skipping `-c=<text>` would run it unchecked.
+      const letters = a.slice(1);
+      for (let j = 0; j < letters.length; j++) {
+        const ch = letters[j] ?? "";
+        if (ch === "c") {
+          const attached = letters.slice(j + 1).replace(/^=/, "");
+          const text = attached !== "" ? attached : args[i + 1];
+          if (text !== undefined) checkScriptText(state, text, outer);
+          return;
+        }
+        if (ch === "p") {
+          // `-p<value>` attaches the package; a bare `-p` takes the next word.
+          if (letters.slice(j + 1).replace(/^=/, "") === "") i++;
+          break;
+        }
       }
-      if (!a.includes("=") && NPX_VALUE_FLAGS.has(a)) i++;
     }
     const wrapped = args.slice(i);
     if (wrapped.length === 0) return;
