@@ -1779,6 +1779,21 @@ export interface ReplayViewOptions {
   readonly env?: TerminalEnv;
 }
 
+/** The terminal size a replay renders at; a resize replaces it and rebuilds the view. */
+export interface ReplaySize {
+  readonly columns: number;
+  readonly rows: number;
+}
+
+/** The size after a resize: stdout's report where it has one, the last known value otherwise. */
+export function nextReplaySize(
+  current: ReplaySize,
+  columns: number | undefined,
+  rows: number | undefined,
+): ReplaySize {
+  return { columns: columns ?? current.columns, rows: rows ?? current.rows };
+}
+
 /** The same view-model the live entry builds, with the approval panel driven by the stream. */
 export function replayView(load: ReplayLoad, options: ReplayViewOptions): ViewModel {
   const model = replayModel(load, options.now);
@@ -1811,21 +1826,38 @@ export function replayView(load: ReplayLoad, options: ReplayViewOptions): ViewMo
 }
 
 interface ReplayProps {
-  readonly view: ViewModel;
+  readonly load: ReplayLoad;
+  readonly options: ReplayViewOptions;
   readonly glyphs: GlyphSet;
   readonly depth: ColorDepth;
 }
 
-function Replay({ view, glyphs, depth }: ReplayProps): ReactElement {
+function Replay({ load, options, glyphs, depth }: ReplayProps): ReactElement {
   const { exit } = useApp();
+  const [size, setSize] = useState<ReplaySize>({ columns: options.columns, rows: options.rows });
   const [notice, setNotice] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
   const [activity, setActivity] = useState<ActivityPaneState | null>(null);
+  const view = useMemo(
+    () => replayView(load, { ...options, columns: size.columns, rows: size.rows }),
+    [load, options, size],
+  );
   const base = useMemo(() => (notice === null ? view : { ...view, notice }), [view, notice]);
   const withActivity = activity === null ? base : replayActivityView(base, activity, glyphs);
   const current = help ? replayHelpView(withActivity) : withActivity;
   const currentRef = useRef(current);
   currentRef.current = current;
+
+  // Rebuild at the new size so the frame never keeps drawing past a shrunken terminal.
+  useEffect(() => {
+    const onResize = (): void => {
+      setSize((last) => nextReplaySize(last, process.stdout.columns, process.stdout.rows));
+    };
+    process.stdout.on("resize", onResize);
+    return () => {
+      process.stdout.off("resize", onResize);
+    };
+  }, []);
 
   useInput((input, key) => {
     const running = currentRef.current;
@@ -1866,18 +1898,18 @@ async function runReplay(options: TerminalOptions, replay: string): Promise<numb
   const { glyphs, depth } = themeFor(options);
   const env = terminalEnv(options.env);
   const load = await readReplayFile(replay);
-  const view = replayView(load, {
+  const viewOptions: ReplayViewOptions = {
     now: Date.now(),
     ascii: options.ascii,
     columns: options.columns,
     rows: options.rows,
     env,
-  });
+  };
   if (options.once) {
     options.out(
       await renderFrame(
-        view,
-        { columns: options.columns, rows: options.rows },
+        replayView(load, viewOptions),
+        { columns: viewOptions.columns, rows: viewOptions.rows },
         { ascii: options.ascii, env },
       ),
     );
@@ -1893,13 +1925,16 @@ async function runReplay(options: TerminalOptions, replay: string): Promise<numb
     await runInSession({
       session,
       render: async () => {
-        const instance = render(<Replay view={view} glyphs={glyphs} depth={depth} />, {
-          stdout: process.stdout,
-          stdin: process.stdin,
-          patchConsole: false,
-          exitOnCtrlC: false,
-          debug: options.frames === true,
-        });
+        const instance = render(
+          <Replay load={load} options={viewOptions} glyphs={glyphs} depth={depth} />,
+          {
+            stdout: process.stdout,
+            stdin: process.stdin,
+            patchConsole: false,
+            exitOnCtrlC: false,
+            debug: options.frames === true,
+          },
+        );
         await instance.waitUntilExit();
       },
     });

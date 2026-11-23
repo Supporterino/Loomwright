@@ -12,6 +12,7 @@ import {
 } from "../src/controls/activity-pane.ts";
 import {
   isReadOnly,
+  nextReplaySize,
   REPLAY_READ_ONLY,
   replayActivityView,
   replayHelpView,
@@ -305,6 +306,52 @@ describe("once prints one frame", () => {
     expect(panelText).toContain("]52;c;h");
     expect(panelText).not.toContain("\u001b]");
     expect(panelText).not.toContain("\u0007");
+  });
+});
+
+describe("replay follows a terminal resize", () => {
+  test("a replay resized after launch rebuilds the view at the new size", async () => {
+    const load = await readReplayFile(FIXTURE);
+    const wide = replayView(load, { now: NOW, ascii: true, columns: 120, rows: 40 });
+    expect(wide.rows).toBe(40);
+
+    const size = nextReplaySize({ columns: wide.columns, rows: wide.rows }, 80, 24);
+    expect(size).toEqual({ columns: 80, rows: 24 });
+    const shrunkOptions = { now: NOW, ascii: true, ...size };
+    const shrunk = replayView(load, shrunkOptions);
+    expect(shrunk.columns).toBe(80);
+    expect(shrunk.rows).toBe(24);
+
+    const lines = (await renderOnceFrame(shrunk, shrunkOptions)).split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.every((line) => line.length <= 80)).toBe(true);
+  });
+
+  test("a resized replay rebuilds its activity pane inside the new rows", async () => {
+    const load = await readReplayFile(FIXTURE);
+    const wide = replayView(load, { now: NOW, ascii: true, columns: 120, rows: 40 });
+    const run = wide.run;
+    if (run === null) throw new Error("the replay fixture has no run");
+    const size = nextReplaySize({ columns: wide.columns, rows: wide.rows }, 80, 24);
+    const shrunkOptions = { now: NOW, ascii: true, ...size };
+    const shrunk = replayView(load, shrunkOptions);
+    const frame = await renderOnceFrame(
+      replayActivityView(shrunk, openActivityPane(run), ASCII_GLYPHS),
+      shrunkOptions,
+    );
+    expect(frame).toContain("Activity");
+    expect(frame.split("\n").length).toBeLessThanOrEqual(24);
+  });
+
+  test("a resize keeps the last known dimension when stdout reports none", () => {
+    expect(nextReplaySize({ columns: 80, rows: 24 }, undefined, 30)).toEqual({
+      columns: 80,
+      rows: 30,
+    });
+    expect(nextReplaySize({ columns: 80, rows: 24 }, 100, undefined)).toEqual({
+      columns: 100,
+      rows: 24,
+    });
   });
 });
 
