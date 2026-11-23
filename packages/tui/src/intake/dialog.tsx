@@ -151,6 +151,25 @@ const PANEL_CHROME_ROWS = 5;
 const PREVIEW_HEADER_ROWS = 3;
 
 /**
+ * The typed request split into panel rows. `PanelBox` renders an embedded newline as its own row,
+ * so a multi-line paste is windowed like the file preview and names the shown count when it trims.
+ */
+function requestLines(state: IntakeState, rows: number, trailing: number): string[] {
+  if (state.text === "") return ["request: (empty)"];
+  // One line keeps the compact form the frame fixtures pin.
+  if (!state.text.includes("\n")) return [`request: ${state.text}`];
+  const all = state.text.split("\n");
+  const room = Math.max(0, rows - PANEL_CHROME_ROWS - trailing);
+  if (room === 0) return [];
+  const shown = all.slice(0, room - 1);
+  const label =
+    shown.length < all.length
+      ? `request (${shown.length} of ${all.length} lines):`
+      : `request (${all.length} lines):`;
+  return [label, ...shown.map((line) => `  | ${line}`)];
+}
+
+/**
  * The file keeps its first twenty lines; the dialog shows as many as the terminal has room for and
  * names the shown count when it has to trim.
  */
@@ -180,13 +199,15 @@ function fileLines(state: IntakeState, glyphs: GlyphSet, rows: number, trailing:
 /** The panel the frame renders; the error rides in `notice` so it stays inline and visible. */
 export function intakePanel(state: IntakeState, glyphs: GlyphSet, rows = 40): PanelView {
   const spawnedRows = state.spawned === null ? 0 : 1 + state.spawned.tail.length;
+  const noticeRows = state.error === null ? 0 : state.error.split("\n").length;
   const trailing =
     (state.submitting && state.spawned === null ? 1 : 0) +
     spawnedRows +
-    (state.queuedNote === null ? 0 : 1);
+    (state.queuedNote === null ? 0 : 1) +
+    noticeRows;
   const lines: string[] =
     state.mode === "text"
-      ? [state.text === "" ? "request: (empty)" : `request: ${state.text}`]
+      ? requestLines(state, rows, trailing)
       : fileLines(state, glyphs, rows, trailing);
   if (state.submitting && state.spawned === null) lines.push("starting...");
   if (state.spawned !== null) {

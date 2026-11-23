@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { StatusDocument } from "@loomwright/core/factory";
 import { RunState, TaskState } from "@loomwright/core/state/run";
 import { activityPanePanel, openActivityPane } from "../src/controls/activity-pane.ts";
+import { initialIntake, intakePanel } from "../src/intake/dialog.tsx";
 import { collectFacts, type EventFacts } from "../src/model/facts.ts";
 import {
   type ActivityLine,
@@ -169,6 +170,35 @@ describe("an empty workspace frame", () => {
 });
 
 describe("the frame never exceeds the terminal", () => {
+  test("a multi-line text request stays inside the frame with the footer last", async () => {
+    const size = { columns: 80, rows: 24 };
+    const text = Array.from({ length: 19 }, (_, index) => `request line ${index + 1}`).join("\n");
+    const view = buildViewModel(
+      vmInput({
+        panel: intakePanel(
+          {
+            ...initialIntake,
+            text,
+            submitting: true,
+            spawned: {
+              logPath: "/ws/.factory/logs/tui-spawn-x.log",
+              displayPath: ".factory/logs/tui-spawn-x.log",
+              tail: Array.from({ length: 10 }, (_, index) => `tail line ${index + 1}`),
+            },
+          },
+          ASCII_GLYPHS,
+          size.rows,
+        ),
+      }),
+    );
+    const frame = await renderFrame(view, size, { ascii: true });
+    const lines = frame.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("Esc cancel");
+    expect(frame).toContain("request (7 of 19 lines):");
+    expect(frame).toContain("tail line 10");
+  });
+
   test("the footer is the last row and the frame fits", async () => {
     const text = await renderFrame(sixtyView("run-59"), { columns: 80, rows: 24 }, { ascii: true });
     const lines = text.split("\n");

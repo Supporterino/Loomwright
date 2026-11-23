@@ -251,6 +251,30 @@ describe("text intake", () => {
     expect(newline.text).toBe("first\nsecond\n");
   });
 
+  test("a multi-line request is split into panel rows and names the shown count", () => {
+    const text = Array.from({ length: 25 }, (_, index) => `line ${index + 1}`).join("\n");
+    const lines = intakePanel({ ...initialIntake, text }, ASCII_GLYPHS, 24).lines;
+
+    expect(lines.some((line) => line.includes("\n"))).toBe(false);
+    expect(lines).toContain("request (18 of 25 lines):");
+    expect(lines).toContain("  | line 18");
+    expect(lines).not.toContain("  | line 19");
+    // The rows plus the panel's five chrome rows fit the 24-row terminal.
+    expect(lines.length).toBeLessThanOrEqual(24 - 5);
+  });
+
+  test("a multi-line request leaves the error notice a row and fits 80x24", () => {
+    const text = Array.from({ length: 25 }, (_, index) => `line ${index + 1}`).join("\n");
+    const lines = intakePanel(
+      { ...initialIntake, text, error: "the request is empty" },
+      ASCII_GLYPHS,
+      24,
+    ).lines;
+
+    expect(lines).toContain("request (17 of 25 lines):");
+    expect(lines.length).toBeLessThanOrEqual(24 - 5 - 1);
+  });
+
   test("the physical Backspace key Ink reports as delete removes the last character", () => {
     const ws = workspace();
     const ctx = context(ws);
