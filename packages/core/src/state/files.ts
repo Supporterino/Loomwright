@@ -107,6 +107,7 @@ function lockIsStale(path: string, staleAfterMs: number): boolean {
     try {
       return Date.now() - statSync(path).mtimeMs > STALE_AFTER_MS;
     } catch {
+      // No stat either: treat the lock as stale so work is not blocked.
       return true;
     }
   }

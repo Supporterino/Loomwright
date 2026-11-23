@@ -161,6 +161,7 @@ export function tailLog(logPath: string, lines = 10): readonly string[] {
   try {
     text = readTail(logPath, TAIL_BYTES);
   } catch {
+    // An absent or unreadable log has no tail.
     return [];
   }
   // Gate and agent output reaches a notice as-is, so a tail line never carries a terminal control.

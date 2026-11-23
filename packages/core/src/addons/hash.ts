@@ -21,6 +21,7 @@ export function isText(bytes: Uint8Array): boolean {
     new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     return true;
   } catch {
+    // Invalid UTF-8 is not text.
     return false;
   }
 }

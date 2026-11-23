@@ -25,6 +25,7 @@ function read(root: string, rel: string): string | undefined {
   try {
     return readFileSync(join(root, rel), "utf8");
   } catch {
+    // An absent or unreadable file is not a contract here.
     return undefined;
   }
 }
@@ -39,6 +40,7 @@ function topLevelKeys(root: string, rel: string): Record<string, unknown> | unde
       ? (value as Record<string, unknown>)
       : undefined;
   } catch {
+    // Odd or templated YAML is not a parseable contract.
     return undefined;
   }
 }
@@ -73,6 +75,7 @@ function findProvided(repo: ScannedRepo): FoundContract[] {
     try {
       scripts = (JSON.parse(pkgText) as { scripts?: Record<string, unknown> }).scripts ?? {};
     } catch {
+      // An unparseable package.json declares no generated artifacts.
       scripts = {};
     }
   }

@@ -86,6 +86,7 @@ function readText(abs: string): string | undefined {
     const text = readFileSync(abs, "utf8");
     return text.includes("\0") ? undefined : text;
   } catch {
+    // An unreadable or oversized file is not a script.
     return undefined;
   }
 }
@@ -98,6 +99,7 @@ function loadContext(workspace: string, sessionID: string): SessionContext | und
   try {
     raw = readFileSync(sessionContextFile(workspace, sessionID), "utf8");
   } catch {
+    // No pinned context for this session.
     return undefined;
   }
   const first = pinned.get(sessionID);
@@ -106,6 +108,7 @@ function loadContext(workspace: string, sessionID: string): SessionContext | und
   try {
     return parseSessionContext(JSON.parse(raw));
   } catch {
+    // A broken context file refuses the session.
     return undefined;
   }
 }
@@ -208,6 +211,7 @@ function guard(workspace: string, event: ToolEvent): { ctx: SessionContext; note
         seen.set(abs, stamp);
         return note === undefined ? { ctx } : { ctx, note };
       } catch {
+        // A stat that raced the read only loses the repeat note.
         return { ctx };
       }
     }
@@ -271,6 +275,7 @@ const listDir = (abs: string): string[] | undefined => {
   try {
     return readdirSync(abs);
   } catch {
+    // An unreadable directory has no entries.
     return undefined;
   }
 };

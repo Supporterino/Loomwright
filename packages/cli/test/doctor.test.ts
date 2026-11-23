@@ -204,6 +204,17 @@ esac
     expect(check?.fix).toContain("replaces the script lookup");
   });
 
+  test("warns when package.json cannot be parsed instead of hiding the gate script", async () => {
+    const root = await installed(createSingleRepoFixture, {
+      app: { format: "true", types: "true", test: "true", testAffected: "true" },
+    });
+    writeFileSync(join(root, "package.json"), '{ "scripts": { ');
+    await fixtureGit(root, "commit", "-q", "-am", "chore: broken package.json");
+    const check = find(await report(root), "app lint script");
+    expect(check).toMatchObject({ status: "warn" });
+    expect(check?.detail).toContain("package.json");
+  });
+
   test("does not warn about a skipped script", async () => {
     const root = await installed(createSingleRepoFixture, {
       app: { ...passAll, lint: "skip" },

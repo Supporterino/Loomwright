@@ -53,6 +53,7 @@ function crateName(cargoToml: string): string | undefined {
     const pkg = text.split(/^\[/m).find((section) => section.startsWith("package]"));
     return pkg?.match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1];
   } catch {
+    // No readable Cargo.toml: no crate name to match.
     return undefined;
   }
 }

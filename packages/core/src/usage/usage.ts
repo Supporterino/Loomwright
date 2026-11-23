@@ -38,6 +38,7 @@ function readLedger(file: string): UsageLedger | undefined {
     const ledger = readJson(file) as UsageLedger;
     return Array.isArray(ledger?.entries) ? ledger : undefined;
   } catch {
+    // A corrupt ledger reads as empty: usage never blocks a run (P15).
     return undefined;
   }
 }

@@ -90,6 +90,7 @@ function readText(path: string): string | undefined {
   try {
     return readFileSync(path, "utf8");
   } catch {
+    // An unreadable script host has no text.
     return undefined;
   }
 }

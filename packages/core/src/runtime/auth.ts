@@ -138,6 +138,7 @@ export function parseCredentialExport(raw: string): StoredCredential[] | undefin
   try {
     parsed = JSON.parse(raw);
   } catch {
+    // A failed export prints junk, so there are no credentials.
     return undefined;
   }
   if (!Array.isArray(parsed)) return undefined;
@@ -262,6 +263,7 @@ export async function syncCredentials(
       if (res.status >= 400 && res.status !== 404) failed += 1;
       else removed += 1;
     } catch {
+      // A failed delete counts as a failed credential, reported by the summary.
       failed += 1;
     }
   }
@@ -291,6 +293,7 @@ export async function syncCredentials(
       if (res.status >= 400) failed += 1;
       else updated += 1;
     } catch {
+      // A failed write counts as a failed credential, reported by the summary.
       failed += 1;
     }
   }
@@ -303,6 +306,7 @@ export async function syncCredentials(
       if (res.status >= 400 && res.status !== 404) failed += 1;
       else activated += 1;
     } catch {
+      // A failed activation counts as a failed credential, reported by the summary.
       failed += 1;
     }
   }

@@ -132,6 +132,7 @@ export function gateExecutables(command: string): string[] {
   try {
     commandNames(parseScript(command), out);
   } catch {
+    // An unparsable gate command yields no executables.
     return [];
   }
   return [...out];
@@ -151,6 +152,7 @@ function dirSize(path: string): number {
     try {
       entries = readdirSync(dir);
     } catch {
+      // A directory that vanished mid-walk contributes no entries.
       continue;
     }
     for (const name of entries) {
@@ -380,15 +382,35 @@ async function checkRepos(
   return ready;
 }
 
-function packageScript(dir: string, name: string): string | undefined {
+type ScriptLookup =
+  | { readonly kind: "body"; readonly body: string }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly error: string };
+
+function errnoOf(err: unknown): unknown {
+  return typeof err === "object" && err !== null && "code" in err ? err.code : undefined;
+}
+
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function packageScript(dir: string, name: string): ScriptLookup {
+  let text: string;
   try {
-    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
-      scripts?: Record<string, unknown>;
-    };
+    text = readFileSync(join(dir, "package.json"), "utf8");
+  } catch (err: unknown) {
+    // A missing package.json is normal outside Node; any other read error is worth reporting.
+    return errnoOf(err) === "ENOENT"
+      ? { kind: "absent" }
+      : { kind: "unreadable", error: messageOf(err) };
+  }
+  try {
+    const pkg = JSON.parse(text) as { scripts?: Record<string, unknown> };
     const value = pkg.scripts?.[name];
-    return typeof value === "string" ? value : undefined;
-  } catch {
-    return undefined;
+    return typeof value === "string" ? { kind: "body", body: value } : { kind: "absent" };
+  } catch (err: unknown) {
+    return { kind: "unreadable", error: messageOf(err) };
   }
 }
 
@@ -409,11 +431,20 @@ function checkWriteModeScripts(
       // An override (a command or "skip") replaces the script lookup entirely.
       if (config.gates.overrides[repo.name]?.[type] !== undefined) continue;
       const script = packageScript(dir, name);
-      if (script !== undefined && WRITE_FLAG.test(script)) {
+      if (script.kind === "unreadable") {
         c.add(
           "warn",
           `${repo.name} ${type} script`,
-          `\`${name}\` writes files: ${script}`,
+          `package.json cannot be read (${script.error}); the gate script cannot be checked`,
+          "fix the JSON in package.json",
+        );
+        continue;
+      }
+      if (script.kind === "body" && WRITE_FLAG.test(script.body)) {
+        c.add(
+          "warn",
+          `${repo.name} ${type} script`,
+          `\`${name}\` writes files: ${script.body}`,
           `set gates.overrides.${repo.name}.${type} to a check-only variant (it replaces the script lookup), or point gates.scripts.${type} at a check-only variant`,
         );
       }
@@ -503,6 +534,7 @@ function looseTsconfig(dir: string, gates: readonly ResolvedGate[]): string | un
   try {
     text = readFileSync(join(dir, rel), "utf8");
   } catch {
+    // An unreadable tsconfig is not second-guessed.
     return undefined;
   }
   const tsconfig = parseJsonc(text).value as

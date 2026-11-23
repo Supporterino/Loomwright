@@ -55,6 +55,7 @@ export async function validateChange(root: string, dir: string, id: string): Pro
   try {
     parsed = JSON.parse(res.stdout) as ValidateJson;
   } catch {
+    // Non-JSON output is reported as the validation failure.
     return [`openspec validate failed: ${(res.stderr || res.stdout).trim()}`];
   }
   const item = parsed.items?.find((i) => i.id === id);

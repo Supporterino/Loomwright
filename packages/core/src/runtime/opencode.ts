@@ -419,6 +419,7 @@ export class OpencodeRuntime implements AgentRuntime {
     try {
       event = JSON.parse(raw) as ServerEvent;
     } catch {
+      // A malformed event line is ignored.
       return;
     }
     const sessionID = event.data?.sessionID;

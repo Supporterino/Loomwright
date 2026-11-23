@@ -99,6 +99,7 @@ function readScripts(dir: string): Record<string, string> {
       ),
     );
   } catch {
+    // No readable package.json: there are no scripts to detect.
     return {};
   }
 }
@@ -127,6 +128,7 @@ function taskNames(dir: string): string[] {
       } | null;
       return Object.keys(doc?.tasks ?? {}).sort();
     } catch {
+      // An unreadable Taskfile lists no tasks.
       return [];
     }
   }
@@ -155,6 +157,7 @@ function readInstructions(dir: string): string[] {
           !v.split("/").includes(".."),
       );
     } catch {
+      // An unreadable or odd opencode config contributes no instructions.
       return [];
     }
   }

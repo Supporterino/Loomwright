@@ -69,6 +69,7 @@ function parseDoc(text: string | undefined): unknown {
   try {
     return parseYaml(text, { logLevel: "silent" });
   } catch {
+    // Unparsable YAML has no document to compare.
     return undefined;
   }
 }
@@ -107,6 +108,7 @@ function consumerSources(dir: string): string[] {
       try {
         return readFileSync(join(dir, f.path), "utf8");
       } catch {
+        // An unreadable source file contributes no text.
         return "";
       }
     });

@@ -93,6 +93,7 @@ function packageDependencies(abs: string): Set<string> {
     }
     return names;
   } catch {
+    // An unreadable package.json declares no dependencies.
     return new Set();
   }
 }
@@ -119,6 +120,7 @@ export function requirementHolds(
     try {
       return readFileSync(join(d, req.fileContains.file), "utf8").includes(req.fileContains.text);
     } catch {
+      // A file that cannot be read does not contain the marker.
       return false;
     }
   });

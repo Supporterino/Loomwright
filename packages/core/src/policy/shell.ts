@@ -629,6 +629,7 @@ function checkPackageScript(state: State, tool: string, args: readonly string[])
         ? {}
         : (JSON.parse(text) as { scripts?: Record<string, unknown> }).scripts) ?? {};
   } catch {
+    // A package.json that does not parse has no scripts to rewrite.
     return;
   }
   // Bun runs its own subcommands (`test`, `build`, `install`, …) even when a script has that

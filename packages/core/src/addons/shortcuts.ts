@@ -55,6 +55,7 @@ export async function newShortcuts(dir: string, base: string): Promise<Shortcut[
     try {
       text = readFileSync(join(dir, file), "utf8");
     } catch {
+      // An unreadable untracked file has no shortcuts.
       continue;
     }
     text.split("\n").forEach((l, i) => {

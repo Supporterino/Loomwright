@@ -20,6 +20,7 @@ const names = (dir: string, suffix: string): string[] => {
       .filter((name) => name.endsWith(suffix))
       .map((name) => name.slice(0, -suffix.length));
   } catch {
+    // A missing directory has no names.
     return [];
   }
 };
@@ -55,11 +56,13 @@ const repoIds = (root: string): string[] => {
       .config.repos.filter((repo) => repo.role === "code")
       .map((repo) => repo.name);
   } catch {
+    // A broken config falls back to the repos directory.
     try {
       return readdirSync(join(root, "repos"), { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name);
     } catch {
+      // No repos directory: no repo candidates.
       return [];
     }
   }
@@ -91,6 +94,7 @@ const modelIds = (root: string): string[] => {
     visit(loadConfig(root).config.models);
     return [...found];
   } catch {
+    // A broken config contributes no model names.
     return [];
   }
 };
@@ -101,6 +105,7 @@ const taskIds = (root: string, positionals: readonly string[]): string[] => {
     try {
       id = readActive(root)?.changeId;
     } catch {
+      // A corrupt lock only means no extra candidate.
       id = undefined;
     }
   }
@@ -108,6 +113,7 @@ const taskIds = (root: string, positionals: readonly string[]): string[] => {
   try {
     return loadRun(root, id)?.tasks.map((task) => task.id) ?? [];
   } catch {
+    // A corrupt run only means no task candidates.
     return [];
   }
 };
