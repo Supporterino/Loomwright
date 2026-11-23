@@ -1962,7 +1962,8 @@ function checkPipeline(
     const redirects = input === undefined ? cmd.redirects : [...cmd.redirects, ...input.redirects];
     if (cmd.kind === "subshell") {
       checkRedirects(state, redirects);
-      scoped(state, () => checkScriptAst(state, cmd.script, input));
+      // The subshell's own pipe input and redirects reach the shell it runs.
+      scoped(state, () => checkScriptAst(state, cmd.script, { redirects, stdin }));
     } else {
       checkSimple(state, { ...cmd, redirects }, stdin);
     }

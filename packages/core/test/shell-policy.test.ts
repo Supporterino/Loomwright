@@ -423,6 +423,15 @@ describe("package scripts", () => {
     );
   });
 
+  test("a pipe or redirect into a subshell reaches the shell it runs", () => {
+    expect(reason("printf 'git push' | (bash)", scriptsCtx)).toContain("git push");
+    expect(reason("printf 'git push' | (sh)", scriptsCtx)).toContain("git push");
+    expect(reason("(bash) < scripts/release.sh", scriptsCtx)).toContain("git push");
+    expect(reason("npx -c '(bash) < scripts/release.sh'", scriptsCtx)).toContain("git push");
+    expect(checkShell("printf 'go test' | (bash)", scriptsCtx)).toEqual({ allowed: true });
+    expect(checkShell("(bash) < scripts/test.sh", scriptsCtx)).toEqual({ allowed: true });
+  });
+
   test("the call flag is inspected in its `-c=<text>` and clustered spellings", () => {
     for (const cmd of ["npx -c='git push'", "pnpx -c='git push'", "npx -yc='git push'"])
       expect(reason(cmd, scriptsCtx)).toContain("git push");
