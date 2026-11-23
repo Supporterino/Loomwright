@@ -273,7 +273,8 @@ function grantedCommit(snapshot: RunSnapshot | null): string | null {
 
 function evidenceOf(data: UiData): ApprovalEvidence {
   return {
-    identity: data.identity ?? "",
+    // `null` means the async read has not resolved yet; only a real `""` is a missing identity.
+    ...(data.identity === null ? {} : { identity: data.identity }),
     findings: selectedRunState(data)?.specFindings.length ?? 0,
     specCommit: grantedCommit(data.snapshot),
   };

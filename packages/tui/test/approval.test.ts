@@ -393,6 +393,46 @@ describe("a missing identity disables approval", () => {
   });
 });
 
+describe("an unread identity is not a missing one", () => {
+  test("an unread identity is not a missing one: the first frame drops identity and keeps a/A/R disabled", () => {
+    const run = runState();
+    const idle = { kind: "idle" } as const;
+    const pending = viewOf(uiData(run, { approval: idle }), ASCII_GLYPHS);
+    const pendingPanel = pending.panel;
+    if (pendingPanel === null || pendingPanel.kind !== "approval") {
+      throw new Error("the overlay did not open");
+    }
+    const pendingText = [
+      pendingPanel.title,
+      ...pendingPanel.lines,
+      ...pendingPanel.keys.map((hint) => `${hint.key} ${hint.label}`),
+    ].join("\n");
+    // The async `git config user.email` has not resolved yet: no claim, no dead keys.
+    expect(pendingText).not.toContain(MISSING_IDENTITY);
+    expect(pendingText).not.toContain("identity:");
+    expect(pendingText).not.toContain("a approve and run");
+    expect(pendingText).not.toContain("A approve only");
+    expect(pendingText).not.toContain("R reapprove");
+
+    const checked = viewOf(
+      uiData(run, { approval: idle, identity: "dev@example.com" }),
+      ASCII_GLYPHS,
+    );
+    const checkedPanel = checked.panel;
+    if (checkedPanel === null || checkedPanel.kind !== "approval") {
+      throw new Error("the overlay did not reopen");
+    }
+    const checkedText = [
+      checkedPanel.title,
+      ...checkedPanel.lines,
+      ...checkedPanel.keys.map((hint) => `${hint.key} ${hint.label}`),
+    ].join("\n");
+    expect(checkedText).toContain("identity: dev@example.com");
+    expect(checkedText).toContain("a approve and run");
+    expect(checkedText).toContain("A approve only");
+  });
+});
+
 describe("approve only changes what the overlay says", () => {
   test("A launches approve --no-continue and the waiting overlay offers r and the hint", () => {
     const run = runState();
