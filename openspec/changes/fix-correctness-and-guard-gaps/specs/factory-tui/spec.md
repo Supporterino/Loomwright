@@ -7,11 +7,14 @@
 The UI SHALL render at most ten frames per second, batching events that arrive faster, SHALL keep
 the activity tail in a ring buffer of the last 2,000 lines whatever their event type, and SHALL
 poll at most once per second plus immediately after a spawn. While a run is open the poll SHALL
-request only that run's status (`status(<selected id>)`) and MUST NOT read another run's usage
-ledger or the workspace-usage slice. The workspace-usage slice MAY be read on the initial load
-and on a run-list refresh, where the full document also carries every run's usage. Folding SHALL
-stay O(1) per event, and coalesced heartbeats SHALL NOT grow the retained state. Memory and
-retained event objects MUST NOT grow over a long run.
+normally request only that run's status (`status(<selected id>)`) and MUST NOT read another run's
+usage ledger or the workspace-usage slice. The full document — every run's usage and the
+workspace-usage slice — MAY be read only on the initial load, on a run-list refresh, while a spawn
+started from the run view is pending and no per-run call can discover it yet, and after the
+selected run disappears because landing removed it, where the per-run call cannot resolve; a
+control action that settles a land MAY use the same refresh. Folding SHALL stay O(1) per event,
+and coalesced heartbeats SHALL NOT grow the retained state. Memory and retained event objects MUST
+NOT grow over a long run.
 
 #### Scenario: a burst is coalesced
 
@@ -38,6 +41,18 @@ retained event objects MUST NOT grow over a long run.
 - **THEN** the status call names `add-health`
 - **AND** no call without an id is made during that poll
 - **AND** the other run's usage ledger is not read
+
+#### Scenario: a pending spawn takes one full refresh
+
+- **WHEN** a spawn is started from the run view and the new run cannot be found by id yet
+- **THEN** the poll takes one full `status()` refresh to discover it
+- **AND** once the new run is selected, later polls name it again
+
+#### Scenario: a landed run falls back to the full refresh
+
+- **WHEN** the selected run's per-run status call reports that the run is gone
+- **THEN** the poll takes one full refresh to settle the landing
+- **AND** the other runs' usage ledgers may be read only by that refresh
 
 #### Scenario: the run list still paints every run's usage
 
