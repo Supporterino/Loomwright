@@ -560,6 +560,106 @@ interface InheritedInput {
   readonly stdin: string | undefined | null;
 }
 
+interface NpmSubcommand {
+  readonly index: number;
+  readonly word: string;
+}
+
+/** npm's subcommand, after the config options npm accepts before it (`npm -w . exec`). */
+function npmSubcommand(args: readonly string[]): NpmSubcommand | undefined {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (!a.startsWith("-") || a === "-") return { index: i, word: a };
+    if (a.startsWith("--")) {
+      const next = args[i + 1] ?? "";
+      if (a === "--color" && NPX_COLOR_VALUES.has(next)) i++;
+      else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-"))) i++;
+      continue;
+    }
+    // npm reads a single-dash cluster letter by letter; a bare value letter takes the next word.
+    const letters = a.slice(1);
+    for (let j = 0; j < letters.length; j++) {
+      const ch = letters[j] ?? "";
+      if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
+        if (letters.slice(j + 1) === "") i++;
+        break;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * `npx`, `pnpx` and `npm exec` are package runners: skip their own flags and inspect the command
+ * they wrap. `-c`/`--call` carries a shell command line instead of a wrapped command.
+ */
+function checkPackageRunner(state: State, args: readonly string[], outer: InheritedInput): void {
+  let i = 0;
+  for (; i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (a === "--") {
+      i++;
+      break;
+    }
+    if (!a.startsWith("-") || a === "-") break;
+    if (a.startsWith("--")) {
+      if (a === "--call") {
+        const text = args[i + 1];
+        if (text !== undefined) checkScriptText(state, text, outer);
+        return;
+      }
+      if (a.startsWith("--call=")) {
+        checkScriptText(state, a.slice("--call=".length), outer);
+        return;
+      }
+      const next = args[i + 1] ?? "";
+      if (a === "--color" && NPX_COLOR_VALUES.has(next)) i++;
+      else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-"))) i++;
+      continue;
+    }
+    // npm reads a single-dash cluster as its letters (`-yp <pkg>` is `-y -p <pkg>`), so expand
+    // it before choosing the wrapped command. `-c` takes the call text attached (`-c=<text>`,
+    // `-c<text>`) or as the next word; skipping `-c=<text>` would run it unchecked.
+    const letters = a.slice(1);
+    for (let j = 0; j < letters.length; j++) {
+      const ch = letters[j] ?? "";
+      if (ch === "c") {
+        const attached = letters.slice(j + 1).replace(/^=/, "");
+        const text = attached !== "" ? attached : args[i + 1];
+        if (text !== undefined) checkScriptText(state, text, outer);
+        return;
+      }
+      if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
+        // Any remainder after the letter is the attached value, including `-w=` (empty value);
+        // only a bare letter takes the next word.
+        if (letters.slice(j + 1) === "") i++;
+        break;
+      }
+    }
+  }
+  const wrapped = args.slice(i);
+  if (wrapped.length === 0) return;
+  if (++state.depth > 25) block("command nests too deeply to inspect");
+  // A subprocess cannot change this shell's directory, so a wrapped `cd` must not either.
+  try {
+    scoped(state, () =>
+      checkSimple(
+        state,
+        {
+          kind: "simple",
+          assigns: [],
+          words: wrapped,
+          redirects: [...outer.redirects],
+          substitutions: [],
+        },
+        outer.stdin,
+      ),
+    );
+  } finally {
+    state.depth--;
+  }
+}
+
 /**
  * Global installs and publishing change the machine or the registry, never the worktree.
  * `bun` is both a runtime and a package manager, and the interpreter branch returns before the
@@ -578,73 +678,17 @@ function checkPackageManager(
     return;
   }
   // `npx` and `pnpx` are package runners: skip the alias's own flags and inspect what it wraps.
-  // `-c`/`--call` carries a shell command line instead of a wrapped command.
+  // `npm exec` and its `x` alias are the same runner, reached through npm's own config options.
   if (tool === "npx" || tool === "pnpx") {
-    let i = 0;
-    for (; i < args.length; i++) {
-      const a = args[i] ?? "";
-      if (a === "--") {
-        i++;
-        break;
-      }
-      if (!a.startsWith("-") || a === "-") break;
-      if (a.startsWith("--")) {
-        if (a === "--call") {
-          const text = args[i + 1];
-          if (text !== undefined) checkScriptText(state, text, outer);
-          return;
-        }
-        if (a.startsWith("--call=")) {
-          checkScriptText(state, a.slice("--call=".length), outer);
-          return;
-        }
-        const next = args[i + 1] ?? "";
-        if (a === "--color" && NPX_COLOR_VALUES.has(next)) i++;
-        else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-"))) i++;
-        continue;
-      }
-      // npm reads a single-dash cluster as its letters (`-yp <pkg>` is `-y -p <pkg>`), so expand
-      // it before choosing the wrapped command. `-c` takes the call text attached (`-c=<text>`,
-      // `-c<text>`) or as the next word; skipping `-c=<text>` would run it unchecked.
-      const letters = a.slice(1);
-      for (let j = 0; j < letters.length; j++) {
-        const ch = letters[j] ?? "";
-        if (ch === "c") {
-          const attached = letters.slice(j + 1).replace(/^=/, "");
-          const text = attached !== "" ? attached : args[i + 1];
-          if (text !== undefined) checkScriptText(state, text, outer);
-          return;
-        }
-        if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
-          // Any remainder after the letter is the attached value, including `-w=` (empty value);
-          // only a bare letter takes the next word.
-          if (letters.slice(j + 1) === "") i++;
-          break;
-        }
-      }
-    }
-    const wrapped = args.slice(i);
-    if (wrapped.length === 0) return;
-    if (++state.depth > 25) block("command nests too deeply to inspect");
-    // A subprocess cannot change this shell's directory, so a wrapped `cd` must not either.
-    try {
-      scoped(state, () =>
-        checkSimple(
-          state,
-          {
-            kind: "simple",
-            assigns: [],
-            words: wrapped,
-            redirects: [...outer.redirects],
-            substitutions: [],
-          },
-          outer.stdin,
-        ),
-      );
-    } finally {
-      state.depth--;
-    }
+    checkPackageRunner(state, args, outer);
     return;
+  }
+  if (tool === "npm") {
+    const cmd = npmSubcommand(args);
+    if (cmd !== undefined && (cmd.word === "exec" || cmd.word === "x")) {
+      checkPackageRunner(state, args.slice(cmd.index + 1), outer);
+      return;
+    }
   }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
   const sub = cmd?.word;

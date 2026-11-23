@@ -1789,73 +1789,108 @@ function bunRunScript(args, start) {
   }
   return;
 }
+function npmSubcommand(args) {
+  for (let i = 0;i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (!a.startsWith("-") || a === "-")
+      return { index: i, word: a };
+    if (a.startsWith("--")) {
+      const next = args[i + 1] ?? "";
+      if (a === "--color" && NPX_COLOR_VALUES.has(next))
+        i++;
+      else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-")))
+        i++;
+      continue;
+    }
+    const letters = a.slice(1);
+    for (let j = 0;j < letters.length; j++) {
+      const ch = letters[j] ?? "";
+      if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
+        if (letters.slice(j + 1) === "")
+          i++;
+        break;
+      }
+    }
+  }
+  return;
+}
+function checkPackageRunner(state, args, outer) {
+  let i = 0;
+  for (;i < args.length; i++) {
+    const a = args[i] ?? "";
+    if (a === "--") {
+      i++;
+      break;
+    }
+    if (!a.startsWith("-") || a === "-")
+      break;
+    if (a.startsWith("--")) {
+      if (a === "--call") {
+        const text = args[i + 1];
+        if (text !== undefined)
+          checkScriptText(state, text, outer);
+        return;
+      }
+      if (a.startsWith("--call=")) {
+        checkScriptText(state, a.slice("--call=".length), outer);
+        return;
+      }
+      const next = args[i + 1] ?? "";
+      if (a === "--color" && NPX_COLOR_VALUES.has(next))
+        i++;
+      else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-")))
+        i++;
+      continue;
+    }
+    const letters = a.slice(1);
+    for (let j = 0;j < letters.length; j++) {
+      const ch = letters[j] ?? "";
+      if (ch === "c") {
+        const attached = letters.slice(j + 1).replace(/^=/, "");
+        const text = attached !== "" ? attached : args[i + 1];
+        if (text !== undefined)
+          checkScriptText(state, text, outer);
+        return;
+      }
+      if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
+        if (letters.slice(j + 1) === "")
+          i++;
+        break;
+      }
+    }
+  }
+  const wrapped = args.slice(i);
+  if (wrapped.length === 0)
+    return;
+  if (++state.depth > 25)
+    block("command nests too deeply to inspect");
+  try {
+    scoped(state, () => checkSimple(state, {
+      kind: "simple",
+      assigns: [],
+      words: wrapped,
+      redirects: [...outer.redirects],
+      substitutions: []
+    }, outer.stdin));
+  } finally {
+    state.depth--;
+  }
+}
 function checkPackageManager(state, tool, args, outer) {
   if (tool === "bunx") {
     checkPackageManager(state, "bun", ["x", ...args], outer);
     return;
   }
   if (tool === "npx" || tool === "pnpx") {
-    let i = 0;
-    for (;i < args.length; i++) {
-      const a = args[i] ?? "";
-      if (a === "--") {
-        i++;
-        break;
-      }
-      if (!a.startsWith("-") || a === "-")
-        break;
-      if (a.startsWith("--")) {
-        if (a === "--call") {
-          const text = args[i + 1];
-          if (text !== undefined)
-            checkScriptText(state, text, outer);
-          return;
-        }
-        if (a.startsWith("--call=")) {
-          checkScriptText(state, a.slice("--call=".length), outer);
-          return;
-        }
-        const next = args[i + 1] ?? "";
-        if (a === "--color" && NPX_COLOR_VALUES.has(next))
-          i++;
-        else if (!a.includes("=") && (NPX_VALUE_FLAGS.has(a) || a.startsWith("--fetch-")))
-          i++;
-        continue;
-      }
-      const letters = a.slice(1);
-      for (let j = 0;j < letters.length; j++) {
-        const ch = letters[j] ?? "";
-        if (ch === "c") {
-          const attached = letters.slice(j + 1).replace(/^=/, "");
-          const text = attached !== "" ? attached : args[i + 1];
-          if (text !== undefined)
-            checkScriptText(state, text, outer);
-          return;
-        }
-        if (NPX_SHORT_VALUE_FLAGS.has(ch)) {
-          if (letters.slice(j + 1) === "")
-            i++;
-          break;
-        }
-      }
-    }
-    const wrapped = args.slice(i);
-    if (wrapped.length === 0)
-      return;
-    if (++state.depth > 25)
-      block("command nests too deeply to inspect");
-    try {
-      scoped(state, () => checkSimple(state, {
-        kind: "simple",
-        assigns: [],
-        words: wrapped,
-        redirects: [...outer.redirects],
-        substitutions: []
-      }, outer.stdin));
-    } finally {
-      state.depth--;
-    }
+    checkPackageRunner(state, args, outer);
     return;
+  }
+  if (tool === "npm") {
+    const cmd = npmSubcommand(args);
+    if (cmd !== undefined && (cmd.word === "exec" || cmd.word === "x")) {
+      checkPackageRunner(state, args.slice(cmd.index + 1), outer);
+      return;
+    }
   }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
   const sub = cmd?.word;

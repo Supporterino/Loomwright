@@ -386,6 +386,27 @@ describe("package scripts", () => {
       expect(checkShell(cmd, realCtx)).toEqual({ allowed: true });
   });
 
+  test("npm exec and its x alias inspect the wrapped command like npx", () => {
+    for (const cmd of [
+      "npm exec -- git push",
+      "npm x -- git push",
+      "npm -w . exec -- git push",
+      "npm exec --package typescript -- git push",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+    expect(reason("npm exec -- npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(reason("npm x -- npm install -g left-pad", scriptsCtx)).toContain(
+      "global installs change the machine",
+    );
+    for (const cmd of ["npm x -c 'git push'", "npm exec -c='git push'", "npm x --call 'git push'"])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+    expect(reason("npm exec --call 'npm publish'", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(checkShell("npm exec -- tsc --version", realCtx)).toEqual({ allowed: true });
+    expect(checkShell("npm x tsc --version", realCtx)).toEqual({ allowed: true });
+  });
+
   test("bun x passes piped, redirected and here-doc input to the wrapped interpreter", () => {
     expect(reason("printf 'git push' | bun x sh", scriptsCtx)).toContain("git push");
     expect(reason("printf 'git push' | bunx bash", scriptsCtx)).toContain("git push");
