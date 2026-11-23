@@ -118,6 +118,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
               window={viewModel.taskWindow}
               glyphs={glyphs}
               depth={depth}
+              columns={leftWidth}
             />
           </Box>
           <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
@@ -144,7 +145,13 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
         </Box>
       ) : run.detail === null ? (
         <Box flexDirection="column">
-          <TaskGraph tasks={run.tasks} window={single.window} glyphs={glyphs} depth={depth} />
+          <TaskGraph
+            tasks={run.tasks}
+            window={single.window}
+            glyphs={glyphs}
+            depth={depth}
+            columns={inner}
+          />
           <ActivitySection
             lines={run.activity}
             glyphs={glyphs}

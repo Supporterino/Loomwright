@@ -1185,6 +1185,65 @@ describe("an ASCII task title clips with ASCII", () => {
     expect(detailRow?.endsWith("...")).toBe(true);
     expect(detailRow?.length).toBeLessThanOrEqual(80);
   });
+
+  test("at 120 columns the two-pane graph and detail clip long titles to their pane widths", async () => {
+    const title = "A task title long enough to be clipped in both panes at 120 columns wide";
+    const run = runState({
+      tasks: [taskState({ id: "first", title, repo: "app" })],
+    });
+    const graph = await frame(
+      buildViewModel(runInput(run, [], { selectedTaskId: null })),
+      120,
+      40,
+      true,
+    );
+    expect(graph).toMatch(/^[\t\n -~]*$/u);
+    expect(graph).not.toContain("…");
+    const graphRow = graph.split("\n").find((line) => line.includes("attempt 0"));
+    expect(graphRow).toBeDefined();
+    // One column of frame padding, then the 58-cell graph pane.
+    const graphPane = (graphRow ?? "").slice(1, 59);
+    expect(graphPane.length).toBe(58);
+    expect(graphPane.endsWith("...")).toBe(true);
+
+    const gateName = "a-gate-name-long-enough-to-overflow-the-detail-pane-with-more-words";
+    resetSeq();
+    const detail = await frame(
+      buildViewModel(
+        runInput(
+          run,
+          [
+            event("gate.finished", {
+              name: gateName,
+              type: "test",
+              status: "pass",
+              durationMs: 1_200,
+              step: "first",
+            }),
+          ],
+          { selectedTaskId: "first" },
+        ),
+      ),
+      120,
+      40,
+      true,
+    );
+    expect(detail).toMatch(/^[\t\n -~]*$/u);
+    expect(detail).not.toContain("…");
+    // The graph pane, its padding, then the 59-cell detail pane.
+    const lines = detail.split("\n");
+    const detailRow = lines.find((line) => line.slice(60).trimStart().startsWith("task "));
+    expect(detailRow).toBeDefined();
+    const fact = (detailRow ?? "").slice(60);
+    expect(fact.length).toBeLessThanOrEqual(59);
+    expect(fact.endsWith("...")).toBe(true);
+
+    const gateRow = lines.find((line) => line.slice(60).includes(gateName.slice(0, 10)));
+    expect(gateRow).toBeDefined();
+    const gate = (gateRow ?? "").slice(60);
+    expect(gate.length).toBeLessThanOrEqual(59);
+    expect(gate.endsWith("...")).toBe(true);
+  });
 });
 
 describe("the terminal session", () => {

@@ -1,11 +1,11 @@
 import { Box, Text } from "ink";
 import type { ReactElement } from "react";
-import { formatElapsed, truncate } from "../model/format.ts";
+import { formatElapsed } from "../model/format.ts";
 import type { GateRow, TaskDetail as TaskDetailView } from "../model/view-model.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
 import { ActivityTail } from "./activity.tsx";
-import { colorProps, gateLine, statusGlyph, statusToken } from "./style.ts";
+import { clip, colorProps, gateLine, statusGlyph, statusToken } from "./style.ts";
 
 export interface TaskDetailProps {
   readonly detail: TaskDetailView;
@@ -58,7 +58,7 @@ function factsOf(detail: TaskDetailView, glyphs: GlyphSet): readonly Fact[] {
   return [
     {
       label: "task",
-      value: `${task.id} ${glyphs.bullet} ${truncate(task.title, 56, glyphs)}`,
+      value: `${task.id} ${glyphs.bullet} ${task.title}`,
       bold: true,
     },
     { label: "status", value: task.status, bold: false },
@@ -96,12 +96,14 @@ export function TaskDetail({
   const gateWindow = windowGates(gates, gateRows);
   // No gate row fits: the count folds into the title row the fixed budget already pays for.
   const foldedGates = gateRows <= 0 && gates.length > 0;
+  // The label column and its space are fixed, so the value takes the rest of the pane.
+  const valueRoom = Math.max(0, columns - labelWidth - 1);
   return (
     <Box flexDirection="column">
       {facts.map((fact) => (
         <Text key={fact.label} wrap="truncate">
           <Text {...colorProps("muted", depth)}>{fact.label.padEnd(labelWidth)}</Text>{" "}
-          <Text {...(fact.bold ? { bold: true } : {})}>{fact.value}</Text>
+          <Text {...(fact.bold ? { bold: true } : {})}>{clip(fact.value, valueRoom, glyphs)}</Text>
         </Text>
       ))}
       <Text bold>{foldedGates ? `Gates ${glyphs.bullet} ${gateWindow.more} hidden` : "Gates"}</Text>
@@ -109,14 +111,19 @@ export function TaskDetail({
         <Text {...colorProps("muted", depth)}>no gate results</Text>
       ) : (
         <>
-          {gateWindow.shown.map((gate) => (
-            <Text key={`${gate.step}-${gate.name}`} wrap="truncate">
-              <Text {...colorProps(statusToken(gate.status), depth)}>
-                {statusGlyph(gate.status, glyphs)}
-              </Text>{" "}
-              {gateLine(gate.name, gate.status, formatElapsed(gate.durationMs), widths)}
-            </Text>
-          ))}
+          {gateWindow.shown.map((gate) => {
+            const glyph = statusGlyph(gate.status, glyphs);
+            return (
+              <Text key={`${gate.step}-${gate.name}`} wrap="truncate">
+                <Text {...colorProps(statusToken(gate.status), depth)}>{glyph}</Text>{" "}
+                {clip(
+                  gateLine(gate.name, gate.status, formatElapsed(gate.durationMs), widths),
+                  Math.max(0, columns - glyph.length - 1),
+                  glyphs,
+                )}
+              </Text>
+            );
+          })}
           {gateWindow.more === 0 || foldedGates ? null : (
             <Text {...colorProps("muted", depth)}>{`${gateWindow.more} more gates`}</Text>
           )}
