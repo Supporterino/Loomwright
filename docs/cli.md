@@ -1,6 +1,6 @@
 # CLI reference
 
-`loomwright [-C <dir>] <command> [options]`. Every command takes `-h/--help`, and `-V/--version` prints the version. The npm package is `@loomwright/cli` (`npx @loomwright/cli@<version> <command>`). The old `ai-factory` binary still works as a deprecated alias. The unscoped package `ai-factory` on npm is an unrelated project.
+`loomwright [-C <dir>] <command> [options]`. `-h/--help` prints help before the command or as its first token; later `-h` and `--help` are flag values or positional text, and a token after `--` is never help. `-V/--version` prints the version. The npm package is `@loomwright/cli` (`npx @loomwright/cli@<version> <command>`). The old `ai-factory` binary still works as a deprecated alias. The unscoped package `ai-factory` on npm is an unrelated project.
 
 `init`, `update` and `detect --apply` refuse to rewrite a workspace that a newer version installed, because that would downgrade it. Run the matching version, or pass `--allow-downgrade` to go back on purpose.
 
