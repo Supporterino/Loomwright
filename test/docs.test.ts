@@ -12,23 +12,40 @@ function git(...args: string[]): string {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 }
 
+const CHANGE_ID = "fix-correctness-and-guard-gaps";
+const CHANGE_DIR = `openspec/changes/${CHANGE_ID}`;
+
 /**
  * The commit before the change added its proposal. The historical-file assertion compares
  * against it so a later ADR or index row cannot accidentally look like a change to history.
  */
 function changeBase(): string {
-  const added = git(
-    "log",
-    "--diff-filter=A",
-    "--format=%H",
-    "--",
-    "openspec/changes/fix-correctness-and-guard-gaps/proposal.md",
-  )
+  const added = git("log", "--diff-filter=A", "--format=%H", "--", `${CHANGE_DIR}/proposal.md`)
     .split("\n")
     .filter(Boolean);
   const first = added[added.length - 1];
   if (first === undefined) throw new Error("the change proposal is not in history");
   return git("rev-parse", `${first}^`);
+}
+
+/**
+ * The change's own last commit: the newest commit carrying its `Change-Id`, or for a squash
+ * landing the newest that touched its directory. Bounding the range here keeps a later change
+ * that edits an ADR from looking like a change to history.
+ */
+function changeTip(): string {
+  const [trailer] = git(
+    "log",
+    "--extended-regexp",
+    "--format=%H",
+    `--grep=^Change-Id: ${CHANGE_ID}$`,
+  )
+    .split("\n")
+    .filter(Boolean);
+  if (trailer !== undefined) return trailer;
+  const [touching] = git("log", "--format=%H", "--", CHANGE_DIR).split("\n").filter(Boolean);
+  if (touching === undefined) throw new Error("the change is not in history");
+  return touching;
 }
 
 function read(...parts: string[]): string {
@@ -489,7 +506,7 @@ describe("compatibility surface", () => {
     expect(historical.length).toBeGreaterThan(0);
 
     // 0049 is new, so it is not in the base tree; the named-ADR test above covers it.
-    const changed = git("diff", "--name-only", base, "--", ...historical)
+    const changed = git("diff", "--name-only", base, changeTip(), "--", ...historical)
       .split("\n")
       .filter(Boolean)
       .sort();
