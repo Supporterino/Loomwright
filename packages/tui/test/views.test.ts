@@ -814,6 +814,74 @@ describe("run view layout", () => {
   });
 });
 
+describe("run header", () => {
+  const LONG_ID = "fix-tui-findings-log-styling";
+
+  function longRunView(
+    screen: "run" | "list",
+    columns: number,
+    rows: number,
+    wideMeta = false,
+  ): ViewModel {
+    const run = runState({
+      id: LONG_ID,
+      summary: "Fix the findings marker and the log styling",
+      createdAt: new Date(Date.parse(ISO) - (wideMeta ? 240 : 1) * 3_600_000).toISOString(),
+    });
+    const lock: ActiveLock = {
+      changeId: LONG_ID,
+      pid: wideMeta ? 123456 : 4242,
+      host: "host",
+      since: ISO,
+    };
+    return buildViewModel(
+      vmInput({
+        screen,
+        columns,
+        rows,
+        status: statusDoc(
+          [{ run, tokens: wideMeta ? 1_234_567 : 12_345, cost: wideMeta ? 1234.56 : 0.42 }],
+          { active: lock },
+        ),
+        runs: [run],
+        selectedRunId: LONG_ID,
+      }),
+    );
+  }
+
+  test("the run header keeps the lock status and clips with the frame's mark", async () => {
+    const text = await frame(longRunView("run", 80, 24), 80, 24, true);
+    const header = text.split("\n").find((line) => line.includes("active (pid 4242)"));
+    expect(header).toBeDefined();
+    // The id gives way first; the lock status is the field that may never be clipped away.
+    expect(header).toContain(LONG_ID.slice(0, 8));
+    expect(header).toContain("...");
+    expect(header).not.toContain("…");
+    expect(header?.length).toBeLessThanOrEqual(80);
+
+    // The 120-column list preview's right pane is 59 cells, so its header needs the same budget.
+    const preview = await frame(longRunView("list", 120, 40), 120, 40, true);
+    const previewHeader = preview
+      .split("\n")
+      .find((line) => line.slice(60).includes("active (pid 4242)"));
+    expect(previewHeader).toBeDefined();
+    expect(previewHeader?.slice(60)).toContain("...");
+    expect(previewHeader).not.toContain("…");
+    expect(previewHeader?.length).toBeLessThanOrEqual(120);
+
+    // A 100-column preview leaves 49 cells and a long run overflows even the metadata; it is cut
+    // from the front so the lock status still ends the row.
+    const narrow = await frame(longRunView("list", 100, 24, true), 100, 24, true);
+    const narrowHeader = narrow
+      .split("\n")
+      .find((line) => line.slice(50).includes("active (pid 123456)"));
+    expect(narrowHeader).toBeDefined();
+    expect(narrowHeader?.slice(50)).toContain("...");
+    expect(narrowHeader).not.toContain("…");
+    expect(narrowHeader?.length).toBeLessThanOrEqual(100);
+  });
+});
+
 describe("task detail", () => {
   test("a task detail shows the evidence: role, duration, attempt, gates and the log tail", async () => {
     const tail = await frame(failingTaskView(null), 120, 40, false);

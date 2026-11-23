@@ -44,7 +44,7 @@ export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
                 <RunList viewModel={viewModel} glyphs={glyphs} depth={depth} />
               </Box>
               <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
-                <RunHeader run={run} glyphs={glyphs} depth={depth} />
+                <RunHeader run={run} glyphs={glyphs} depth={depth} columns={previewColumns} />
                 <ActivityTail
                   lines={run.activity}
                   glyphs={glyphs}

@@ -104,7 +104,7 @@ export function RunView({ viewModel, glyphs, depth, twoPane }: RunViewProps): Re
   const rightWidth = Math.max(0, inner - leftWidth - 1);
   return (
     <Box flexDirection="column" paddingX={1}>
-      <RunHeader run={run} glyphs={glyphs} depth={depth} />
+      <RunHeader run={run} glyphs={glyphs} depth={depth} columns={inner} />
       {viewModel.notice === null ? null : (
         <Text {...colorProps("muted", depth)} wrap="truncate">
           {viewModel.notice}
