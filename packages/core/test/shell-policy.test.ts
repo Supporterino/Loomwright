@@ -409,6 +409,17 @@ describe("package scripts", () => {
     expect(checkShell("npx npm@latest run lint", scriptsCtx)).toEqual({ allowed: true });
   });
 
+  test("a version-tagged package spec does not hide deploy scripts", () => {
+    for (const cmd of [
+      "npx npm@latest run deploy",
+      "npx npm@10 run deploy",
+      "npx bun@1 run deploy",
+      "bun@1 run deploy",
+      "bun@1 deploy",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+  });
+
   test("npm exec and its x alias inspect the wrapped command like npx", () => {
     for (const cmd of [
       "npm exec -- git push",

@@ -1702,12 +1702,13 @@ function checkSimple(
     return;
   }
   // `npx npm@latest publish` runs the tagged package's bin: the version tag must not hide the
-  // package manager from the publish and global-install checks.
+  // package manager from the publish, global-install and package-script checks, so every branch
+  // below dispatches on the stripped `tool` rather than the tagged `base`.
   const at = base.lastIndexOf("@");
   const tool = at > 0 && PACKAGE_MANAGERS.has(base.slice(0, at)) ? base.slice(0, at) : base;
   if (PACKAGE_MANAGERS.has(tool))
     checkPackageManager(state, tool, args, { redirects: cmd.redirects, stdin });
-  const interpreter = base.replace(/\d+(\.\d+)*$/, "");
+  const interpreter = tool.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     // -i edits the operands in place: they are writes.
     const operands: string[] = [];
@@ -1723,7 +1724,7 @@ function checkSimple(
     for (const f of code ? operands : operands.slice(1))
       checkWrite(state, f, `${interpreter} -i edits`);
   }
-  const inline = INTERPRETERS[interpreter] ?? INTERPRETERS[base];
+  const inline = INTERPRETERS[interpreter] ?? INTERPRETERS[tool];
   if (inline) {
     const i = args.findIndex((a) => inline.includes(a));
     const joined = args.find((a) =>
@@ -1738,7 +1739,7 @@ function checkSimple(
     }
     const file = args.find((a) => !a.startsWith("-"));
     // `bun run x` / `bun x` may name a package.json script rather than a file.
-    if (base === "bun" && file !== undefined) {
+    if (tool === "bun" && file !== undefined) {
       checkPackageScript(state, "bun", args);
       return;
     }
@@ -1782,7 +1783,7 @@ function checkSimple(
   }
   if (head.includes("/")) scoped(state, () => checkScriptFile(state, head, "shell"));
 
-  switch (base) {
+  switch (tool) {
     case "git":
       return checkGit(state, args);
     case "rm":
@@ -1910,7 +1911,7 @@ function checkSimple(
     case "pnpm":
     case "yarn":
     case "bun":
-      checkPackageScript(state, base, args);
+      checkPackageScript(state, tool, args);
       return;
     case "make":
     case "gmake":

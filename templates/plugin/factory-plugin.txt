@@ -2808,7 +2808,7 @@ function checkSimple(state, cmd, stdin) {
   const tool = at > 0 && PACKAGE_MANAGERS.has(base.slice(0, at)) ? base.slice(0, at) : base;
   if (PACKAGE_MANAGERS.has(tool))
     checkPackageManager(state, tool, args, { redirects: cmd.redirects, stdin });
-  const interpreter = base.replace(/\d+(\.\d+)*$/, "");
+  const interpreter = tool.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     const operands = [];
     let code = false;
@@ -2825,7 +2825,7 @@ function checkSimple(state, cmd, stdin) {
     for (const f of code ? operands : operands.slice(1))
       checkWrite(state, f, `${interpreter} -i edits`);
   }
-  const inline = INTERPRETERS[interpreter] ?? INTERPRETERS[base];
+  const inline = INTERPRETERS[interpreter] ?? INTERPRETERS[tool];
   if (inline) {
     const i = args.findIndex((a) => inline.includes(a));
     const joined = args.find((a) => inline.some((f) => f.startsWith("--") && a.startsWith(`${f}=`)));
@@ -2837,7 +2837,7 @@ function checkSimple(state, cmd, stdin) {
       return;
     }
     const file = args.find((a) => !a.startsWith("-"));
-    if (base === "bun" && file !== undefined) {
+    if (tool === "bun" && file !== undefined) {
       checkPackageScript(state, "bun", args);
       return;
     }
@@ -2884,7 +2884,7 @@ function checkSimple(state, cmd, stdin) {
   }
   if (head.includes("/"))
     scoped(state, () => checkScriptFile(state, head, "shell"));
-  switch (base) {
+  switch (tool) {
     case "git":
       return checkGit(state, args);
     case "rm":
@@ -3015,7 +3015,7 @@ function checkSimple(state, cmd, stdin) {
     case "pnpm":
     case "yarn":
     case "bun":
-      checkPackageScript(state, base, args);
+      checkPackageScript(state, tool, args);
       return;
     case "make":
     case "gmake":
