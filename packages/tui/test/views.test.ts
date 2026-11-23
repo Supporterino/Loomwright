@@ -984,6 +984,21 @@ describe("footer", () => {
     expect(finishedText).not.toContain("x abort");
     expect(finishedText).toContain("q quit");
   });
+
+  test("an overflowing paused run with a failed task and questions keeps q quit and ? help", async () => {
+    const run = runState({
+      phase: "paused",
+      tasks: [taskState({ id: "first", status: "failed" })],
+      clarifications: [
+        { step: "design", question: "Is auth needed?", status: "unanswered", at: ISO },
+      ],
+    });
+    const view = buildViewModel(runInput(run, [], { selectedTaskId: "first" }));
+    const footer = (await frame(view, 80, 24, true)).split("\n").at(-1) ?? "";
+    expect(footer).toBe(
+      "r resume - w reword - x abort - t retry task - Q questions - ? help - q quit",
+    );
+  });
 });
 
 describe("frame rendering", () => {
