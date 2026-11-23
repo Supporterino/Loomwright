@@ -199,10 +199,29 @@ afterAll(() => rmSync(ws, { recursive: true, force: true }));
 beforeEach(() => rmSync(approvalFile(ws, ID), { force: true }));
 
 describe("plugin bundle", () => {
-  test("the committed bundle is current and carries the new reason (run `bun run build:plugin`)", async () => {
+  test("the regenerated bundle is committed and a root build matches it (run `bun run build:plugin`)", async () => {
     const bundle = readFileSync(PLUGIN_OUT, "utf8");
     expect(bundle).toContain("expands into itself");
     expect(bundle).toBe(await bundlePlugin());
+  });
+
+  test("a subdirectory build matches the committed file", async () => {
+    const bundleFrom = async (dir: string): Promise<string> => {
+      const cwd = process.cwd();
+      process.chdir(dir);
+      try {
+        return await bundlePlugin();
+      } finally {
+        process.chdir(cwd);
+      }
+    };
+    const fromRoot = await bundlePlugin();
+    const fromSubdirectory = await bundleFrom(join(ROOT, "packages", "core"));
+    expect(fromSubdirectory).toBe(fromRoot);
+    expect(fromSubdirectory).toBe(readFileSync(PLUGIN_OUT, "utf8"));
+    expect(fromSubdirectory).toContain("// packages/core/src/plugin/entry.ts");
+    expect(fromSubdirectory).not.toContain("../");
+    expect(fromSubdirectory).not.toContain(ROOT);
   });
 
   test("an in-memory build leaves the tracked file alone", async () => {
