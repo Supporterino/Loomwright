@@ -13,11 +13,29 @@ import {
   RunEvent as RunEventSchema,
   reduce,
 } from "@loomwright/protocol";
+import { landFor } from "../src/controls/actions.ts";
 import { ACTIVITY_LIMIT, collectFacts } from "../src/model/facts.ts";
 import { formatElapsed, formatPercent, formatTokensShort, truncate } from "../src/model/format.ts";
 import { applyKey } from "../src/model/keys.ts";
-import { buildViewModel, roleLabel, type ViewModelInput } from "../src/model/view-model.ts";
-import { emptyWorkspace, LABELS, replayNotice } from "../src/strings.ts";
+import {
+  buildViewModel,
+  roleLabel,
+  type SpecFindingRow,
+  singlePaneTailRows,
+  taskDetailGateRows,
+  taskDetailTailRows,
+  twoPaneTailRows,
+  type ViewModelInput,
+} from "../src/model/view-model.ts";
+import { lastOffset, moveBy, pageSize, windowTitle } from "../src/model/viewport.ts";
+import {
+  emptyWorkspace,
+  findingsCount,
+  LABELS,
+  pausedFindings,
+  replayNotice,
+} from "../src/strings.ts";
+import { ASCII_GLYPHS, UNICODE_GLYPHS } from "../src/theme/glyphs.ts";
 
 const ISO = "2026-11-17T10:00:00.000Z";
 const RUN = "add-health";
@@ -138,6 +156,8 @@ function vmInput(overrides: Partial<ViewModelInput>): ViewModelInput {
       overrides.selectedTaskId === undefined ? base.selectedTaskId : overrides.selectedTaskId,
     panel: overrides.panel === undefined ? null : overrides.panel,
     notice: overrides.notice === undefined ? null : overrides.notice,
+    listOffset: overrides.listOffset ?? 0,
+    taskOffset: overrides.taskOffset ?? 0,
   };
 }
 
@@ -166,12 +186,25 @@ describe("format", () => {
     expect(formatTokensShort(999)).toBe("999");
     expect(formatPercent(1, 4)).toBe("25%");
     expect(formatPercent(1, 0)).toBe("0%");
-    expect(truncate("health endpoint", 6)).toBe("healt…");
-    expect(truncate("short", 10)).toBe("short");
+    expect(truncate("health endpoint", 6, UNICODE_GLYPHS)).toBe("healt…");
+    expect(truncate("short", 10, UNICODE_GLYPHS)).toBe("short");
+    expect(truncate("health endpoint", 6, ASCII_GLYPHS)).toBe("hea...");
   });
 });
 
 describe("buildViewModel", () => {
+  test("a run summary with controls and newlines is flattened before any pane renders it", () => {
+    const run = runState({
+      phase: "awaiting-approval",
+      summary: "Add\u001b[2J health\nendpoints",
+    });
+    const status = statusDoc([{ run, tokens: 0, cost: 0 }]);
+    const view = buildViewModel(vmInput({ status, runs: [run], selectedRunId: RUN }));
+    expect(view.list[0]?.summary).toBe("Add[2J health endpoints");
+    expect(view.run?.summary).toBe("Add[2J health endpoints");
+    expect(view.run?.approval?.summary).toBe("Add[2J health endpoints");
+  });
+
   test("header: id, phase label, elapsed, tokens, cost and lock role", () => {
     const run = runState({ phase: "awaiting-approval" });
     const status = statusDoc([{ run, tokens: 12_345, cost: 0.42 }]);
@@ -194,9 +227,31 @@ describe("buildViewModel", () => {
   });
 
   test("the list is ordered and labelled: newest first, active pid, queued #1, idle", () => {
-    const oldest = runState({ id: "oldest", createdAt: "2026-11-17T09:00:00.000Z" });
-    const active = runState({ id: "running", createdAt: "2026-11-17T09:10:00.000Z" });
-    const queued = runState({ id: "queued", createdAt: "2026-11-17T09:20:00.000Z" });
+    const finding = {
+      severity: "should",
+      file: "packages/tui/src/model/view-model.ts",
+      line: 28,
+      what: "the row lacks the count",
+      problem: "findings are invisible",
+      fix: "carry the count",
+      impact: "the run looks idle",
+    };
+    const oldest = runState({
+      id: "oldest",
+      createdAt: "2026-11-17T09:00:00.000Z",
+      summary: "Oldest change",
+    });
+    const active = runState({
+      id: "running",
+      createdAt: "2026-11-17T09:10:00.000Z",
+      summary: "Active change",
+    });
+    const queued = runState({
+      id: "queued",
+      createdAt: "2026-11-17T09:20:00.000Z",
+      summary: "Queued change",
+      specFindings: [finding, { ...finding, severity: "must", line: 97 }],
+    });
     const lock: ActiveLock = { changeId: "running", pid: 4242, host: "host", since: ISO };
     const status = statusDoc(
       [
@@ -215,6 +270,12 @@ describe("buildViewModel", () => {
       }),
     );
     expect(view.list.map((item) => item.id)).toEqual(["queued", "running", "oldest"]);
+    expect(view.list.map((item) => item.summary)).toEqual([
+      "Queued change",
+      "Active change",
+      "Oldest change",
+    ]);
+    expect(view.list.map((item) => item.findings)).toEqual([2, 0, 0]);
     expect(view.list[0]?.role).toEqual({ kind: "queued", position: 1 });
     expect(view.list[1]?.role).toEqual({ kind: "active", pid: 4242 });
     expect(view.list[2]?.role).toEqual({ kind: "idle" });
@@ -222,6 +283,12 @@ describe("buildViewModel", () => {
     expect(roleLabel(view.list[0]?.role ?? { kind: "idle" })).toBe("queued #1");
     expect(roleLabel(view.list[2]?.role ?? { kind: "idle" })).toBe("idle");
     expect(view.list.filter((item) => item.selected).map((item) => item.id)).toEqual(["oldest"]);
+    // Every row carries its elapsed time even when no event has updated the run.
+    expect(view.list.map((item) => formatElapsed(item.elapsedMs))).toEqual([
+      "40m08s",
+      "50m08s",
+      "1h00m",
+    ]);
     expect(view.footer.map((hint) => hint.key)).toEqual(["n", "?", "q", "Enter"]);
   });
 
@@ -245,6 +312,28 @@ describe("buildViewModel", () => {
     const view = buildViewModel(runInput(run, [], { source: "replay" }));
     expect(view.run?.replayed).toBe(true);
     expect(view.notice).toBe(replayNotice);
+  });
+
+  test("replay is read-only: the footer lists only log, help and quit", () => {
+    for (const phase of ["implementing", "paused", "done", "aborted"] as const) {
+      const run = runState({
+        phase,
+        tasks: [taskState({ id: "first", status: "failed" })],
+      });
+      const view = buildViewModel(runInput(run, [], { source: "replay", selectedTaskId: "first" }));
+      expect(
+        view.footer.map((hint) => hint.key),
+        phase,
+      ).toEqual(["L", "?", "q"]);
+    }
+  });
+
+  test("the keys are documented: the run footer offers L for the activity log in live and replay", () => {
+    const run = runState();
+    for (const source of ["live", "replay"] as const) {
+      const view = buildViewModel(runInput(run, [], { source }));
+      expect(view.footer, source).toContainEqual({ key: "L", label: "log", enabled: true });
+    }
   });
 
   test("task order is kept from run state, with attempt and failures shown", () => {
@@ -336,6 +425,68 @@ describe("buildViewModel", () => {
       durationMs: 1_234,
     });
     expect(view.run?.detail?.retries).toBe(2);
+  });
+
+  test("control characters are stripped from task rows, questions and approval evidence", () => {
+    const task = taskState({
+      id: "\u001b[2Jtask",
+      title: "\u001b]52;c;title\u0007",
+      repo: "rep\u001b[2Jo",
+    });
+    const run = runState({ phase: "awaiting-approval", tasks: [task] });
+    resetSeq();
+    const view = buildViewModel(
+      runInput(
+        run,
+        [
+          event("task.started", {
+            task: { id: "\u001b[2Jtask", repo: "rep\u001b[2Jo" },
+            attempt: 1,
+          }),
+          event("agent.started", {
+            step: "\u001b[2Jtask",
+            agent: "\u001b[2Jimpl",
+            model: "model\u001b]52;c;x\u0007",
+          }),
+          event("question.raised", {
+            step: "\u001b[2Jintake",
+            question: "\u001b]52;c;q\u0007",
+            status: "unanswered",
+          }),
+          event("approval.pending", {
+            specHash: "\u001b]52;c;hash\u0007",
+            changeDir: "\u001b[2Jdir",
+          }),
+        ],
+        { selectedTaskId: "[2Jtask" },
+      ),
+    );
+
+    const row = view.run?.tasks[0];
+    expect(row?.id).toBe("[2Jtask");
+    expect(row?.title).toBe("]52;c;title");
+    expect(row?.repo).toBe("rep[2Jo");
+    expect(row?.selected).toBe(true);
+    expect(view.run?.detail?.agent?.role).toBe("[2Jimpl");
+    expect(view.run?.detail?.agent?.model).toBe("model]52;c;x");
+    expect(view.run?.questions[0]?.step).toBe("[2Jintake");
+    expect(view.run?.questions[0]?.question).toBe("]52;c;q");
+    expect(view.run?.approval?.specHash).toBe("]52;c;hash");
+    expect(view.run?.approval?.changeDir).toBe("[2Jdir");
+
+    resetSeq();
+    const granted = buildViewModel(
+      runInput(run, [
+        event("approval.granted", {
+          approver: "\u001b[2Jdev\u0007",
+          specHash: "\u001b]52;c;h\u0007",
+          specCommit: "\u001b[2Jabc\u0007",
+        }),
+      ]),
+    ).run?.approval;
+    expect(granted?.specHash).toBe("]52;c;h");
+    expect(granted?.specCommit).toBe("[2Jabc");
+    expect(granted?.approver).toBe("[2Jdev");
   });
 
   test("question.answered flips the snapshot row to answered and keeps the questions file", () => {
@@ -511,6 +662,179 @@ describe("buildViewModel", () => {
   });
 });
 
+describe("spec findings", () => {
+  const finding: SpecFindingRow = {
+    severity: "must",
+    file: "packages/core/src/state/run.ts",
+    line: 111,
+    what: "carries the paused reason",
+    problem: "the run view cannot say why it stopped",
+    fix: "carry pausedReason in RunDetail",
+    impact: "the user rewords blind",
+  };
+
+  test("RunDetail carries severity, file, line and the flattened text in run-state order", () => {
+    const second: SpecFindingRow = {
+      severity: "nice",
+      file: "packages/tui/src/strings.ts",
+      line: 40,
+      what: "the count reads twice",
+      problem: "the label repeats",
+      fix: "name it once",
+      impact: "the row is noisy",
+    };
+    const run = runState({
+      phase: "paused",
+      pausedReason: "spec findings need reword",
+      specFindings: [finding, second],
+    });
+    const detail = buildViewModel(runInput(run)).run;
+    expect(detail?.specFindings.map((row) => row.severity)).toEqual(["must", "nice"]);
+    expect(detail?.specFindings[0]).toEqual(finding);
+    expect(detail?.specFindings[1]).toEqual(second);
+    expect(detail?.pausedReason).toBe("spec findings need reword");
+  });
+
+  test("the run list marks findings: the count is carried and a run without findings reads 0", () => {
+    const paused = runState({
+      phase: "paused",
+      specFindings: [finding, { ...finding, severity: "should", line: 97 }],
+    });
+    const clean = runState({ id: "clean" });
+    const view = buildViewModel(
+      vmInput({
+        screen: "list",
+        status: statusDoc([
+          { run: paused, tokens: 0, cost: 0 },
+          { run: clean, tokens: 0, cost: 0 },
+        ]),
+        runs: [paused, clean],
+        selectedRunId: RUN,
+      }),
+    );
+    expect(view.list.find((item) => item.id === RUN)?.findings).toBe(2);
+    expect(view.list.find((item) => item.id === "clean")?.findings).toBe(0);
+  });
+
+  test("control characters are stripped from spec findings and pausedReason", () => {
+    const run = runState({
+      phase: "paused",
+      pausedReason: "\u001b[2Jblocked\u0007",
+      specFindings: [
+        {
+          severity: "must",
+          what: "\u001b[2Jwhat\u0007",
+          problem: "\u001b]52;c;problem\u0007",
+          fix: "\u001b[2Jfix\u0007",
+          impact: "\u001b]52;c;impact\u0007",
+        },
+      ],
+    });
+    const detail = buildViewModel(runInput(run)).run;
+    expect(detail?.specFindings[0]?.what).toBe("[2Jwhat");
+    expect(detail?.specFindings[0]?.problem).toBe("]52;c;problem");
+    expect(detail?.specFindings[0]?.fix).toBe("[2Jfix");
+    expect(detail?.specFindings[0]?.impact).toBe("]52;c;impact");
+    expect(detail?.pausedReason).toBe("[2Jblocked");
+  });
+
+  test("a finding with no file or line carries null, never undefined or an empty string", () => {
+    const run = runState({
+      phase: "paused",
+      specFindings: [{ severity: "should", what: "w", problem: "p", fix: "f", impact: "i" }],
+    });
+    const row = buildViewModel(runInput(run)).run?.specFindings[0];
+    expect(row?.file).toBeNull();
+    expect(row?.line).toBeNull();
+    expect(buildViewModel(runInput(runState())).run?.pausedReason).toBeNull();
+  });
+
+  test("the banner says reword is needed: the words name the count and the singular", () => {
+    expect(pausedFindings("—", 3)).toBe("paused — 3 spec findings need reword");
+    expect(pausedFindings("—", 1)).toBe("paused — 1 spec finding needs reword");
+    expect(pausedFindings("-", 2)).toBe("paused - 2 spec findings need reword");
+    expect(findingsCount(2)).toBe("2 findings");
+    expect(findingsCount(1)).toBe("1 finding");
+  });
+});
+
+describe("reword availability", () => {
+  const ACCEPTED = [
+    "queued",
+    "implementing",
+    "reviewing",
+    "contracts",
+    "full-suite",
+    "closing",
+    "paused",
+    "aborted",
+  ] as const;
+  const REFUSED = ["intake", "design", "awaiting-approval", "done"] as const;
+  const LOCK: ActiveLock = { changeId: RUN, pid: 4242, host: "host", since: ISO };
+
+  function viewWith(
+    run: RunState,
+    extras: { readonly active?: ActiveLock | null; readonly driverAlive?: boolean } = {},
+  ) {
+    return buildViewModel(
+      runInput(run, [], { status: statusDoc([{ run, tokens: 0, cost: 0 }], extras) }),
+    );
+  }
+
+  test("the eight phases the CLI accepts offer a reword", () => {
+    for (const phase of ACCEPTED) {
+      const view = buildViewModel(runInput(runState({ phase })));
+      expect(view.run?.reword, phase).toEqual({ state: "available", reason: null });
+      expect(view.footer, phase).toContainEqual({ key: "w", label: "reword", enabled: true });
+    }
+  });
+
+  test("phases the CLI refuses offer no reword", () => {
+    for (const phase of REFUSED) {
+      const view = buildViewModel(runInput(runState({ phase })));
+      expect(view.run?.reword, phase).toEqual({ state: "absent", reason: null });
+      expect(
+        view.footer.some((hint) => hint.key === "w"),
+        phase,
+      ).toBe(false);
+    }
+  });
+
+  test("a replay source offers no reword even at implementing", () => {
+    const view = buildViewModel(
+      runInput(runState({ phase: "implementing" }), [], { source: "replay" }),
+    );
+    expect(view.run?.reword).toEqual({ state: "absent", reason: null });
+    expect(view.footer.some((hint) => hint.key === "w")).toBe(false);
+  });
+
+  test("a driven run explains why w is inert", () => {
+    const view = viewWith(runState({ phase: "implementing" }), { active: LOCK });
+    const reason = "add-health is being driven by pid 4242; stop it first";
+    expect(view.run?.reword).toEqual({ state: "inert", reason });
+    expect(view.footer).toContainEqual({ key: "w", label: "reword", enabled: false, reason });
+  });
+
+  test("another change holding the lock names that change", () => {
+    const other: ActiveLock = { changeId: "faster-imports", pid: 99, host: "host", since: ISO };
+    const view = viewWith(runState({ phase: "implementing" }), { active: other });
+    const reason =
+      "faster-imports is the active change; finish or abort it before rewording add-health";
+    expect(view.run?.reword).toEqual({ state: "inert", reason });
+    expect(view.footer).toContainEqual({ key: "w", label: "reword", enabled: false, reason });
+  });
+
+  test("a stale lock with a dead driver leaves the reword available", () => {
+    const view = viewWith(runState({ phase: "implementing" }), {
+      active: LOCK,
+      driverAlive: false,
+    });
+    expect(view.run?.lock).toEqual({ kind: "idle" });
+    expect(view.run?.reword).toEqual({ state: "available", reason: null });
+    expect(view.footer).toContainEqual({ key: "w", label: "reword", enabled: true });
+  });
+});
+
 describe("applyKey", () => {
   test("the list and run keys return their intents", () => {
     const run = runState();
@@ -531,6 +855,10 @@ describe("applyKey", () => {
     expect(applyKey(list, "j")).toEqual({ kind: "next-run" });
     expect(applyKey(list, "Up")).toEqual({ kind: "prev-run" });
     expect(applyKey(list, "k")).toEqual({ kind: "prev-run" });
+    expect(applyKey(list, "PgUp")).toEqual({ kind: "page-up" });
+    expect(applyKey(list, "PgDn")).toEqual({ kind: "page-down" });
+    expect(applyKey(list, "g")).toEqual({ kind: "first" });
+    expect(applyKey(list, "G")).toEqual({ kind: "last" });
     expect(applyKey(list, "Esc")).toEqual({ kind: "none" });
 
     const runView = buildViewModel(runInput(run));
@@ -539,6 +867,10 @@ describe("applyKey", () => {
     expect(applyKey(runView, "j")).toEqual({ kind: "next-task" });
     expect(applyKey(runView, "Up")).toEqual({ kind: "prev-task" });
     expect(applyKey(runView, "k")).toEqual({ kind: "prev-task" });
+    expect(applyKey(runView, "PgUp")).toEqual({ kind: "page-up" });
+    expect(applyKey(runView, "PgDn")).toEqual({ kind: "page-down" });
+    expect(applyKey(runView, "g")).toEqual({ kind: "first" });
+    expect(applyKey(runView, "G")).toEqual({ kind: "last" });
     // The approval overlay owns a/A/w/R; the run screen leaves them inert.
     expect(applyKey(runView, "a")).toEqual({ kind: "none" });
     expect(applyKey(runView, "A")).toEqual({ kind: "none" });
@@ -547,12 +879,13 @@ describe("applyKey", () => {
     expect(applyKey(runView, "r")).toEqual({ kind: "resume" });
     expect(applyKey(runView, "x")).toEqual({ kind: "abort" });
     expect(applyKey(runView, "t")).toEqual({ kind: "retry" });
+    expect(applyKey(runView, "l")).toEqual({ kind: "land" });
     expect(applyKey(runView, "Q")).toEqual({ kind: "open-questions" });
     expect(applyKey(runView, "q")).toEqual({ kind: "quit" });
     expect(applyKey(runView, "?")).toEqual({ kind: "help" });
   });
 
-  test("the run footer leaves a, A, w and R to the approval overlay", () => {
+  test("the run footer leaves a, A and R to the approval overlay", () => {
     const implementing = runState({
       specFindings: [
         {
@@ -570,9 +903,33 @@ describe("applyKey", () => {
       const keys = view.footer.map((hint) => hint.key);
       expect(keys).not.toContain("a");
       expect(keys).not.toContain("A");
-      expect(keys).not.toContain("w");
       expect(keys).not.toContain("R");
     }
+  });
+
+  test("the land footer hint shares landFor's predicate and appears only for a done run", () => {
+    for (const phase of [
+      "intake",
+      "design",
+      "awaiting-approval",
+      "queued",
+      "implementing",
+      "reviewing",
+      "contracts",
+      "full-suite",
+      "closing",
+      "done",
+      "paused",
+      "aborted",
+    ] as const) {
+      const view = buildViewModel(runInput(runState({ phase })));
+      expect(
+        view.footer.some((hint) => hint.key === "l"),
+        phase,
+      ).toBe(landFor(view) !== null);
+    }
+    const done = buildViewModel(runInput(runState({ phase: "done" })));
+    expect(done.footer).toContainEqual({ key: "l", label: "land", enabled: true });
   });
 
   test("two panes become one: Esc backs out of the drilled task before it leaves the run", () => {
@@ -602,6 +959,203 @@ describe("applyKey", () => {
     );
     expect(view.footer.map((hint) => hint.key)).toEqual(["y"]);
     expect(applyKey(view, "a")).toEqual({ kind: "none" });
+  });
+});
+
+describe("scroll windows", () => {
+  /** `count` runs newest first: `run-0` is the oldest row. */
+  function manyRuns(count: number): RunState[] {
+    return Array.from({ length: count }, (_, index) =>
+      runState({
+        id: `run-${index}`,
+        summary: `run ${index}`,
+        createdAt: new Date(Date.parse(ISO) + index * 1_000).toISOString(),
+      }),
+    );
+  }
+
+  function listView(
+    runs: readonly RunState[],
+    selectedRunId: string,
+    overrides: Partial<ViewModelInput> = {},
+  ) {
+    return buildViewModel(
+      vmInput({
+        screen: "list",
+        rows: 24,
+        status: statusDoc(runs.map((run) => ({ run, tokens: 0, cost: 0 }))),
+        runs,
+        selectedRunId,
+        ...overrides,
+      }),
+    );
+  }
+
+  test("a 60-run list keeps the frame still", () => {
+    const runs = manyRuns(60);
+    const top = listView(runs, "run-59");
+    expect(top.listWindow).toEqual({ offset: 0, size: 22, total: 60 });
+
+    const bottom = listView(runs, "run-0");
+    expect(bottom.listWindow.offset).toBe(60 - 22);
+    expect(bottom.listWindow.offset + bottom.listWindow.size).toBe(60);
+  });
+
+  test("resize re-clamps the offset", () => {
+    const runs = manyRuns(60);
+    const small = listView(runs, "run-0", { rows: 24 });
+    expect(small.listWindow).toEqual({ offset: 38, size: 22, total: 60 });
+    expect(windowTitle("runs", small.listWindow)).toBe("runs 39-60/60");
+
+    // Growing to 120x40 keeps the same requested offset but clamps it to the larger window.
+    const grown = listView(runs, "run-0", { rows: 40, listOffset: small.listWindow.offset });
+    expect(grown.listWindow).toEqual({ offset: 22, size: 38, total: 60 });
+    expect(grown.listWindow.offset + grown.listWindow.size).toBe(60);
+    expect(windowTitle("runs", grown.listWindow)).toBe("runs 23-60/60");
+
+    // Shrinking back re-clamps in the other direction and keeps the selection visible.
+    const shrunk = listView(runs, "run-0", { rows: 24, listOffset: grown.listWindow.offset });
+    expect(shrunk.listWindow.offset).toBe(38);
+    expect(shrunk.listWindow.offset).toBeLessThanOrEqual(60 - shrunk.listWindow.size);
+  });
+
+  test("the selection stays visible for every requested offset", () => {
+    const runs = manyRuns(60);
+    // Newest first, so `run-30` sits at index 29.
+    for (let offset = 0; offset <= 40; offset += 1) {
+      const view = listView(runs, "run-30", { listOffset: offset });
+      expect(view.listWindow.offset, `offset ${offset}`).toBeLessThanOrEqual(29);
+      expect(view.listWindow.offset + view.listWindow.size, `offset ${offset}`).toBeGreaterThan(29);
+    }
+  });
+
+  test("the title names the window only when needed", () => {
+    const runs = manyRuns(12);
+    // 9 rows fit at 11 terminal rows; offset 2 puts the window over rows 3-11.
+    const windowed = listView(runs, "run-3", { rows: 11, listOffset: 2 });
+    expect(windowed.listWindow).toEqual({ offset: 2, size: 9, total: 12 });
+    expect(windowTitle("runs", windowed.listWindow)).toBe("runs 3-11/12");
+
+    const fits = listView(runs, "run-3", { rows: 40 });
+    expect(fits.listWindow).toEqual({ offset: 0, size: 38, total: 12 });
+    expect(windowTitle("runs", fits.listWindow)).toBeNull();
+  });
+
+  test("a page move keeps the selection in the window", () => {
+    const tasks = Array.from({ length: 30 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    const input = runInput(run, [], { rows: 24, selectedTaskId: "task-0" });
+    const first = buildViewModel(input);
+    expect(first.taskWindow).toEqual({ offset: 0, size: 17, total: 30 });
+
+    let selected = "task-0";
+    let offset = first.taskWindow.offset;
+    for (let press = 0; press < 2; press += 1) {
+      const index = tasks.findIndex((task) => task.id === selected);
+      const next = Math.min(tasks.length - 1, index + pageSize(first.taskWindow.size));
+      offset = moveBy(offset, pageSize(first.taskWindow.size), tasks.length, first.taskWindow.size);
+      selected = `task-${next}`;
+      const view = buildViewModel({ ...input, selectedTaskId: selected, taskOffset: offset });
+      expect(view.taskWindow.offset).toBeLessThanOrEqual(next);
+      expect(view.taskWindow.offset + view.taskWindow.size).toBeGreaterThan(next);
+      offset = view.taskWindow.offset;
+    }
+    expect(offset).toBe(lastOffset(30, first.taskWindow.size));
+    expect(selected).toBe("task-29");
+  });
+
+  test("a requested offset clamps at both ends", () => {
+    const runs = manyRuns(60);
+    expect(listView(runs, "run-0", { listOffset: 999 }).listWindow.offset).toBe(38);
+    expect(listView(runs, "run-59", { listOffset: -5 }).listWindow.offset).toBe(0);
+  });
+
+  test("singlePaneTailRows keeps its notice fixture and sizes from the graph window", () => {
+    const notice = Array.from({ length: 12 }, (_, index) => `notice line ${index + 1}`).join("\n");
+    const oneTask = buildViewModel(
+      runInput(runState({ tasks: [taskState({ id: "first" })] }), [], {
+        rows: 24,
+        notice,
+        selectedTaskId: null,
+      }),
+    );
+    expect(singlePaneTailRows(oneTask)).toBe(8);
+
+    const twelve = Array.from({ length: 12 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    // The four-row floor wins over the graph, so all twelve still fit with the tail intact.
+    const fits = buildViewModel(
+      runInput(runState({ tasks: twelve }), [], { rows: 24, selectedTaskId: null }),
+    );
+    expect(fits.taskWindow.size).toBe(12);
+    expect(singlePaneTailRows(fits)).toBe(9);
+  });
+
+  test("a paused run with findings counts its banner row in every budget", () => {
+    const findings: readonly SpecFindingRow[] = [
+      {
+        severity: "must",
+        file: "packages/tui/src/views/header.tsx",
+        line: 42,
+        what: "the banner hides the count",
+        problem: "a paused run looks like a generic pause",
+        fix: "name the findings in words",
+        impact: "the user cannot see why the run stopped",
+      },
+      {
+        severity: "should",
+        file: "packages/tui/src/model/view-model.ts",
+        line: 437,
+        what: "the banner row is missing",
+        problem: "the budget counts one header row for a two-row header",
+        fix: "count the paused banner",
+        impact: "a long paused run overflows",
+      },
+      {
+        severity: "nice",
+        file: "packages/tui/src/strings.ts",
+        line: 44,
+        what: "the third finding is a fixture",
+        problem: "three findings exercise the plural banner",
+        fix: "keep three",
+        impact: "none",
+      },
+    ];
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const view = buildViewModel(
+      runInput(runState({ phase: "paused", specFindings: findings, tasks }), [], {
+        rows: 24,
+        selectedTaskId: "task-0",
+      }),
+    );
+    // 24 rows - two header rows - graph and titles - footer; the graph gives way to the tail floor.
+    expect(view.taskWindow.size).toBe(16);
+    expect(singlePaneTailRows(view)).toBe(4);
+    expect(twoPaneTailRows(view)).toBe(21);
+    // The empty gate list and activity tail each keep a row, leaving the same tail floor.
+    expect(taskDetailGateRows(view)).toBe(5);
+    expect(taskDetailTailRows(view)).toBe(8);
+  });
+
+  test("the overview never loses the tail", () => {
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    const input = runInput(run, [], { rows: 24, selectedTaskId: null });
+    const view = buildViewModel(input);
+    expect(view.taskWindow).toEqual({ offset: 0, size: 17, total: 24 });
+    expect(singlePaneTailRows(view)).toBe(4);
+
+    // The graph scrolls instead of taking the tail's floor away.
+    const scrolled = buildViewModel({ ...input, selectedTaskId: "task-23" });
+    expect(scrolled.taskWindow.offset).toBe(7);
+    expect(scrolled.taskWindow.offset + scrolled.taskWindow.size).toBe(24);
   });
 });
 
@@ -642,6 +1196,8 @@ describe("no engine imports", () => {
       const namesFactoryPath = name === "intake/dialog.tsx" || name === "intake/paths.ts";
       if (text.includes(".factory/") && !namesFactoryPath)
         violations.push(`${name}: references .factory/`);
+      // Land is a detached CLI child, never an imported pipeline function.
+      if (/\blandChange\b/.test(text)) violations.push(`${name}: references landChange`);
       for (const match of text.matchAll(imports)) {
         const clause = match[1] ?? "";
         const specifier = match[2] ?? "";
@@ -686,9 +1242,9 @@ describe("only the short commands run in-process", () => {
     return calls;
   }
 
-  test("Factory.run, approve and resume are never driven from the UI", () => {
+  test("Factory.run, approve, resume, pause and land are never driven from the UI", () => {
     const calls = factoryCalls();
-    for (const forbidden of ["run", "approve", "resume", "pause"]) {
+    for (const forbidden of ["run", "approve", "resume", "pause", "land"]) {
       expect(calls.has(forbidden), `factory.${forbidden} must not be called in-process`).toBe(
         false,
       );

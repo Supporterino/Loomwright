@@ -51,6 +51,36 @@ export interface Command {
   run(args: readonly string[], io: Io): Promise<ExitCode>;
 }
 
+/**
+ * `-h`/`--help` are help only before the command; a string option may take one as its value.
+ * `parseArgs` reads a dash-leading token as an option, so bind it to the option explicitly.
+ */
+function bindHelpValue(args: readonly string[], options: CommandOptions): string[] {
+  const bound: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--") {
+      bound.push(...args.slice(i));
+      break;
+    }
+    const next = args[i + 1];
+    if (
+      arg !== undefined &&
+      next !== undefined &&
+      (next === "-h" || next === "--help") &&
+      arg.startsWith("--") &&
+      !arg.includes("=") &&
+      options[arg.slice(2)]?.type === "string"
+    ) {
+      bound.push(`${arg}=${next}`);
+      i++;
+      continue;
+    }
+    if (arg !== undefined) bound.push(arg);
+  }
+  return bound;
+}
+
 /** `node:util` parseArgs in strict mode, with its errors turned into usage errors. */
 export function parseCommandArgs<const O extends CommandOptions>(
   command: string,
@@ -60,7 +90,12 @@ export function parseCommandArgs<const O extends CommandOptions>(
 ) {
   try {
     // CommandOption extends the parse-args descriptor; parseArgs ignores the extra keys.
-    return parseArgs({ args: [...args], options, strict: true, allowPositionals });
+    return parseArgs({
+      args: bindHelpValue(args, options),
+      options,
+      strict: true,
+      allowPositionals,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new UsageError(`${command}: ${message}`, [`see \`loomwright ${command} --help\``]);

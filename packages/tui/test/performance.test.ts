@@ -85,6 +85,10 @@ function activity(seq: number, step = "first", text = `line ${seq}`): RunEvent {
   };
 }
 
+function heartbeat(seq: number, text = `tick ${seq}`): RunEvent {
+  return { v: PROTOCOL_VERSION, runId: RUN, seq, ts: ISO, type: "heartbeat", data: { text } };
+}
+
 function gate(seq: number, step: string, status: "pass" | "fail" = "pass"): RunEvent {
   return {
     v: PROTOCOL_VERSION,
@@ -200,6 +204,39 @@ describe("rendering and polling stay bounded", () => {
     expect(facts.activity).toHaveLength(ACTIVITY_LIMIT);
     expect(facts.activity[0]?.seq).toBe(100_000 - 1_999);
     expect(facts.activity.at(-1)?.seq).toBe(100_000);
+
+    const text = await renderFrame(frameOf(facts), { columns: 80, rows: 24 }, { ascii: true });
+    expect(text.length).toBeGreaterThan(0);
+    expect(text.split("\n").length).toBeLessThanOrEqual(24);
+
+    // A generous margin: the soak must not approach the 60 s bun timeout.
+    expect(elapsed).toBeLessThan(5_000);
+  });
+
+  test("the tail is capped: a heartbeat soak stays bounded and each burst is one line", async () => {
+    const events: RunEvent[] = [];
+    let seq = 0;
+    const started = performance.now();
+    for (let index = 1; index <= 100_000; index += 1) {
+      seq += 1;
+      events.push(activity(seq));
+      // Ten consecutive heartbeats after every 100 activity lines: 10,000 events, 1,000 bursts.
+      if (index % 100 === 0) {
+        for (let tick = 1; tick <= 10; tick += 1) {
+          seq += 1;
+          events.push(heartbeat(seq));
+        }
+      }
+    }
+    const facts = collectFacts(events);
+    const elapsed = performance.now() - started;
+
+    expect(facts.activity).toHaveLength(ACTIVITY_LIMIT);
+    expect(facts.activity.at(-1)?.kind).toBe("heartbeat");
+    expect(facts.activity.at(-1)?.text).toBe(`tick ${seq}`);
+    // Each ten-heartbeat burst contributes one line: the retained tail holds 20 bursts.
+    expect(facts.activity.filter((line) => line.kind === "heartbeat")).toHaveLength(20);
+    expect(facts.activity.length).toBeLessThan(events.length);
 
     const text = await renderFrame(frameOf(facts), { columns: 80, rows: 24 }, { ascii: true });
     expect(text.length).toBeGreaterThan(0);

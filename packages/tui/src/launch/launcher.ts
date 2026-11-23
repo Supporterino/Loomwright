@@ -7,15 +7,17 @@ import { type ChildProcess, spawn as defaultSpawn } from "node:child_process";
 import { appendFileSync, closeSync, fstatSync, mkdirSync, openSync, readSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import process from "node:process";
+import { stripControls } from "../model/format.ts";
 
 export type LaunchAction =
   | { readonly kind: "run-text"; readonly text: string }
   | { readonly kind: "run-file"; readonly path: string }
   | { readonly kind: "approve"; readonly id: string }
   | { readonly kind: "approve-only"; readonly id: string }
-  | { readonly kind: "reword"; readonly id: string }
+  | { readonly kind: "reword"; readonly id: string; readonly prompt?: string }
   | { readonly kind: "reapprove"; readonly id: string }
-  | { readonly kind: "resume"; readonly id: string };
+  | { readonly kind: "resume"; readonly id: string }
+  | { readonly kind: "land"; readonly id: string };
 
 export interface ExitResult {
   readonly code: number | null;
@@ -44,12 +46,18 @@ export function actionArgs(action: LaunchAction): readonly string[] {
       return ["approve", action.id];
     case "approve-only":
       return ["approve", action.id, "--no-continue"];
-    case "reword":
-      return ["reword", action.id];
+    case "reword": {
+      // Trim decides emptiness and the trimmed text is passed, so the 80-column check and the
+      // confirm line agree; internal newlines stay in the one argv element.
+      const prompt = action.prompt?.trim() ?? "";
+      return prompt === "" ? ["reword", action.id] : ["reword", action.id, "--prompt", prompt];
+    }
     case "reapprove":
       return ["reapprove", action.id];
     case "resume":
       return ["resume", action.id];
+    case "land":
+      return ["land", action.id];
     default: {
       const unhandled: never = action;
       throw new Error(`unknown launch action: ${String(unhandled)}`);
@@ -153,9 +161,11 @@ export function tailLog(logPath: string, lines = 10): readonly string[] {
   try {
     text = readTail(logPath, TAIL_BYTES);
   } catch {
+    // An absent or unreadable log has no tail.
     return [];
   }
-  const rows = text.split(/\r?\n/u);
+  // Gate and agent output reaches a notice as-is, so a tail line never carries a terminal control.
+  const rows = text.split(/\r?\n/u).map(stripControls);
   if (rows.at(-1) === "") rows.pop();
   return rows.slice(-lines);
 }

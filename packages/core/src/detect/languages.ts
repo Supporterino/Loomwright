@@ -23,6 +23,7 @@ function readText(root: string, rel: string): string | undefined {
   try {
     return readFileSync(join(root, rel), "utf8");
   } catch {
+    // An absent or unreadable file contributes no text.
     return undefined;
   }
 }
@@ -34,6 +35,7 @@ function usesReact(root: string, packageJsonPath: string): boolean {
   try {
     pkg = JSON.parse(text);
   } catch {
+    // A package.json that does not parse declares no React.
     return false;
   }
   if (typeof pkg !== "object" || pkg === null) return false;
@@ -61,6 +63,7 @@ function isK8sManifest(root: string, rel: string): boolean {
       })
     );
   } catch {
+    // Not a plain Kubernetes manifest: no documents or invalid YAML.
     return false;
   }
 }

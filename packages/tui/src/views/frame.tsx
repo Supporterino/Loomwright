@@ -1,6 +1,6 @@
 import { Box, render } from "ink";
 import type { ReactElement } from "react";
-import type { ViewModel } from "../model/view-model.ts";
+import { twoPaneTailRows, type ViewModel } from "../model/view-model.ts";
 import { detectColorDepth, type TerminalEnv } from "../theme/env.ts";
 import { type GlyphSet, glyphsFor } from "../theme/glyphs.ts";
 import type { ColorDepth } from "../theme/tokens.ts";
@@ -24,11 +24,19 @@ export interface FrameSize {
 
 export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
   const run = viewModel.run;
+  // The preview's right pane spends a column of padding before its activity lines.
+  const previewColumns = Math.max(0, viewModel.columns - Math.floor(viewModel.columns / 2) - 1);
   return (
     <Box flexDirection="column" width={viewModel.columns} height={viewModel.rows}>
-      <Box flexDirection="column" flexGrow={1} overflowY="hidden">
+      <Box flexDirection="column" flexGrow={1}>
         {viewModel.panel !== null ? (
-          <PanelBox panel={viewModel.panel} glyphs={glyphs} depth={depth} />
+          <PanelBox
+            panel={viewModel.panel}
+            glyphs={glyphs}
+            depth={depth}
+            rows={viewModel.rows}
+            columns={viewModel.columns}
+          />
         ) : viewModel.screen === "list" ? (
           viewModel.twoPane && run !== null ? (
             <Box flexDirection="row">
@@ -36,12 +44,13 @@ export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
                 <RunList viewModel={viewModel} glyphs={glyphs} depth={depth} />
               </Box>
               <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
-                <RunHeader run={run} glyphs={glyphs} depth={depth} />
+                <RunHeader run={run} glyphs={glyphs} depth={depth} columns={previewColumns} />
                 <ActivityTail
                   lines={run.activity}
                   glyphs={glyphs}
                   depth={depth}
-                  maxLines={Math.max(0, viewModel.rows - 6)}
+                  maxLines={twoPaneTailRows(viewModel)}
+                  columns={previewColumns}
                 />
               </Box>
             </Box>
@@ -57,7 +66,12 @@ export function Frame({ viewModel, glyphs, depth }: FrameProps): ReactElement {
           />
         )}
       </Box>
-      <KeyFooter hints={viewModel.footer} glyphs={glyphs} depth={depth} />
+      <KeyFooter
+        hints={viewModel.footer}
+        glyphs={glyphs}
+        depth={depth}
+        columns={viewModel.columns}
+      />
     </Box>
   );
 }

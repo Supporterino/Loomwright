@@ -1,0 +1,40 @@
++----------------------------------------------------------------------------------------------------------------------+
+| Activity - run                                                                                                       |
+| first - agent - first line 38                                                                                        |
+| first - agent - first line 39                                                                                        |
+| first - agent - first line 40                                                                                        |
+| first - agent - first line 41                                                                                        |
+| first - agent - first line 42                                                                                        |
+| first - agent - first line 43                                                                                        |
+| first - agent - first line 44                                                                                        |
+| first - agent - first line 45                                                                                        |
+| first - agent - first line 46                                                                                        |
+| first - agent - first line 47                                                                                        |
+| first - agent - first line 48                                                                                        |
+| run - log - run line 1                                                                                               |
+| run - log - run line 2                                                                                               |
+| run - log - run line 3                                                                                               |
+| run - log - run line 4                                                                                               |
+| run - log - run line 5                                                                                               |
+| run - log - run line 6                                                                                               |
+| run - log - run line 7                                                                                               |
+| run - log - run line 8                                                                                               |
+| run - log - run line 9                                                                                               |
+| run - log - run line 10                                                                                              |
+| run - log - run line 11                                                                                              |
+| run - log - run line 12                                                                                              |
+| run - log - run line 13                                                                                              |
+| run - log - run line 14                                                                                              |
+| run - log - run line 15                                                                                              |
+| run - log - run line 16                                                                                              |
+| run - log - run line 17                                                                                              |
+| run - log - run line 18                                                                                              |
+| run - log - run line 19                                                                                              |
+| run - log - run line 20                                                                                              |
+| run - log - run line 21                                                                                              |
+| run - log - run line 22                                                                                              |
+| run - log - run line 23                                                                                              |
+| run - log - run line 24                                                                                              |
+| j/k scroll - PgUp/PgDn page - g/G ends - f follow on - Tab scope - Esc back                                          |
++----------------------------------------------------------------------------------------------------------------------+
+j/k scroll - PgUp/PgDn page - g/G ends - f follow on - Tab scope - Esc back

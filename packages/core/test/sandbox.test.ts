@@ -13,10 +13,34 @@ import {
 
 describe("sandboxEnabled", () => {
   test("macOS with sandbox-exec unless switched off; nowhere else yet", () => {
-    expect(sandboxEnabled("auto", "darwin", () => true)).toBe(true);
-    expect(sandboxEnabled("off", "darwin", () => true)).toBe(false);
-    expect(sandboxEnabled("auto", "darwin", () => false)).toBe(false);
-    expect(sandboxEnabled("auto", "linux", () => true)).toBe(false);
+    expect(sandboxEnabled("auto", "darwin", () => true, {})).toBe(true);
+    expect(sandboxEnabled("off", "darwin", () => true, {})).toBe(false);
+    expect(sandboxEnabled("auto", "darwin", () => false, {})).toBe(false);
+    expect(sandboxEnabled("auto", "linux", () => true, {})).toBe(false);
+  });
+
+  test("the marker turns wrapping off", () => {
+    expect(sandboxEnabled("auto", "darwin", () => true, {})).toBe(true);
+    expect(sandboxEnabled("auto", "darwin", () => true, { AI_FACTORY_SANDBOX: "wrapped" })).toBe(
+      false,
+    );
+    expect(sandboxEnabled("auto", "darwin", () => true, { AI_FACTORY_SANDBOX: "off" })).toBe(false);
+    expect(sandboxEnabled("auto", "darwin", () => true, { AI_FACTORY_SANDBOX: "seatbelt" })).toBe(
+      true,
+    );
+  });
+
+  test("the Seatbelt suite passes while itself under a profile", () => {
+    const saved = process.env.AI_FACTORY_SANDBOX;
+    process.env.AI_FACTORY_SANDBOX = "wrapped";
+    try {
+      expect(sandboxEnabled("auto")).toBe(false);
+      // The suite's own skip condition: it spawns nothing while the gate has wrapped it.
+      expect(process.platform === "darwin" && sandboxEnabled("auto")).toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
+      else process.env.AI_FACTORY_SANDBOX = saved;
+    }
   });
 });
 

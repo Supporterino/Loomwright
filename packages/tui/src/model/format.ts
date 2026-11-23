@@ -1,4 +1,5 @@
 /** Plain text formatting for the view-model: no colour, no terminal access. */
+import type { GlyphSet } from "../theme/glyphs.ts";
 
 /** `1h02m`, `3m12s`, `8s`; negative or invalid spans read as zero. */
 export function formatElapsed(ms: number): string {
@@ -25,10 +26,32 @@ export function formatPercent(part: number, whole: number): string {
   return `${Math.round((part / whole) * 100)}%`;
 }
 
-/** Cuts text to `width` cells, ending in an ellipsis when anything was dropped. */
-export function truncate(text: string, width: number): string {
+/**
+ * `text` without the C0/C1 controls that drive a terminal; tab and newline survive because they
+ * only lay text out (an `ESC[2J` or `OSC 52` would clear the screen or write the clipboard).
+ */
+export function stripControls(text: string): string {
+  return text.replace(/[^\P{Cc}\t\n]/gu, "");
+}
+
+/**
+ * Readable text stays one line and carries no terminal controls: a payload's newlines never split
+ * a row, and its escape sequences never reach the terminal.
+ */
+export function flat(text: string): string {
+  return stripControls(text)
+    .replace(/\s*[\r\n]+\s*/g, " ")
+    .trim();
+}
+
+/**
+ * Cuts text to `width` cells, ending in the frame's ellipsis when anything was dropped. Ink's own
+ * truncation is always `…`, so the mark follows the glyph set to keep an ASCII frame printable.
+ */
+export function truncate(text: string, width: number, glyphs: GlyphSet): string {
   if (width <= 0) return "";
   if (text.length <= width) return text;
-  if (width === 1) return "…";
-  return `${text.slice(0, width - 1)}…`;
+  const mark = glyphs.bullet === "-" ? "..." : "…";
+  if (width <= mark.length) return mark.slice(0, width);
+  return `${text.slice(0, width - mark.length)}${mark}`;
 }

@@ -397,7 +397,129 @@ function checkRecursiveSearch(state: State, base: string, args: readonly string[
 }
 
 /** Package managers whose global installs and publishing the guard refuses. */
-const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx"]);
+const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "bunx", "npx", "pnpx"]);
+
+/**
+ * npm config options that take a value, so the value is not the wrapped command. Shared by
+ * `npx`/`pnpx` and `npm exec`; `--fetch-*` is matched by prefix below. Aliases that expand to a
+ * value option (`--enjoy-by` → `--before`, `--reg` → `--registry`) are listed too. An option
+ * whose arity is missing here is still inspected under both interpretations, so it cannot hide
+ * the wrapped command.
+ */
+const NPM_VALUE_FLAGS = new Set([
+  "--_auth",
+  "--access",
+  "--allow-directory",
+  "--allow-file",
+  "--allow-git",
+  "--allow-remote",
+  "--allow-scripts",
+  "--also",
+  "--audit-level",
+  "--auth-type",
+  "--before",
+  "--ca",
+  "--cache",
+  "--cache-max",
+  "--cache-min",
+  "--cafile",
+  "--call",
+  "--cert",
+  "--cidr",
+  "--cpu",
+  "--depth",
+  "--diff",
+  "--diff-dst-prefix",
+  "--diff-src-prefix",
+  "--diff-unified",
+  "--editor",
+  "--enjoy-by",
+  "--expect-result-count",
+  "--expires",
+  "--fetch-retries",
+  "--fetch-retry-factor",
+  "--fetch-retry-maxtimeout",
+  "--fetch-retry-mintimeout",
+  "--fetch-timeout",
+  "--git",
+  "--globalconfig",
+  "--heading",
+  "--https-proxy",
+  "--include",
+  "--init-author-email",
+  "--init-author-name",
+  "--init-author-url",
+  "--init-license",
+  "--init-module",
+  "--init-type",
+  "--init-version",
+  "--init.author.email",
+  "--init.author.name",
+  "--init.author.url",
+  "--init.license",
+  "--init.module",
+  "--init.version",
+  "--install-strategy",
+  "--key",
+  "--libc",
+  "--local-address",
+  "--location",
+  "--lockfile-version",
+  "--loglevel",
+  "--logs-dir",
+  "--logs-max",
+  "--maxsockets",
+  "--message",
+  "--min-release-age",
+  "--name",
+  "--node-gyp",
+  "--node-options",
+  "--noproxy",
+  "--omit",
+  "--only",
+  "--orgs",
+  "--orgs-permission",
+  "--os",
+  "--otp",
+  "--pack-destination",
+  "--package",
+  "--packages",
+  "--packages-and-scopes-permission",
+  "--password",
+  "--prefix",
+  "--preid",
+  "--provenance-file",
+  "--proxy",
+  "--reg",
+  "--registry",
+  "--replace-registry-host",
+  "--save-prefix",
+  "--sbom-format",
+  "--sbom-type",
+  "--scope",
+  "--scopes",
+  "--script-shell",
+  "--searchexclude",
+  "--searchlimit",
+  "--searchopts",
+  "--searchstaleness",
+  "--shell",
+  "--tag",
+  "--tag-version-prefix",
+  "--token-description",
+  "--umask",
+  "--user-agent",
+  "--userconfig",
+  "--viewer",
+  "--which",
+  "--workspace",
+]);
+/** npm's `--color` takes `always`, `true` or `false`; otherwise it is a bare boolean. */
+const NPM_COLOR_VALUES = new Set(["always", "true", "false"]);
+/** Single-letter npm config flags that take a value (npm reads a cluster letter by letter). */
+const NPM_SHORT_VALUE_FLAGS = new Set(["c", "C", "L", "m", "w"]);
+/** `npx` adds `-p`/`--package` and `-n`/`--node-arg`; `npm exec -p` is the boolean `--parseable`. */
+const NPX_SHORT_VALUE_FLAGS = new Set([...NPM_SHORT_VALUE_FLAGS, "n", "p"]);
 /** Bun subcommands where `-g` means a global install; `bun test -g` filters test names. */
 const BUN_GLOBAL_SUBCOMMANDS = new Set([
   "install",
@@ -451,6 +573,190 @@ function bunRunScript(args: readonly string[], start: number): string | undefine
   return undefined;
 }
 
+/** The outer command's stdin and redirects, which a wrapped shell command inherits. */
+interface InheritedInput {
+  readonly redirects: readonly Redirect[];
+  readonly stdin: string | undefined | null;
+}
+
+interface NpmSubcommand {
+  readonly index: number;
+  readonly word: string;
+}
+
+/**
+ * npm's possible subcommands, after the config options npm accepts before it (`npm -w . exec`).
+ * An option whose arity is unknown is read both as a bare flag and as value-taking, so no
+ * spelling can hide `exec`.
+ */
+function npmSubcommands(args: readonly string[]): NpmSubcommand[] {
+  const found = new Map<number, NpmSubcommand>();
+  const seen = new Set<number>();
+  const pending = [0];
+  while (pending.length > 0) {
+    const i = pending.pop();
+    if (i === undefined || seen.has(i)) continue;
+    seen.add(i);
+    if (i >= args.length) continue;
+    const a = args[i] ?? "";
+    if (a === "--") {
+      const next = args[i + 1];
+      if (next !== undefined) found.set(i + 1, { index: i + 1, word: next });
+      continue;
+    }
+    if (!a.startsWith("-") || a === "-") {
+      found.set(i, { index: i, word: a });
+      continue;
+    }
+    if (a.startsWith("--")) {
+      const next = args[i + 1] ?? "";
+      if (a === "--color" && NPM_COLOR_VALUES.has(next)) pending.push(i + 2);
+      else if (a.includes("=")) pending.push(i + 1);
+      else if (NPM_VALUE_FLAGS.has(a) || a.startsWith("--fetch-")) pending.push(i + 2);
+      else pending.push(i + 1, i + 2);
+      continue;
+    }
+    // npm reads a single-dash cluster letter by letter; a bare value letter takes the next word.
+    let next: number | undefined;
+    const letters = a.slice(1);
+    for (let j = 0; j < letters.length; j++) {
+      const ch = letters[j] ?? "";
+      if (NPM_SHORT_VALUE_FLAGS.has(ch)) {
+        next = letters.slice(j + 1) === "" ? i + 2 : i + 1;
+        break;
+      }
+    }
+    pending.push(next ?? i + 1);
+  }
+  return [...found.values()].sort((a, b) => a.index - b.index);
+}
+
+interface PackageRunnerFlags {
+  readonly long: ReadonlySet<string>;
+  readonly short: ReadonlySet<string>;
+}
+
+const NPX_RUNNER_FLAGS: PackageRunnerFlags = {
+  long: NPM_VALUE_FLAGS,
+  short: NPX_SHORT_VALUE_FLAGS,
+};
+/** `npm exec` shares npm's config table, where `-p` is the boolean `--parseable`. */
+const NPM_EXEC_RUNNER_FLAGS: PackageRunnerFlags = {
+  long: NPM_VALUE_FLAGS,
+  short: NPM_SHORT_VALUE_FLAGS,
+};
+
+interface RunnerScan {
+  readonly starts: readonly number[];
+  readonly calls: readonly string[];
+}
+
+/**
+ * Where a runner's wrapped command may start, plus any `-c`/`--call` text. An unknown long
+ * option is scanned both as a bare flag and as taking the next word, so an option missing from
+ * the value table cannot shift the command out of view.
+ */
+function scanRunnerArgs(args: readonly string[], flags: PackageRunnerFlags): RunnerScan {
+  const starts = new Set<number>();
+  const calls: string[] = [];
+  const seen = new Set<number>();
+  const pending = [0];
+  while (pending.length > 0) {
+    const i = pending.pop();
+    if (i === undefined || seen.has(i)) continue;
+    seen.add(i);
+    if (i >= args.length) {
+      starts.add(i);
+      continue;
+    }
+    const a = args[i] ?? "";
+    if (a === "--") {
+      starts.add(i + 1);
+      continue;
+    }
+    if (!a.startsWith("-") || a === "-") {
+      starts.add(i);
+      continue;
+    }
+    if (a.startsWith("--")) {
+      if (a === "--call") {
+        calls.push(args[i + 1] ?? "");
+        continue;
+      }
+      if (a.startsWith("--call=")) {
+        calls.push(a.slice("--call=".length));
+        continue;
+      }
+      const next = args[i + 1] ?? "";
+      if (a === "--color" && NPM_COLOR_VALUES.has(next)) pending.push(i + 2);
+      else if (a.includes("=")) pending.push(i + 1);
+      else if (flags.long.has(a) || a.startsWith("--fetch-")) pending.push(i + 2);
+      else pending.push(i + 1, i + 2);
+      continue;
+    }
+    // npm reads a single-dash cluster as its letters (`-yp <pkg>` is `-y -p <pkg>`), so expand
+    // it before choosing the wrapped command. `-c` takes the call text attached (`-c=<text>`,
+    // `-c<text>`) or as the next word; skipping `-c=<text>` would run it unchecked.
+    const letters = a.slice(1);
+    let next: number | undefined;
+    let called = false;
+    for (let j = 0; j < letters.length; j++) {
+      const ch = letters[j] ?? "";
+      if (ch === "c") {
+        const attached = letters.slice(j + 1).replace(/^=/, "");
+        calls.push(attached !== "" ? attached : (args[i + 1] ?? ""));
+        called = true;
+        break;
+      }
+      if (flags.short.has(ch)) {
+        // Any remainder after the letter is the attached value, including `-w=` (empty value);
+        // only a bare letter takes the next word.
+        next = letters.slice(j + 1) === "" ? i + 2 : i + 1;
+        break;
+      }
+    }
+    if (!called) pending.push(next ?? i + 1);
+  }
+  return { starts: [...starts].sort((a, b) => a - b), calls };
+}
+
+/**
+ * `npx`, `pnpx` and `npm exec` are package runners: skip their own flags and inspect the command
+ * they wrap. `-c`/`--call` carries a shell command line instead of a wrapped command.
+ */
+function checkPackageRunner(
+  state: State,
+  args: readonly string[],
+  outer: InheritedInput,
+  flags: PackageRunnerFlags,
+): void {
+  const { starts, calls } = scanRunnerArgs(args, flags);
+  for (const text of calls) checkScriptText(state, text, outer);
+  for (const start of starts) {
+    const wrapped = args.slice(start);
+    if (wrapped.length === 0) continue;
+    if (++state.depth > 25) block("command nests too deeply to inspect");
+    // A subprocess cannot change this shell's directory, so a wrapped `cd` must not either.
+    try {
+      scoped(state, () =>
+        checkSimple(
+          state,
+          {
+            kind: "simple",
+            assigns: [],
+            words: wrapped,
+            redirects: [...outer.redirects],
+            substitutions: [],
+          },
+          outer.stdin,
+        ),
+      );
+    } finally {
+      state.depth--;
+    }
+  }
+}
+
 /**
  * Global installs and publishing change the machine or the registry, never the worktree.
  * `bun` is both a runtime and a package manager, and the interpreter branch returns before the
@@ -461,12 +767,29 @@ function checkPackageManager(
   tool: string,
   args: readonly string[],
   /** The outer command's input: `bun x` hands its redirects and stdin to what it wraps. */
-  outer: { readonly redirects: readonly Redirect[]; readonly stdin: string | undefined | null },
+  outer: InheritedInput,
 ): void {
   // `bunx` is Bun's documented alias for `bun x`: whatever it wraps gets the same checks.
   if (tool === "bunx") {
     checkPackageManager(state, "bun", ["x", ...args], outer);
     return;
+  }
+  // `npx` and `pnpx` are package runners: skip the alias's own flags and inspect what it wraps.
+  // `npm exec` and its `x` alias are the same runner, reached through npm's own config options.
+  if (tool === "npx" || tool === "pnpx") {
+    checkPackageRunner(state, args, outer, NPX_RUNNER_FLAGS);
+    return;
+  }
+  if (tool === "npm") {
+    const runners = npmSubcommands(args).filter((c) => c.word === "exec" || c.word === "x");
+    for (const cmd of runners) {
+      // npm reads `--call`/`-c` from the whole argv, so the options before `exec` carry the same
+      // call text as the ones after it.
+      for (const text of scanRunnerArgs(args.slice(0, cmd.index), NPM_EXEC_RUNNER_FLAGS).calls)
+        checkScriptText(state, text, outer);
+      checkPackageRunner(state, args.slice(cmd.index + 1), outer, NPM_EXEC_RUNNER_FLAGS);
+    }
+    if (runners.length > 0) return;
   }
   const cmd = tool === "bun" ? bunSubcommand(args) : undefined;
   const sub = cmd?.word;
@@ -548,7 +871,8 @@ function expandScripts(
     if (state.expanding.has(expansion)) block(`script \`${key}\` expands into itself`);
     state.expanding.add(expansion);
     try {
-      checkScript(state, body);
+      // The script runs in its own shell, so a `cd` inside it must not move this one.
+      scoped(state, () => checkScript(state, body));
     } finally {
       state.expanding.delete(expansion);
     }
@@ -572,6 +896,7 @@ function checkPackageScript(state: State, tool: string, args: readonly string[])
         ? {}
         : (JSON.parse(text) as { scripts?: Record<string, unknown> }).scripts) ?? {};
   } catch {
+    // A package.json that does not parse has no scripts to rewrite.
     return;
   }
   // Bun runs its own subcommands (`test`, `build`, `install`, …) even when a script has that
@@ -695,7 +1020,7 @@ function checkMake(state: State, args: readonly string[]): void {
       if (/\$[({]/.test(line)) {
         const found = scanText(line);
         if (found) block(`make ${target}: ${found}`);
-      } else checkScript(state, line.replaceAll(DOLLAR, "$"));
+      } else scoped(state, () => checkScript(state, line.replaceAll(DOLLAR, "$")));
     }
   };
   for (const t of targets.length > 0 ? targets : first === undefined ? [] : [first]) visit(t);
@@ -1276,7 +1601,8 @@ function unwrap(state: State, words: string[], stdin: string | undefined | null)
       if (base === "flock") {
         const c = rest.indexOf("-c");
         if (c !== -1) {
-          checkScript(state, rest[c + 1] ?? "");
+          // `flock -c` runs the text in a child shell, so its `cd` stays there.
+          scoped(state, () => checkScript(state, rest[c + 1] ?? ""));
           return [];
         }
         i += 1; // lock file
@@ -1289,7 +1615,8 @@ function unwrap(state: State, words: string[], stdin: string | undefined | null)
       let i = 0;
       while (i < rest.length && (rest[i] ?? "").startsWith("-"))
         i += /^-(n|d)$/.test(rest[i] ?? "") ? 2 : 1;
-      checkScript(state, rest.slice(i).join(" "));
+      // `watch` runs the text in a child shell, so its `cd` stays there.
+      scoped(state, () => checkScript(state, rest.slice(i).join(" ")));
       return [];
     }
     return w;
@@ -1442,12 +1769,24 @@ function checkSimple(
       break;
     }
     const operand = args[i];
-    if (c) return checkScript(state, operand ?? "");
-    if (!fromStdin && operand !== undefined) return checkScriptFile(state, operand, "shell");
-    if (heredoc !== undefined) return checkScript(state, heredoc);
-    if (inputFile !== undefined) return checkScriptFile(state, inputFile, "shell");
+    if (c) {
+      scoped(state, () => checkScript(state, operand ?? ""));
+      return;
+    }
+    if (!fromStdin && operand !== undefined) {
+      scoped(state, () => checkScriptFile(state, operand, "shell"));
+      return;
+    }
+    if (heredoc !== undefined) {
+      scoped(state, () => checkScript(state, heredoc));
+      return;
+    }
+    if (inputFile !== undefined) {
+      scoped(state, () => checkScriptFile(state, inputFile, "shell"));
+      return;
+    }
     if (stdin === null) block(`pipes generated input into ${base}`);
-    if (stdin !== undefined) checkScript(state, stdin);
+    if (stdin !== undefined) scoped(state, () => checkScript(state, stdin));
     return;
   }
   if (base === "source" || base === ".") {
@@ -1463,9 +1802,14 @@ function checkSimple(
     state.cwd = undefined;
     return;
   }
-  if (PACKAGE_MANAGERS.has(base))
-    checkPackageManager(state, base, args, { redirects: cmd.redirects, stdin });
-  const interpreter = base.replace(/\d+(\.\d+)*$/, "");
+  // `npx npm@latest publish` runs the tagged package's bin: the version tag must not hide the
+  // package manager from the publish, global-install and package-script checks, so every branch
+  // below dispatches on the stripped `tool` rather than the tagged `base`.
+  const at = base.lastIndexOf("@");
+  const tool = at > 0 && PACKAGE_MANAGERS.has(base.slice(0, at)) ? base.slice(0, at) : base;
+  if (PACKAGE_MANAGERS.has(tool))
+    checkPackageManager(state, tool, args, { redirects: cmd.redirects, stdin });
+  const interpreter = tool.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     // -i edits the operands in place: they are writes.
     const operands: string[] = [];
@@ -1481,7 +1825,7 @@ function checkSimple(
     for (const f of code ? operands : operands.slice(1))
       checkWrite(state, f, `${interpreter} -i edits`);
   }
-  const inline = INTERPRETERS[interpreter] ?? INTERPRETERS[base];
+  const inline = INTERPRETERS[interpreter] ?? INTERPRETERS[tool];
   if (inline) {
     const i = args.findIndex((a) => inline.includes(a));
     const joined = args.find((a) =>
@@ -1496,7 +1840,7 @@ function checkSimple(
     }
     const file = args.find((a) => !a.startsWith("-"));
     // `bun run x` / `bun x` may name a package.json script rather than a file.
-    if (base === "bun" && file !== undefined) {
+    if (tool === "bun" && file !== undefined) {
       checkPackageScript(state, "bun", args);
       return;
     }
@@ -1522,7 +1866,10 @@ function checkSimple(
   if (base === "sed" || base === "gsed") checkSed(state, args);
   if (base === "script") {
     const c = args.findIndex((a) => a === "-c" || a === "--command");
-    if (c !== -1) return checkScript(state, args[c + 1] ?? "");
+    if (c !== -1) {
+      scoped(state, () => checkScript(state, args[c + 1] ?? ""));
+      return;
+    }
   }
   if (base === "fd" || base === "fdfind") {
     const x = args.findIndex((a) => ["-x", "--exec", "-X", "--exec-batch"].includes(a));
@@ -1535,9 +1882,9 @@ function checkSimple(
       return;
     }
   }
-  if (head.includes("/")) checkScriptFile(state, head, "shell");
+  if (head.includes("/")) scoped(state, () => checkScriptFile(state, head, "shell"));
 
-  switch (base) {
+  switch (tool) {
     case "git":
       return checkGit(state, args);
     case "rm":
@@ -1665,7 +2012,7 @@ function checkSimple(
     case "pnpm":
     case "yarn":
     case "bun":
-      checkPackageScript(state, base, args);
+      checkPackageScript(state, tool, args);
       return;
     case "make":
     case "gmake":
@@ -1736,11 +2083,18 @@ function literalOutput(cmd: Command): string | undefined {
   return undefined;
 }
 
-function checkPipeline(state: State, pipeline: Pipeline): void {
+function checkPipeline(
+  state: State,
+  pipeline: Pipeline,
+  /** Input a wrapping shell hands to the pipeline (`npx -c '<text>'`, `bun x`). */
+  inherited?: InheritedInput,
+): void {
   const { commands } = pipeline;
   commands.forEach((cmd, i) => {
     // stdin of a pipe stage: known text, null (generated, unknown) or undefined (none).
     const prev = commands[i - 1];
+    // Only a pipeline's first command reads the wrapping shell's stdin and redirects.
+    const input = prev === undefined ? inherited : undefined;
     let stdin: string | undefined | null;
     if (prev !== undefined) {
       const prevWords = prev.kind === "simple" ? prev.words : [];
@@ -1752,33 +2106,53 @@ function checkPipeline(state: State, pipeline: Pipeline): void {
         }
       }
       stdin = literalOutput(prev) ?? null;
+    } else if (input !== undefined) {
+      stdin = input.stdin;
     }
+    // The command's own redirects win over the wrapper's when both name an input.
+    const redirects = input === undefined ? cmd.redirects : [...cmd.redirects, ...input.redirects];
     if (cmd.kind === "subshell") {
-      checkRedirects(state, cmd.redirects);
-      scoped(state, () => checkScriptAst(state, cmd.script));
+      checkRedirects(state, redirects);
+      // The subshell's own pipe input and redirects reach the shell it runs.
+      scoped(state, () => checkScriptAst(state, cmd.script, { redirects, stdin }));
     } else {
-      checkSimple(state, cmd, stdin);
+      checkSimple(state, { ...cmd, redirects }, stdin);
     }
   });
 }
 
-/** Subshells and substitutions do not change the parent's directory. */
+/** Subshells and substitutions change neither the parent's directory nor its aliases. */
 function scoped(state: State, fn: () => void): void {
   const cwd = state.cwd;
+  const aliases = new Map(state.aliases);
   try {
     fn();
   } finally {
     state.cwd = cwd;
+    state.aliases.clear();
+    for (const [name, value] of aliases) state.aliases.set(name, value);
   }
 }
 
-function checkScriptAst(state: State, script: Script): void {
+function checkScriptAst(
+  state: State,
+  script: Script,
+  /** Input the script inherits from the shell that runs it. */
+  inherited?: InheritedInput,
+): void {
   if (++state.depth > 25) block("command nests too deeply to inspect");
   try {
-    for (const p of script.pipelines) checkPipeline(state, p);
+    for (const p of script.pipelines) checkPipeline(state, p, inherited);
   } finally {
     state.depth--;
   }
+}
+
+/** `npx -c '<text>'`: the text's shell inherits the alias's stdin and input redirects. */
+function checkScriptText(state: State, text: string, inherited: InheritedInput): undefined {
+  // The text runs in a subprocess, so a `cd` inside it must not move the outer shell's directory.
+  scoped(state, () => checkScriptAst(state, parseScript(text), inherited));
+  return undefined;
 }
 
 function checkScript(state: State, text: string): undefined {

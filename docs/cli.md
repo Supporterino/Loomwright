@@ -1,6 +1,6 @@
 # CLI reference
 
-`loomwright [-C <dir>] <command> [options]`. Every command takes `-h/--help`, and `-V/--version` prints the version. The npm package is `@loomwright/cli` (`npx @loomwright/cli@<version> <command>`). The old `ai-factory` binary still works as a deprecated alias. The unscoped package `ai-factory` on npm is an unrelated project.
+`loomwright [-C <dir>] <command> [options]`. `-h/--help` prints help before the command or as its first token; later `-h` and `--help` are flag values or positional text, and a token after `--` is never help. `-V/--version` prints the version. The npm package is `@loomwright/cli` (`npx @loomwright/cli@<version> <command>`). The old `ai-factory` binary still works as a deprecated alias. The unscoped package `ai-factory` on npm is an unrelated project.
 
 `init`, `update` and `detect --apply` refuse to rewrite a workspace that a newer version installed, because that would downgrade it. Run the matching version, or pass `--allow-downgrade` to go back on purpose.
 
@@ -120,7 +120,7 @@ A read-only health check. It looks at:
   - submodule state; for uninitialised ones it offers `git submodule update --init` when run in a terminal;
   - clean working trees;
   - the `pre-push` hook in the AI repo and every submodule.
-- **Gates:** the resolved command for every repo and gate type, printed as a table. It flags a missing gate and an executable that is not on `PATH` or in the repo's tool directories (`node_modules/.bin`, `.venv/bin`). For script gates (`npm run lint`), only the runner is checked.
+- **Gates:** the resolved command for every repo and gate type, printed as a table. It flags a missing gate and an executable that is not on `PATH` or in the repo's tool directories (`node_modules/.bin`, `.venv/bin`). For script gates (`npm run lint`), only the runner is checked. It skips the write-mode script warning when the repository/gate pair has a `gates.overrides.<repo>.<type>` entry, because an override replaces the script lookup.
 - **Caches:** the sizes of the dependency caches, worktrees, logs and backups under `.factory/`.
 - **Credentials:** the stored credentials of the configured providers (from `opencode auth login`) are reported without their values. They are imported into the throwaway database used by the model check, exactly as the runtime imports them into its private server.
 - **Models:** every configured model must be listed by `opencode models` when it runs with the same curated environment as the pipeline's server. A model whose provider credentials are neither stored nor exported fails here.
@@ -175,7 +175,7 @@ loomwright gate <change-id> [--task <id>] [--repo <name>] [--full] [--json]
 Runs format, lint, types and tests.
 - `--task` gates a task worktree (`.factory/worktrees/<change>/<repo>/<task>`) against `change/<id>`, with file-scoped format/lint and affected tests only.
 - Without `--task` it gates every repo that has `change/<id>` checked out, against its default branch. `--full` runs whole-repo gates and the full suite.
-- Gates resolve as `gates.overrides` → the repo's own script (`gates.scripts` names in package.json, Makefile, justfile or Taskfile) → profile defaults. A gate with no command fails; set the override to `"skip"` to opt out explicitly.
+- Gates resolve as `gates.overrides` → the repo's own script (`gates.scripts` names in package.json, Makefile, justfile or Taskfile) → profile defaults. An override replaces the script lookup, so the script is not read (or warned about) for that pair; `"skip"` also counts as an override entry. A gate with no command fails; set the override to `"skip"` to opt out explicitly.
 - A gate that modifies files fails as "not check-only", and the worktree is restored.
 - A change with a definitions snapshot (taken at `approve`) is gated with it, like the pipeline does, not with today's config.
 - Gate output is redacted (tokens, credentials, env secrets) before it is printed, stored or sent to an agent.
@@ -249,9 +249,9 @@ Prints a change's stored event stream from `.factory/events/<id>.jsonl` as JSONL
 loomwright tui [--replay <file>] [--once] [--ascii]
 ```
 
-Opens the terminal UI: the run list, the run view with its task graph and detail, intake, the approval overlay and the questions pane. It reads the run state and the event stream; the long actions (intake, approve, approve only, reword, reapprove and resume) are detached CLI children, while answer, abort and retry are short in-process writes, so quitting it never stops a run. `-C` selects the workspace.
+Opens the terminal UI: the run list, the run view with its task graph, detail and activity tail folded from every event, intake, the approval overlay and the questions pane. It reads the run state and the event stream; the long actions (intake, approve, approve only, reword, reapprove, resume and land) are detached CLI children, while answer, abort and retry are short in-process writes, so quitting it never stops a run. `-C` selects the workspace.
 
-`--replay <file>` renders a recorded JSONL event stream instead of a workspace and is read-only: no write action, no status poll, no child. `--once` renders exactly one frame, prints it without cursor control and exits; it requires `--replay` and is what CI smoke-tests. `--ascii` forces the ASCII glyph set. The command needs a terminal: without a TTY and without `--replay` it prints the `status --watch` / `events --follow` hint and exits 1. Exit codes: 0 ok, 1 no TTY, 2 invalid flags or an unreadable replay file.
+`--replay <file>` renders a recorded JSONL event stream instead of a workspace and is read-only: no write action, no status poll, no child. `--once` renders exactly one frame, prints it without cursor control and exits; it requires `--replay` and is what CI smoke-tests. `--ascii` forces the ASCII glyph set. The command needs a terminal: without a TTY and without `--replay` it prints the `status --watch` / `events --follow` hint and exits 1. `l` lands a `done` run from the UI: a confirmation, then a detached `land <id>` child that merges locally and pushes nothing; replay disables it. Exit codes: 0 ok, 1 no TTY, 2 invalid flags or an unreadable replay file.
 
 See [docs/tui.md](tui.md) for the keys and the screens.
 

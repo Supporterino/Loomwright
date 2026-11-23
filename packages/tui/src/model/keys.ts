@@ -23,6 +23,14 @@ export interface KeyInput {
   readonly backspace: boolean;
 }
 
+/**
+ * Ink names the physical Backspace key (DEL, `\x7f`) `delete`, not `backspace`; accept both, since
+ * `\b` and a terminal that sends the classic name still report `backspace`.
+ */
+export function deletesLast(key: Pick<KeyInput, "backspace" | "delete">): boolean {
+  return key.backspace || key.delete;
+}
+
 export type Intent =
   | { kind: "none" }
   | { kind: "quit" }
@@ -34,10 +42,16 @@ export type Intent =
   | { kind: "prev-run" }
   | { kind: "next-task" }
   | { kind: "prev-task" }
+  | { kind: "page-up" }
+  | { kind: "page-down" }
+  | { kind: "first" }
+  | { kind: "last" }
   | { kind: "resume" }
   | { kind: "abort" }
   | { kind: "retry" }
-  | { kind: "open-questions" };
+  | { kind: "land" }
+  | { kind: "open-questions" }
+  | { kind: "open-activity" };
 
 function listIntent(viewModel: ViewModel, key: string): Intent {
   switch (key) {
@@ -52,6 +66,14 @@ function listIntent(viewModel: ViewModel, key: string): Intent {
     case "Up":
     case "k":
       return { kind: "prev-run" };
+    case "PgUp":
+      return { kind: "page-up" };
+    case "PgDn":
+      return { kind: "page-down" };
+    case "g":
+      return { kind: "first" };
+    case "G":
+      return { kind: "last" };
     default:
       return { kind: "none" };
   }
@@ -69,14 +91,26 @@ function runIntent(viewModel: ViewModel, key: string): Intent {
     case "Up":
     case "k":
       return { kind: "prev-task" };
+    case "PgUp":
+      return { kind: "page-up" };
+    case "PgDn":
+      return { kind: "page-down" };
+    case "g":
+      return { kind: "first" };
+    case "G":
+      return { kind: "last" };
     case "r":
       return { kind: "resume" };
     case "x":
       return { kind: "abort" };
     case "t":
       return { kind: "retry" };
+    case "l":
+      return { kind: "land" };
     case "Q":
       return { kind: "open-questions" };
+    case "L":
+      return { kind: "open-activity" };
     default:
       return { kind: "none" };
   }

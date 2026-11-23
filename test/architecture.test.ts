@@ -373,6 +373,35 @@ describe("tests follow the packages", () => {
   });
 });
 
+describe("the TUI status and control seams", () => {
+  const entry = readFileSync(join(repoRoot, "packages/tui/src/entry.tsx"), "utf8");
+  const DEFINITIONS = /^\s*(?:export\s+)?(?:async\s+)?(?:function|interface|type|const)\s+(\w+)/gm;
+  const defined = new Set([...entry.matchAll(DEFINITIONS)].map((match) => match[1]));
+
+  test("the entry is a shell", () => {
+    for (const symbol of [
+      "performControl",
+      "createResumeGuard",
+      "createLandGuard",
+      "startResume",
+      "startLand",
+      "startReword",
+      "createStatusSource",
+      "UiData",
+    ]) {
+      expect(defined.has(symbol), symbol).toBe(false);
+    }
+    expect(entry.split("\n").length).toBeLessThanOrEqual(1600);
+  });
+
+  test("the controllers are testable without Ink", () => {
+    for (const file of ["packages/tui/src/model/status.ts", "packages/tui/src/model/controls.ts"]) {
+      const text = readFileSync(join(repoRoot, file), "utf8");
+      expect(text).not.toMatch(/from "(ink|react)"/);
+    }
+  });
+});
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

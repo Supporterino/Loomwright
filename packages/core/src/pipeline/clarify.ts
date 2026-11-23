@@ -64,6 +64,7 @@ export async function askQuestions(input: {
     try {
       answer = await input.ask(question);
     } catch {
+      // A rejected question is unanswered; the run continues.
       answer = undefined;
     }
     if (answer === undefined) {

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Factory, StatusDocument } from "@loomwright/core/factory";
 import type { ActiveLock } from "@loomwright/core/state/active";
 import { RunState, TaskState } from "@loomwright/core/state/run";
@@ -11,13 +14,20 @@ import {
   RunEvent as RunEventSchema,
   reduce,
 } from "@loomwright/protocol";
-import { runTui } from "../src/entry.tsx";
+import { REPLAY_READ_ONLY, runTui } from "../src/entry.tsx";
+import type { LaunchAction, Launcher } from "../src/launch/launcher.ts";
 import { collectFacts } from "../src/model/facts.ts";
 import { applyKey } from "../src/model/keys.ts";
-import { buildViewModel, type ViewModel, type ViewModelInput } from "../src/model/view-model.ts";
+import {
+  buildViewModel,
+  taskDetailGateRows,
+  type ViewModel,
+  type ViewModelInput,
+} from "../src/model/view-model.ts";
 import { createTerminalSession, type TerminalSession } from "../src/session.ts";
 import { emptyWorkspace } from "../src/strings.ts";
 import { renderFrame } from "../src/views/frame.tsx";
+import { singlePaneTailRows, taskDetailTailRows, twoPaneTailRows } from "../src/views/run-view.tsx";
 
 const ISO = "2026-11-17T10:00:00.000Z";
 const RUN = "add-health";
@@ -66,6 +76,19 @@ function taskState(overrides: Record<string, unknown>): TaskState {
     status: "pending",
     ...overrides,
   });
+}
+
+function specFinding(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    severity: "must",
+    file: "src/app.ts",
+    line: 42,
+    what: "does the thing",
+    problem: "the thing breaks",
+    fix: "fix the thing",
+    impact: "the thing stays broken",
+    ...overrides,
+  };
 }
 
 function usageSummary(tokens: number, cost: number): UsageSummary {
@@ -136,7 +159,7 @@ async function frame(view: ViewModel, columns = 120, rows = 40, ascii = false): 
   return renderFrame(view, { columns, rows }, { ascii });
 }
 
-function failingTaskView(): ViewModel {
+function failingTaskView(selectedTaskId: string | null = "first"): ViewModel {
   const run = runState({
     tasks: [
       taskState({ id: "first", title: "Health endpoint", repo: "app", status: "failed" }),
@@ -145,6 +168,7 @@ function failingTaskView(): ViewModel {
   });
   resetSeq();
   const events = [
+    event("run.started", { phase: "implementing" }),
     event("task.started", { task: { id: "first", repo: "app" }, attempt: 2 }),
     event("agent.started", {
       step: "first",
@@ -183,14 +207,26 @@ function failingTaskView(): ViewModel {
     }),
     event("agent.activity", { step: "first", detail: "retrying gate", kind: "tool" }),
   ];
-  return buildViewModel(runInput(run, events, { selectedTaskId: "first" }));
+  return buildViewModel(runInput(run, events, { selectedTaskId }));
 }
 
 describe("run list", () => {
   test("the list is ordered and labelled: newest first, active pid, queued #1, idle", async () => {
-    const oldest = runState({ id: "oldest", createdAt: "2026-11-17T09:00:00.000Z" });
-    const active = runState({ id: "running", createdAt: "2026-11-17T09:10:00.000Z" });
-    const queued = runState({ id: "queued", createdAt: "2026-11-17T09:20:00.000Z" });
+    const oldest = runState({
+      id: "oldest",
+      createdAt: "2026-11-17T09:00:00.000Z",
+      summary: "Oldest",
+    });
+    const active = runState({
+      id: "running",
+      createdAt: "2026-11-17T09:10:00.000Z",
+      summary: "Active",
+    });
+    const queued = runState({
+      id: "queued",
+      createdAt: "2026-11-17T09:20:00.000Z",
+      summary: "Queued",
+    });
     const lock: ActiveLock = {
       changeId: "running",
       pid: 4242,
@@ -212,9 +248,11 @@ describe("run list", () => {
         selectedRunId: "oldest",
       }),
     );
-    const text = await frame(view, 80, 24, true);
+    // A width that leaves room for every field: the 80-column row prioritises the id instead.
+    const text = await frame(view, 90, 24, true);
     const lines = text.split("\n");
-    expect(lines.some((line) => line.startsWith("> > oldest"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("> > oldest  Oldest"))).toBe(true);
+    expect(text).toContain("Queued");
     const queuedAt = text.indexOf("queued #1");
     const runningAt = text.indexOf("active (pid 4242)");
     const oldestAt = text.indexOf("idle");
@@ -223,6 +261,120 @@ describe("run list", () => {
     expect(oldestAt).toBeGreaterThan(runningAt);
     expect(text).toContain("12.3k tokens");
     expect(text).toContain("$0.42");
+    // Every row carries its elapsed time beside the other metadata.
+    expect(text).toContain("1h00m");
+    expect(text).toContain("50m08s");
+    expect(text).toContain("40m08s");
+  });
+
+  test("the run list marks findings: 2 findings on the row and no marker on a clean run", async () => {
+    const finding = {
+      severity: "must",
+      file: "packages/tui/src/views/header.tsx",
+      line: 42,
+      what: "the banner hides the count",
+      problem: "the run looks idle",
+      fix: "carry the count",
+      impact: "the user cannot see why the run stopped",
+    };
+    const marked = runState({
+      id: "paused-run",
+      summary: "Paused change",
+      phase: "paused",
+      createdAt: new Date(Date.parse(ISO) + 1_000).toISOString(),
+      specFindings: [finding, { ...finding, severity: "should", line: 97 }],
+    });
+    const clean = runState({ id: "clean-run", summary: "Clean change" });
+    const view = buildViewModel(
+      vmInput({
+        screen: "list",
+        status: statusDoc([
+          { run: marked, tokens: 0, cost: 0 },
+          { run: clean, tokens: 0, cost: 0 },
+        ]),
+        runs: [marked, clean],
+        selectedRunId: marked.id,
+      }),
+    );
+    const text = await frame(view, 80, 24, true);
+    const markedRow = text.split("\n").find((line) => line.includes("2 findings"));
+    expect(markedRow).toBeDefined();
+    expect(markedRow).toContain("paused-run  Pa");
+    // The gate glyph and label, not the coral approval hue.
+    expect(markedRow).toContain("! 2 findings");
+
+    const cleanRow = text.split("\n").find((line) => line.includes("Clean change"));
+    expect(cleanRow).toBeDefined();
+    expect(cleanRow).not.toContain("findings");
+  });
+
+  test("a long row keeps the change id and the findings marker at 80x24", async () => {
+    const finding = {
+      severity: "must",
+      file: "packages/tui/src/views/run-list.tsx",
+      line: 56,
+      what: "the marker is cut off",
+      problem: "a long summary eats the row",
+      fix: "reserve the id and the marker first",
+      impact: "the finding count is invisible",
+    };
+    const run = runState({
+      id: "fix-tui-findings-log-styling",
+      summary: "Fix the findings marker and the log styling across the run list and the run view",
+      phase: "paused",
+      specFindings: [finding, { ...finding, line: 97 }],
+    });
+    const view = buildViewModel(
+      vmInput({
+        screen: "list",
+        status: statusDoc([{ run, tokens: 1_234, cost: 0.42 }]),
+        runs: [run],
+        selectedRunId: run.id,
+      }),
+    );
+    const text = await frame(view, 80, 24, true);
+    const row = text.split("\n").find((line) => line.includes("2 findings"));
+    expect(row).toBeDefined();
+    expect(row).toContain("fix-tui-findings-log-styling");
+    expect(row).toContain("Fix the f");
+    expect(row).toContain("! 2 findings");
+    expect(row).toContain("paused");
+    expect(row?.length).toBeLessThanOrEqual(80);
+
+    // An active run at the gate has the longest metadata; the id and summary must survive it.
+    const gated = runState({
+      id: "add-health",
+      summary: "Add health endpoints",
+      phase: "awaiting-approval",
+      createdAt: new Date(Date.parse(ISO) - 3_592_000).toISOString(),
+    });
+    const lock: ActiveLock = {
+      changeId: gated.id,
+      pid: 4242,
+      host: "host",
+      since: ISO,
+    };
+    const activeView = buildViewModel(
+      vmInput({
+        screen: "list",
+        status: statusDoc([{ run: gated, tokens: 12_345, cost: 0.42 }], { active: lock }),
+        runs: [gated],
+        selectedRunId: gated.id,
+      }),
+    );
+    const activeText = await frame(activeView, 80, 24, true);
+    const activeRow = activeText.split("\n").find((line) => line.includes("add-health"));
+    expect(activeRow).toBeDefined();
+    expect(activeRow).toContain("Add healt");
+    expect(activeRow).toContain("awaiting approval");
+    expect(activeRow).toContain("active (pid 4242)");
+    expect(activeRow?.length).toBeLessThanOrEqual(80);
+
+    // The narrower two-pane list still reserves the marker ahead of the long head.
+    const wide = await frame(view, 120, 40, true);
+    const wideRow = wide.split("\n").find((line) => line.includes("2 findings"));
+    expect(wideRow).toBeDefined();
+    expect(wideRow).toContain("! 2 findings");
   });
 
   test("every run row carries its phase glyph beside the phase label", async () => {
@@ -286,7 +438,7 @@ describe("run view layout", () => {
       24,
       true,
     );
-    expect(drilled).toContain("attempt 0");
+    expect(drilled.replace(/\s+/gu, " ")).toContain("attempt 0");
     expect(drilled).not.toContain("Repo");
 
     const wide = await frame(
@@ -308,7 +460,7 @@ describe("run view layout", () => {
     );
     const sideBySide = wide
       .split("\n")
-      .some((line) => line.includes("second") && line.includes("agent"));
+      .some((line) => line.includes("Tasks") && line.includes("task"));
     expect(sideBySide).toBe(true);
     expect(graph.run?.tasks).toHaveLength(2);
 
@@ -328,7 +480,7 @@ describe("run view layout", () => {
     const wideList = await frame(buildViewModel(listInput), 120, 40, true);
     const sharedRow = wideList
       .split("\n")
-      .find((line) => line.includes(`> ${RUN}`) && line.includes("edited src/health.ts"));
+      .find((line) => line.startsWith("> > ") && line.includes("edited src/health.ts"));
     expect(sharedRow).toBeDefined();
     const narrowList = await frame(buildViewModel(listInput), 80, 24, true);
     expect(narrowList).toContain(`> ${RUN}`);
@@ -371,22 +523,525 @@ describe("run view layout", () => {
     expect(second).toBeGreaterThan(-1);
     expect(first).toBeGreaterThan(second);
   });
+
+  test("design and install activity is visible at 80 and 120 columns", async () => {
+    const run = runState({ phase: "design" });
+    resetSeq();
+    const events = [
+      event("run.started", { phase: "design" }),
+      event("phase.changed", { from: "intake", to: "design" }),
+      event("install.started", { step: "install", repo: "loomwright" }),
+      event("install.finished", {
+        step: "install",
+        repo: "loomwright",
+        durationMs: 1_200,
+        detail: "bun install",
+      }),
+      event("progress.line", { level: "normal", text: "design: 3 capabilities planned" }),
+    ];
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null }));
+    for (const [columns, rows] of [
+      [80, 24],
+      [120, 40],
+    ] as const) {
+      const text = await frame(view, columns, rows, true);
+      const tasks = text.indexOf("Tasks");
+      expect(tasks).toBeGreaterThan(-1);
+      for (const line of [
+        "run - run - started in design",
+        "run - phase - intake -> design",
+        "loomwright - install - install started",
+        // The two-pane right pane is one column narrower than the leftover width (its left
+        // padding), so at 120 columns this line clips its tail and only the head is visible.
+        "loomwright - install - install finished in 1.2s",
+        "run - log - design: 3 capabilities planned",
+      ]) {
+        expect(text).toContain(line);
+        expect(text.indexOf(line)).toBeGreaterThan(tasks);
+      }
+    }
+  });
+
+  test("a log reference is named: an 80x24 frame keeps it visible on a long progress line", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = [
+      event("progress.line", {
+        level: "normal",
+        text: "implementer finished the task and the rest of this long line is cut by the pane width",
+        ref: { path: ".factory/logs/add-health/2026-11-19.jsonl", offset: 0, bytes: 42 },
+      }),
+    ];
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null }));
+    const text = await frame(view, 80, 24, true);
+    expect(text).toContain(".factory/logs/add-health/2026-11-19.jsonl");
+  });
+
+  test("the activity tail appears in one pane: graph then tail, selecting a task replaces both", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = [
+      event("progress.line", { level: "normal", text: "run-level line" }),
+      event("task.started", { task: { id: "first", repo: "app" }, attempt: 1 }),
+      event("agent.activity", { step: "first", detail: "task tool line", kind: "tool" }),
+    ];
+    const open = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: null })),
+      80,
+      24,
+      true,
+    );
+    expect(open).toContain("Tasks");
+    expect(open).toContain("run-level line");
+    expect(open.indexOf("run-level line")).toBeGreaterThan(open.indexOf("Tasks"));
+
+    const drilled = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: "first" })),
+      80,
+      24,
+      true,
+    );
+    expect(drilled).not.toContain("Tasks");
+    expect(drilled).not.toContain("run-level line");
+    expect(drilled).toContain("first - Health endpoint");
+  });
+
+  test("a long narrow run keeps its run-level tail instead of claiming no activity", async () => {
+    const tasks = Array.from({ length: 18 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    resetSeq();
+    const events = [event("progress.line", { level: "normal", text: "run-level line" })];
+    const text = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: null })),
+      80,
+      24,
+      true,
+    );
+    expect(text).toContain("Tasks");
+    expect(text).toContain("run-level line");
+    expect(text).not.toContain("no activity yet");
+  });
+
+  test("the tail keeps its floor on a short terminal: 80x24 keeps four rows by shrinking the graph", async () => {
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    resetSeq();
+    const events = Array.from({ length: 6 }, (_, index) =>
+      event("progress.line", { level: "normal", text: `activity-${index + 1}` }),
+    );
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, rows: 24 }));
+    expect(singlePaneTailRows(view)).toBe(4);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("activity-6");
+    expect(text).toContain("activity-3");
+    expect(text).not.toContain("activity-2");
+    expect(text).not.toContain("no activity yet");
+  });
+
+  test("2 tasks and 20 activity lines still render both task rows and the four-row tail floor at 80x24", async () => {
+    const run = runState({
+      tasks: [
+        taskState({ id: "first", title: "Health endpoint", repo: "app" }),
+        taskState({ id: "second", title: "Wire client", repo: "api", deps: ["first"] }),
+      ],
+    });
+    resetSeq();
+    const events = Array.from({ length: 20 }, (_, index) =>
+      event("progress.line", { level: "normal", text: `activity-${index + 1}` }),
+    );
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, rows: 24 }));
+    // The tail already overflows its 17 rows after the title and blank line, so the graph gives up
+    // nothing and both of its rows stay.
+    expect(singlePaneTailRows(view)).toBe(19);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("first pending app attempt 0 Health endpoint");
+    expect(text).toContain("second pending api attempt 0 Wire client");
+    for (const newest of ["activity-17", "activity-18", "activity-19", "activity-20"]) {
+      expect(text).toContain(newest);
+    }
+  });
+
+  test("the tail renders nothing rather than no activity when zero rows are left", async () => {
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const run = runState({ tasks });
+    resetSeq();
+    const events = [event("progress.line", { level: "normal", text: "hidden line" })];
+    const notice = Array.from({ length: 19 }, (_, index) => `notice line ${index + 1}`).join("\n");
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, notice, rows: 24 }));
+    // 24 rows - header - 19 notice rows - graph title - activity chrome - footer leaves no tail.
+    expect(singlePaneTailRows(view)).toBe(2);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBe(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).not.toContain("hidden line");
+    expect(text).not.toContain("no activity yet");
+  });
+
+  test("a paused run with findings and a full activity tail keeps the frame within 24 lines", async () => {
+    const tasks = Array.from({ length: 24 }, (_, index) =>
+      taskState({ id: `task-${index}`, title: `Task ${index}` }),
+    );
+    const findings = Array.from({ length: 3 }, (_, index) => ({
+      severity: index === 0 ? "must" : index === 1 ? "should" : "nice",
+      file: "packages/tui/src/views/header.tsx",
+      line: 42 + index,
+      what: `finding ${index + 1}`,
+      problem: "the banner row is missing",
+      fix: "count it",
+      impact: "the frame overflows",
+    }));
+    const run = runState({ phase: "paused", specFindings: findings, tasks });
+    resetSeq();
+    const events = Array.from({ length: 19 }, (_, index) =>
+      event("progress.line", { level: "normal", text: `activity-${index + 1}` }),
+    );
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, rows: 24 }));
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("paused - 3 spec findings need reword");
+    expect(text).toContain("activity-19");
+  });
+
+  test("a multi-line failure notice counts its rows so the newest activity stays visible", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = Array.from({ length: 12 }, (_, index) =>
+      event("progress.line", { level: "normal", text: `activity-${index + 1}` }),
+    );
+    const notice = [
+      `land ${RUN} exited with code 5`,
+      "spawn log: .factory/logs/land.log",
+      ...Array.from({ length: 10 }, (_, index) => `log line ${index + 1}`),
+    ].join("\n");
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, notice, rows: 24 }));
+    // 24 rows - header - 12 notice rows - graph (title + 1 task) - footer.
+    expect(singlePaneTailRows(view)).toBe(8);
+    const text = await frame(view, 80, 24, true);
+    expect(text).toContain(`land ${RUN} exited with code 5`);
+    expect(text).toContain("log line 10");
+    expect(text).toContain("activity-12");
+  });
+
+  test("a multi-line failure notice counts its rows in two panes so the newest activity stays visible", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = Array.from({ length: 40 }, (_, index) =>
+      event("progress.line", { level: "normal", text: `activity-${index + 1}` }),
+    );
+    const notice = [
+      `land ${RUN} exited with code 5`,
+      "spawn log: .factory/logs/land.log",
+      ...Array.from({ length: 10 }, (_, index) => `log line ${index + 1}`),
+    ].join("\n");
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: null, notice, rows: 40 }));
+    // 40 rows - header - 12 notice rows - footer.
+    expect(twoPaneTailRows(view)).toBe(26);
+    const text = await frame(view, 120, 40, true);
+    expect(text).toContain(`land ${RUN} exited with code 5`);
+    expect(text).toContain("log line 10");
+    expect(text).toContain("activity-40");
+  });
+
+  test("the activity tail says no activity yet only when there are no lines", async () => {
+    const run = runState({ tasks: [taskState({ id: "first", title: "Health endpoint" })] });
+    const text = await frame(
+      buildViewModel(runInput(run, [], { selectedTaskId: null })),
+      80,
+      24,
+      true,
+    );
+    expect(text).toContain("no activity yet");
+  });
+
+  test("the task detail stays task-scoped", async () => {
+    const run = runState({
+      tasks: [
+        taskState({ id: "first", title: "Health endpoint", repo: "app" }),
+        taskState({ id: "second", title: "Wire client", repo: "api", deps: ["first"] }),
+      ],
+    });
+    resetSeq();
+    const events = [
+      event("progress.line", { level: "normal", text: "run-level progress" }),
+      event("task.started", { task: { id: "first", repo: "app" }, attempt: 1 }),
+      event("agent.activity", { step: "first", detail: "first tool line", kind: "tool" }),
+      event("task.started", { task: { id: "second", repo: "api" }, attempt: 1 }),
+      event("agent.activity", { step: "second", detail: "second tool line", kind: "tool" }),
+    ];
+
+    const tail = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: null })),
+      120,
+      40,
+      true,
+    );
+    expect(tail).toContain("run-level progress");
+    expect(tail).toContain("first tool line");
+    expect(tail).toContain("second tool line");
+
+    const detail = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: "first" })),
+      120,
+      40,
+      true,
+    );
+    expect(detail).toContain("first tool line");
+    expect(detail).not.toContain("run-level progress");
+    expect(detail).not.toContain("second tool line");
+  });
+});
+
+describe("run header", () => {
+  const LONG_ID = "fix-tui-findings-log-styling";
+
+  function longRunView(
+    screen: "run" | "list",
+    columns: number,
+    rows: number,
+    wideMeta = false,
+  ): ViewModel {
+    const run = runState({
+      id: LONG_ID,
+      summary: "Fix the findings marker and the log styling",
+      createdAt: new Date(Date.parse(ISO) - (wideMeta ? 240 : 1) * 3_600_000).toISOString(),
+    });
+    const lock: ActiveLock = {
+      changeId: LONG_ID,
+      pid: wideMeta ? 123456 : 4242,
+      host: "host",
+      since: ISO,
+    };
+    return buildViewModel(
+      vmInput({
+        screen,
+        columns,
+        rows,
+        status: statusDoc(
+          [{ run, tokens: wideMeta ? 1_234_567 : 12_345, cost: wideMeta ? 1234.56 : 0.42 }],
+          { active: lock },
+        ),
+        runs: [run],
+        selectedRunId: LONG_ID,
+      }),
+    );
+  }
+
+  test("the run header keeps the lock status and clips with the frame's mark", async () => {
+    const text = await frame(longRunView("run", 80, 24), 80, 24, true);
+    const header = text.split("\n").find((line) => line.includes("active (pid 4242)"));
+    expect(header).toBeDefined();
+    // The id gives way first; the lock status is the field that may never be clipped away.
+    expect(header).toContain(LONG_ID.slice(0, 8));
+    expect(header).toContain("...");
+    expect(header).not.toContain("…");
+    expect(header?.length).toBeLessThanOrEqual(80);
+
+    // The 120-column list preview's right pane is 59 cells, so its header needs the same budget.
+    const preview = await frame(longRunView("list", 120, 40), 120, 40, true);
+    const previewHeader = preview
+      .split("\n")
+      .find((line) => line.slice(60).includes("active (pid 4242)"));
+    expect(previewHeader).toBeDefined();
+    expect(previewHeader?.slice(60)).toContain("...");
+    expect(previewHeader).not.toContain("…");
+    expect(previewHeader?.length).toBeLessThanOrEqual(120);
+
+    // A 100-column preview leaves 49 cells and a long run overflows even the metadata; it is cut
+    // from the front so the lock status still ends the row.
+    const narrow = await frame(longRunView("list", 100, 24, true), 100, 24, true);
+    const narrowHeader = narrow
+      .split("\n")
+      .find((line) => line.slice(50).includes("active (pid 123456)"));
+    expect(narrowHeader).toBeDefined();
+    expect(narrowHeader?.slice(50)).toContain("...");
+    expect(narrowHeader).not.toContain("…");
+    expect(narrowHeader?.length).toBeLessThanOrEqual(100);
+  });
 });
 
 describe("task detail", () => {
   test("a task detail shows the evidence: role, duration, attempt, gates and the log tail", async () => {
+    const tail = await frame(failingTaskView(null), 120, 40, false);
+    expect(tail).toContain("started in implementing");
+
     const text = await frame(failingTaskView(), 120, 40, false);
+    expect(text).not.toContain("started in implementing");
     expect(text).toContain("implementer");
     expect(text).toContain("claude-5");
     expect(text).toContain("2m05s");
-    expect(text).toContain("attempt 2");
-    expect(text).toContain("retries 1");
+    const spaced = text.replace(/\s+/gu, " ");
+    expect(spaced).toContain("attempt 2");
+    expect(spaced).toContain("retries 1");
     const lint = text.indexOf("lint fail");
     const testGate = text.indexOf("test pass");
     expect(lint).toBeGreaterThan(-1);
     expect(testGate).toBeGreaterThan(lint);
     expect(text).toContain("test failed");
     expect(text).toContain("→ .factory/logs/first.log");
+  });
+
+  test("an 80x24 task detail keeps the newest of a 20-line tail and its log reference", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "failed" })],
+    });
+    resetSeq();
+    const events = [
+      event("task.started", { task: { id: "first", repo: "app" }, attempt: 2 }),
+      event("agent.started", { step: "first", agent: "implementer", model: "claude-5" }),
+      event("gate.finished", {
+        name: "lint",
+        type: "lint",
+        status: "fail",
+        durationMs: 1_200,
+        step: "first",
+      }),
+      event("gate.finished", {
+        name: "test",
+        type: "test",
+        status: "pass",
+        durationMs: 3_400,
+        step: "first",
+      }),
+      ...Array.from({ length: 20 }, (_, index) =>
+        event("agent.activity", {
+          step: "first",
+          detail: `activity-${index + 1}`,
+          kind: "tool",
+          ...(index === 19
+            ? { ref: { path: ".factory/logs/last.log", offset: 0, bytes: 42 } }
+            : {}),
+        }),
+      ),
+    ];
+    const view = buildViewModel(runInput(run, events, { selectedTaskId: "first", rows: 24 }));
+    // 24 rows - header - eight facts - two gate rows - two titles - footer.
+    expect(taskDetailTailRows(view)).toBe(10);
+    const text = await frame(view, 80, 24, true);
+    expect(text).toContain("activity-20");
+    expect(text).toContain(".factory/logs/last.log");
+    expect(text).not.toContain("activity-1\n");
+  });
+
+  test("a task detail with 20 gates and a scrolling tail windows the gates at 80x24", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "running" })],
+    });
+    resetSeq();
+    const gates = Array.from({ length: 20 }, (_, index) =>
+      event("gate.finished", {
+        name: `gate-${index + 1}`,
+        type: "test",
+        status: index % 4 === 0 ? "fail" : "pass",
+        durationMs: 100 + index * 50,
+        step: "first",
+      }),
+    );
+    const activity = Array.from({ length: 20 }, (_, index) =>
+      event("agent.activity", {
+        step: "first",
+        detail: `activity-${index + 1}`,
+        kind: "tool",
+      }),
+    );
+    const view = buildViewModel(
+      runInput(run, [...gates, ...activity], { selectedTaskId: "first", rows: 24 }),
+    );
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("gate-7");
+    expect(text).not.toContain("gate-8");
+    expect(text).toContain("13 more gates");
+    expect(text).toContain("activity-20");
+  });
+
+  test("a 12-line failure notice at 80x24 folds the hidden gate count into the Gates title", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "failed" })],
+    });
+    resetSeq();
+    const events = [
+      event("gate.finished", {
+        name: "lint",
+        type: "lint",
+        status: "fail",
+        durationMs: 1_200,
+        step: "first",
+      }),
+      event("gate.finished", {
+        name: "test",
+        type: "test",
+        status: "pass",
+        durationMs: 3_400,
+        step: "first",
+      }),
+    ];
+    const notice = [
+      `land ${RUN} exited with code 5`,
+      "spawn log: .factory/logs/land.log",
+      ...Array.from({ length: 10 }, (_, index) => `log line ${index + 1}`),
+    ].join("\n");
+    const view = buildViewModel(
+      runInput(run, events, { selectedTaskId: "first", notice, rows: 24 }),
+    );
+    // 24 rows - header - 12 notice rows - footer leaves exactly the fixed detail budget.
+    expect(taskDetailGateRows(view)).toBe(0);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.at(-1)).toContain("q quit");
+    expect(text).toContain("Gates - 2 hidden");
+    expect(text).not.toContain("lint fail");
+  });
+
+  test("a 12-line failure notice with an empty task detail fits at 80x24", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app", status: "pending" })],
+    });
+    resetSeq();
+    const notice = [
+      `resume ${RUN} exited with code 5`,
+      "spawn log: .factory/logs/resume.log",
+      ...Array.from({ length: 10 }, (_, index) => `log line ${index + 1}`),
+    ].join("\n");
+    const view = buildViewModel(runInput(run, [], { selectedTaskId: "first", notice, rows: 24 }));
+    // The capped notice leaves the detail its eleven always-rendered rows.
+    expect(taskDetailGateRows(view)).toBe(0);
+    expect(taskDetailTailRows(view)).toBe(0);
+    const text = await frame(view, 80, 24, true);
+    const lines = text.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines[0]).toContain(RUN);
+    expect(lines.at(-1)).toContain("q quit");
+    // The header, every fact and the empty gate state survive; the tail spends no row on its own.
+    expect(text).toContain(`resume ${RUN} exited with code 5`);
+    expect(text).toContain("task     first - Health endpoint");
+    expect(text).toContain("no gate results");
+    expect(text).not.toContain("no activity yet");
   });
 });
 
@@ -412,6 +1067,21 @@ describe("footer", () => {
     const finishedText = await frame(finished, 120, 40, true);
     expect(finishedText).not.toContain("x abort");
     expect(finishedText).toContain("q quit");
+  });
+
+  test("an overflowing paused run with a failed task and questions keeps q quit and ? help", async () => {
+    const run = runState({
+      phase: "paused",
+      tasks: [taskState({ id: "first", status: "failed" })],
+      clarifications: [
+        { step: "design", question: "Is auth needed?", status: "unanswered", at: ISO },
+      ],
+    });
+    const view = buildViewModel(runInput(run, [], { selectedTaskId: "first" }));
+    const footer = (await frame(view, 80, 24, true)).split("\n").at(-1) ?? "";
+    expect(footer).toBe(
+      "r resume - w reword - x abort - t retry task - Q questions - ? help - q quit",
+    );
   });
 });
 
@@ -448,6 +1118,215 @@ describe("panel keys", () => {
     }
     expect(text).toContain("same row");
     expect(warnings.filter((warning) => warning.includes("same key"))).toEqual([]);
+  });
+});
+
+describe("an ASCII panel clips its body with ASCII", () => {
+  test("a long panel body line ends in '...' and the frame stays printable ASCII", async () => {
+    const long = `gate lint started: ${"x".repeat(200)}`;
+    const view = buildViewModel(
+      vmInput({
+        columns: 60,
+        panel: {
+          kind: "activity",
+          title: "Activity",
+          lines: [long],
+          keys: [],
+          notice: null,
+        },
+      }),
+    );
+    const text = await frame(view, 60, 24, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("gate lint started: ");
+    expect(text).toContain("...");
+  });
+
+  test("a long questions line clips with '...' too", async () => {
+    const view = buildViewModel(
+      vmInput({
+        columns: 60,
+        panel: {
+          kind: "questions",
+          title: "Questions",
+          lines: [`  ${"y".repeat(200)}`],
+          keys: [],
+          notice: null,
+        },
+      }),
+    );
+    const text = await frame(view, 60, 24, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("...");
+  });
+});
+
+describe("an ASCII activity line clips with ASCII", () => {
+  const longCommand = `bun test ${"packages/tui/src/views ".repeat(8)}`;
+
+  function gateView(): ViewModel {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = [
+      event("gate.started", { name: "test", type: "test", command: longCommand, step: "first" }),
+    ];
+    return buildViewModel(runInput(run, events, { selectedTaskId: null }));
+  }
+
+  test("a gate.started line with a long command at 80 columns clips with '...'", async () => {
+    const text = await frame(gateView(), 80, 24, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("...");
+    for (const line of text.split("\n")) expect(line.length).toBeLessThanOrEqual(80);
+  });
+
+  test("a gate.started line with a long command at 120 columns clips in the two-pane run view", async () => {
+    const text = await frame(gateView(), 120, 40, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("...");
+  });
+
+  // The right pane spends one column on its left padding, so its content is one cell narrower than
+  // the leftover width. A line that fills the old budget must be clipped here with the ASCII mark,
+  // inside the pane, or Ink re-cuts it with `…` and the ASCII promise breaks.
+  for (const { columns, detailLength, paneWidth } of [
+    { columns: 100, detailLength: 35, paneWidth: 49 },
+    { columns: 120, detailLength: 45, paneWidth: 59 },
+  ]) {
+    test(`a right-pane line that fills the budget at ${columns} columns clips with ASCII`, async () => {
+      const run = runState({ phase: "design" });
+      resetSeq();
+      const events = [
+        event("agent.activity", {
+          step: "first",
+          kind: "tool",
+          detail: "x".repeat(detailLength),
+        }),
+      ];
+      const view = buildViewModel(runInput(run, events, { selectedTaskId: null, columns }));
+      const text = await frame(view, columns, 40, true);
+      expect(text).toMatch(/^[\t\n -~]*$/u);
+      expect(text).not.toContain("…");
+      const line = text.split("\n").find((row) => row.includes("first - tool")) ?? "";
+      expect(line.length - line.indexOf("first")).toBe(paneWidth);
+      expect(line.endsWith("...")).toBe(true);
+    });
+  }
+
+  test("a gate.started line with a long command at 120 columns clips in the list preview", async () => {
+    const run = runState({
+      tasks: [taskState({ id: "first", title: "Health endpoint", repo: "app" })],
+    });
+    resetSeq();
+    const events = [
+      event("gate.started", { name: "test", type: "test", command: longCommand, step: "first" }),
+    ];
+    const view = buildViewModel(runInput(run, events, { screen: "list", selectedTaskId: null }));
+    const text = await frame(view, 120, 40, true);
+    expect(text).toMatch(/^[\t\n -~]*$/u);
+    expect(text).not.toContain("…");
+    expect(text).toContain("...");
+  });
+});
+
+describe("an ASCII task title clips with ASCII", () => {
+  test("a title over 40 characters clips with '...' in the graph and the detail", async () => {
+    const title = "A task title long enough to need clipping in both the graph and the detail pane";
+    const run = runState({
+      tasks: [taskState({ id: "first", title, repo: "app" })],
+    });
+    const graph = await frame(
+      buildViewModel(runInput(run, [], { selectedTaskId: null })),
+      80,
+      24,
+      true,
+    );
+    expect(graph).toMatch(/^[\t\n -~]*$/u);
+    expect(graph).not.toContain("…");
+    const graphRow = graph.split("\n").find((line) => line.includes("attempt 0"));
+    expect(graphRow).toBeDefined();
+    expect(graphRow).toContain(title.slice(0, 37));
+    expect(graphRow?.endsWith("...")).toBe(true);
+    expect(graphRow?.length).toBeLessThanOrEqual(80);
+
+    const detail = await frame(
+      buildViewModel(runInput(run, [], { selectedTaskId: "first" })),
+      80,
+      24,
+      true,
+    );
+    expect(detail).toMatch(/^[\t\n -~]*$/u);
+    expect(detail).not.toContain("…");
+    const detailRow = detail.split("\n").find((line) => line.trimStart().startsWith("task "));
+    expect(detailRow).toBeDefined();
+    expect(detailRow).toContain(title.slice(0, 53));
+    expect(detailRow?.endsWith("...")).toBe(true);
+    expect(detailRow?.length).toBeLessThanOrEqual(80);
+  });
+
+  test("at 120 columns the two-pane graph and detail clip long titles to their pane widths", async () => {
+    const title = "A task title long enough to be clipped in both panes at 120 columns wide";
+    const run = runState({
+      tasks: [taskState({ id: "first", title, repo: "app" })],
+    });
+    const graph = await frame(
+      buildViewModel(runInput(run, [], { selectedTaskId: null })),
+      120,
+      40,
+      true,
+    );
+    expect(graph).toMatch(/^[\t\n -~]*$/u);
+    expect(graph).not.toContain("…");
+    const graphRow = graph.split("\n").find((line) => line.includes("attempt 0"));
+    expect(graphRow).toBeDefined();
+    // One column of frame padding, then the 58-cell graph pane.
+    const graphPane = (graphRow ?? "").slice(1, 59);
+    expect(graphPane.length).toBe(58);
+    expect(graphPane.endsWith("...")).toBe(true);
+
+    const gateName = "a-gate-name-long-enough-to-overflow-the-detail-pane-with-more-words";
+    resetSeq();
+    const detail = await frame(
+      buildViewModel(
+        runInput(
+          run,
+          [
+            event("gate.finished", {
+              name: gateName,
+              type: "test",
+              status: "pass",
+              durationMs: 1_200,
+              step: "first",
+            }),
+          ],
+          { selectedTaskId: "first" },
+        ),
+      ),
+      120,
+      40,
+      true,
+    );
+    expect(detail).toMatch(/^[\t\n -~]*$/u);
+    expect(detail).not.toContain("…");
+    // The graph pane, its padding, then the 59-cell detail pane.
+    const lines = detail.split("\n");
+    const detailRow = lines.find((line) => line.slice(60).trimStart().startsWith("task "));
+    expect(detailRow).toBeDefined();
+    const fact = (detailRow ?? "").slice(60);
+    expect(fact.length).toBeLessThanOrEqual(59);
+    expect(fact.endsWith("...")).toBe(true);
+
+    const gateRow = lines.find((line) => line.slice(60).includes(gateName.slice(0, 10)));
+    expect(gateRow).toBeDefined();
+    const gate = (gateRow ?? "").slice(60);
+    expect(gate.length).toBeLessThanOrEqual(59);
+    expect(gate.endsWith("...")).toBe(true);
   });
 });
 
@@ -600,11 +1479,15 @@ interface DrivenRun {
 
 /**
  * Runs the interactive UI with fake stdio, drives keys until it quits and returns what Ink
- * wrote. With `CI` set Ink only writes the final frame, so a run asserts on that frame.
+ * wrote. With `CI` set Ink only writes the final frame, so a run asserts on that frame. A
+ * `replay` path drives the read-only replay view instead of the live workspace.
  */
 async function driveTui(
   factory: Factory,
   drive: (input: FakeInput, output: FakeOutput) => Promise<void>,
+  launcher?: Launcher,
+  frames = false,
+  replay?: string,
 ): Promise<DrivenRun> {
   const input = new FakeInput();
   const output = new FakeOutput();
@@ -627,7 +1510,8 @@ async function driveTui(
     Object.defineProperty(process, "stdin", { value: input, configurable: true });
     Object.defineProperty(process, "stdout", { value: output, configurable: true });
     const code = runTui({
-      workspace: "/workspace",
+      workspace: replay === undefined ? "/workspace" : null,
+      ...(replay === undefined ? {} : { replay }),
       once: false,
       ascii: true,
       columns: 80,
@@ -635,8 +1519,9 @@ async function driveTui(
       out: () => {},
       env: {},
       isTTY: false,
+      frames,
       factory,
-      launcher: {
+      launcher: launcher ?? {
         launch: async () => {
           throw new Error("the help panel must not launch");
         },
@@ -719,6 +1604,95 @@ describe("the interactive entry", () => {
 
     expect(leaves).toBe(1);
     expect(output.text()).toContain("> newest");
+  });
+
+  test("quitting leaves the run alone: q exits 0 while the implementing run keeps its child", async () => {
+    const run = runState({
+      phase: "implementing",
+      tasks: [taskState({ id: "first", status: "running" })],
+    });
+    let launches = 0;
+    let pid: number | undefined;
+    const launcher: Launcher = {
+      launch: async () => {
+        launches += 1;
+        pid = 4242;
+        return {
+          pid,
+          logPath: "/workspace/.factory/logs/tui-spawn-2026-11-18T10-00-00-000Z.log",
+          displayPath: ".factory/logs/tui-spawn-2026-11-18T10-00-00-000Z.log",
+          // A detached child the UI never waits on.
+          exited: new Promise<never>(() => {}),
+        };
+      },
+    };
+
+    // The run was started from the TUI before the user pressed q.
+    await launcher.launch({ kind: "run-text", text: "add a health endpoint" });
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input) => {
+        await pause();
+        input.press("q");
+      },
+      launcher,
+    );
+
+    expect(result.code).toBe(0);
+    // The quit path left the child alone: no second launch, no signal and no wait.
+    expect(launches).toBe(1);
+    expect(pid).toBe(4242);
+  });
+
+  test("l opens the land confirmation: Esc launches nothing and Enter launches one land child", async () => {
+    const run = runState({ phase: "done" });
+    const launches: LaunchAction[] = [];
+    const launcher: Launcher = {
+      launch: async (action) => {
+        launches.push(action);
+        return {
+          pid: 4242,
+          logPath: "/workspace/.factory/logs/tui-spawn-2026-11-18T10-00-00-000Z.log",
+          displayPath: ".factory/logs/tui-spawn-2026-11-18T10-00-00-000Z.log",
+          // A detached child the UI never waits on.
+          exited: new Promise<never>(() => {}),
+        };
+      },
+    };
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(RUN), "the run row");
+        input.press("\r");
+        await until(() => output.text().includes("l land"), "the done run view");
+
+        // Esc cancels the confirmation: no land child may start.
+        input.press("l");
+        await until(() => output.text().includes(`Land ${RUN}?`), "the land confirmation");
+        input.press("\u001b");
+        await pause();
+        expect(launches).toEqual([]);
+
+        // A second l opens it again and Enter confirms exactly one detached land.
+        const mark = output.writes.length;
+        input.press("l");
+        await until(
+          () => output.writes.slice(mark).join("").includes(`Land ${RUN}?`),
+          "the land confirmation again",
+        );
+        input.press("\r");
+        await until(() => launches.length === 1, "the land launch");
+        await pause();
+        input.press("q");
+      },
+      launcher,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
   });
 
   test("live detail arrives from the tail: a queued run opened before its log exists updates", async () => {
@@ -885,6 +1859,57 @@ describe("the interactive entry", () => {
     }
   }, 60_000);
 
+  test("q types into the intake dialog opened over the collapsed approval banner", async () => {
+    const run = runState({ phase: "awaiting-approval" });
+    const status = statusDoc([{ run, tokens: 0, cost: 0 }]);
+    resetSeq();
+    const pending = event("approval.pending", {
+      specHash: "0123456789abcdef0123456789abcdef",
+      changeDir: "openspec/changes/add-health",
+    });
+    const factory: Factory = {
+      ...listFactory(status, [run]),
+      // The stream carries the pending approval the overlay opens from.
+      events: async function* () {
+        yield { line: JSON.stringify(pending), event: pending };
+      },
+    };
+
+    let typed = "";
+    const result = await driveTui(
+      factory,
+      async (input, output) => {
+        const last = (): string => output.writes.at(-1) ?? "";
+        await until(() => output.text().includes(run.id), "the run row");
+        // One Enter only: a repeat would call openRun again and abort the load that opens the gate.
+        await pressUntil(input, "\r", "the approval overlay", () =>
+          output.text().includes("Approval - add-health"),
+        );
+        // Esc collapses the overlay to the banner; n then opens the intake dialog over it.
+        await pressUntil(input, "\u001b", "the collapsed banner", () =>
+          last().includes("! awaiting approval"),
+        );
+        await pressUntil(input, "n", "the intake dialog", () => last().includes("request:"));
+        input.press("q");
+        await until(
+          () => {
+            typed = last();
+            return typed.includes("request: q");
+          },
+          "q typed into the request",
+          5_000,
+        );
+        await pressUntil(input, "\u001b", "the closed intake", () => !last().includes("request:"));
+        input.press("q");
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(typed).toContain("request: q");
+  }, 60_000);
+
   test("help opens on ? and closes on Esc; q still quits", async () => {
     const run = runState();
     const factory = listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]);
@@ -910,5 +1935,191 @@ describe("the interactive entry", () => {
     const afterEscape = closed.writes.slice(mark).join("");
     expect(afterEscape).not.toContain("Help");
     expect(afterEscape).toContain("new change");
+  });
+
+  test("the physical Backspace key (\u007f) deletes a character in the answer composer", async () => {
+    const run = runState();
+    const status = statusDoc([{ run, tokens: 0, cost: 0 }]);
+    resetSeq();
+    const raised = event("question.raised", {
+      step: "design",
+      question: "Which endpoints should be public?",
+      status: "unanswered",
+    });
+    const factory: Factory = {
+      ...listFactory(status, [run]),
+      // Opening the run folds this event into the snapshot that carries the question.
+      events: async function* (_runId, query) {
+        if (query?.follow !== true) yield { line: JSON.stringify(raised), event: raised };
+      },
+    };
+
+    let afterBackspace = "";
+    const result = await driveTui(
+      factory,
+      async (input, output) => {
+        const last = (): string => output.writes.at(-1) ?? "";
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the run view", () => output.text().includes("Q questions"));
+        await pressUntil(input, "Q", "the questions pane", () =>
+          output.text().includes("Questions - add-health"),
+        );
+        await pressUntil(input, "\r", "the composer", () => output.text().includes("answer>"));
+        input.press("x");
+        await until(() => last().includes("answer> x"), "the typed answer");
+
+        // Ink maps DEL (\x7f), the key a terminal sends for Backspace, to `delete`, not `backspace`.
+        input.press("\u007f");
+        await until(() => {
+          afterBackspace = last();
+          return afterBackspace.includes("answer>") && !afterBackspace.includes("answer> x");
+        }, "the composer after Backspace");
+
+        await pressUntil(input, "\u001b", "the record focus", () => !last().includes("answer>"));
+        await pressUntil(input, "\u001b", "the closed pane", () => !last().includes("Questions"));
+        input.press("q");
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(afterBackspace).toContain("answer>");
+    expect(afterBackspace).not.toContain("answer> x");
+  });
+
+  test("w on a paused run with findings opens the reword panel", async () => {
+    const run = runState({ phase: "paused", specFindings: [specFinding()] });
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the paused run view", () =>
+          output.text().includes(`${RUN} paused`),
+        );
+        await pressUntil(input, "w", "the reword panel", () =>
+          output.text().includes(`Reword - ${RUN}`),
+        );
+        expect(output.text()).toContain("1. must");
+        expect(output.text()).toContain("src/app.ts:42");
+        // q types into the prompt, so Ctrl-C is the way out of the panel.
+        input.press("\u0003");
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.writes.join("")).toContain(`Reword - ${RUN}`);
+  });
+
+  test("w on a driven run shows the reason as a notice", async () => {
+    const run = runState({ phase: "implementing", specFindings: [specFinding()] });
+    const lock: ActiveLock = { changeId: RUN, pid: 4242, host: "host", since: ISO };
+    const reason = `${RUN} is being driven by pid 4242; stop it first`;
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }], { active: lock }), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the driven run view", () =>
+          output.text().includes(`${RUN} implementing`),
+        );
+        await pressUntil(input, "w", "the inert notice", () => output.text().includes(reason));
+        input.press("q");
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.writes.join("")).toContain(reason);
+  });
+
+  test("w on a design run does nothing", async () => {
+    const run = runState({ phase: "design", specFindings: [specFinding()] });
+    let after = "";
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the design run view", () =>
+          output.text().includes(`${RUN} design`),
+        );
+        const mark = output.writes.length;
+        input.press("w");
+        await pause();
+        after = output.writes.slice(mark).join("");
+        // q only quits if w did not open the reword prompt.
+        input.press("q");
+        await pause();
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(after).not.toContain(`Reword - ${RUN}`);
+  });
+
+  test("w on a done run does nothing", async () => {
+    const run = runState({ phase: "done", specFindings: [specFinding()] });
+    let after = "";
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the done run view", () =>
+          output.text().includes(`${RUN} done`),
+        );
+        const mark = output.writes.length;
+        input.press("w");
+        await pause();
+        after = output.writes.slice(mark).join("");
+        // q only quits if w did not open the reword prompt.
+        input.press("q");
+        await pause();
+      },
+      undefined,
+      true,
+    );
+
+    expect(result.code).toBe(0);
+    expect(after).not.toContain(`Reword - ${RUN}`);
+  });
+
+  test("replay shows the read-only notice when w is pressed", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-replay-"));
+    const path = join(dir, "implementing.jsonl");
+    writeFileSync(
+      path,
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"implementing"}}',
+        "",
+      ].join("\n"),
+    );
+    try {
+      const result = await driveTui(
+        listFactory(statusDoc([]), []),
+        async (input, output) => {
+          await until(() => output.text().includes(`${RUN} implementing`), "the replayed run view");
+          input.press("w");
+          await until(() => output.text().includes(REPLAY_READ_ONLY), "the read-only notice");
+          input.press("q");
+        },
+        undefined,
+        true,
+        path,
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.writes.join("")).toContain(REPLAY_READ_ONLY);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

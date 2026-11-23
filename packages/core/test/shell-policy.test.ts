@@ -30,6 +30,7 @@ const FILES: Record<string, string> = {
   [`${WT}/scripts/block-comment.ts`]: "/* git push */\nexport const x = 1;\n",
   [`${WT}/scripts/commented.sh`]:
     "#!/bin/bash\nset -e\n# git push is handled by the release workflow\necho ok\n",
+  [`${WT}/Makefile`]: "jump:\n\tcd sub\n",
 };
 const ctx: ShellContext = {
   cwd: WT,
@@ -366,6 +367,142 @@ describe("package scripts", () => {
     expect(checkShell("bunx tsc", scriptsCtx)).toEqual({ allowed: true });
   });
 
+  test("a shell through the alias is blocked", () => {
+    expect(reason("npx sh -c 'git push'", scriptsCtx)).toContain("git push");
+    expect(reason("pnpx sh -c 'git push'", scriptsCtx)).toContain("git push");
+  });
+
+  test("publishing through the alias is blocked", () => {
+    for (const cmd of ["npx npm publish", "pnpx npm publish", "npx -p npm@latest npm publish"])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+  });
+
+  test("a global install through the alias is blocked", () => {
+    for (const cmd of ["npx npm install -g left-pad", "pnpx npm install --global left-pad"])
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+  });
+
+  test("the call flag is inspected", () => {
+    expect(reason("npx -p typescript -c 'npm publish'", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx --call='npm publish'", scriptsCtx)).toContain("publishing is not allowed");
+  });
+
+  test("ordinary runner use stays allowed", () => {
+    for (const cmd of [
+      "npx vitest run",
+      "npx --no-install tsc --noEmit",
+      "npx -p typescript tsc --version",
+    ])
+      expect(checkShell(cmd, realCtx)).toEqual({ allowed: true });
+  });
+
+  test("a version-tagged package spec does not hide publish or global installs", () => {
+    for (const cmd of [
+      "npx npm@latest publish",
+      "pnpx npm@10 publish",
+      "yarn@1.22.19 publish",
+      "bun@1.1.0 publish",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of [
+      "npx npm@10 install -g left-pad",
+      "npx npm@latest install --global left-pad",
+      "bun@1.1.0 add -g left-pad",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    expect(reason("npx -c 'npm@latest publish'", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx -c 'npm@10 install -g left-pad'", scriptsCtx)).toContain(
+      "global installs change the machine",
+    );
+    expect(checkShell("npx npm@latest run lint", scriptsCtx)).toEqual({ allowed: true });
+  });
+
+  test("a version-tagged package spec does not hide deploy scripts", () => {
+    for (const cmd of [
+      "npx npm@latest run deploy",
+      "npx npm@10 run deploy",
+      "npx bun@1 run deploy",
+      "bun@1 run deploy",
+      "bun@1 deploy",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+  });
+
+  test("npm exec and its x alias inspect the wrapped command like npx", () => {
+    for (const cmd of [
+      "npm exec -- git push",
+      "npm x -- git push",
+      "npm -w . exec -- git push",
+      "npm exec --package typescript -- git push",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+    expect(reason("npm exec -- npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(reason("npm x -- npm install -g left-pad", scriptsCtx)).toContain(
+      "global installs change the machine",
+    );
+    for (const cmd of [
+      "npm x -c 'git push'",
+      "npm exec -c='git push'",
+      "npm x --call 'git push'",
+      // npm reads `--call`/`-c` from the whole argv, so the options before `exec` count too.
+      "npm --call 'git push' exec",
+      "npm --call='git push' x",
+      "npm -c 'git push' exec",
+      "npm -c='git push' exec",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+    expect(reason("npm exec --call 'npm publish'", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(checkShell("npm exec -- tsc --version", realCtx)).toEqual({ allowed: true });
+    expect(checkShell("npm x tsc --version", realCtx)).toEqual({ allowed: true });
+    expect(checkShell("npm --call 'tsc --version' exec", realCtx)).toEqual({ allowed: true });
+  });
+
+  test("npm exec reads -p as parseable, not npx's value-taking package flag", () => {
+    expect(reason("npm exec -p npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(reason("npm x -p npm install -g left-pad", scriptsCtx)).toContain(
+      "global installs change the machine",
+    );
+    expect(reason("npm exec -w . npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(reason("npm -p exec npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(checkShell("npm exec -p tsc --version", realCtx)).toEqual({ allowed: true });
+  });
+
+  test("an npm config alias that takes a value is skipped before the wrapped command", () => {
+    for (const cmd of [
+      "npx --enjoy-by 2020-01-01 npm publish",
+      "npx --reg http://evil npm publish",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    expect(checkShell("npx --enjoy-by 2020-01-01 tsc --version", realCtx)).toEqual({
+      allowed: true,
+    });
+    expect(checkShell("npx --reg http://registry tsc --version", realCtx)).toEqual({
+      allowed: true,
+    });
+  });
+
+  test("a runner option with ambiguous arity is inspected with and without a value", () => {
+    expect(reason("npx --not-a-real-option value npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx --not-a-real-option npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npm exec --not-a-real-option value npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx --browser npm publish", scriptsCtx)).toContain("publishing is not allowed");
+    expect(checkShell("npx --not-a-real-option value tsc --version", realCtx)).toEqual({
+      allowed: true,
+    });
+  });
+
   test("bun x passes piped, redirected and here-doc input to the wrapped interpreter", () => {
     expect(reason("printf 'git push' | bun x sh", scriptsCtx)).toContain("git push");
     expect(reason("printf 'git push' | bunx bash", scriptsCtx)).toContain("git push");
@@ -373,6 +510,142 @@ describe("package scripts", () => {
     expect(reason("bun x sh <<EOF\ngit push\nEOF", scriptsCtx)).toContain("git push");
     expect(reason("cat x | bun x sh", scriptsCtx)).toContain("pipes generated input");
     expect(checkShell("printf 'go test' | bun x sh", scriptsCtx)).toEqual({ allowed: true });
+  });
+
+  test("npx and pnpx -c give the call text the alias's piped and redirected input", () => {
+    expect(reason("printf 'git push' | npx -c 'bash'", scriptsCtx)).toContain("git push");
+    expect(reason("printf 'git push' | pnpx --call 'bash'", scriptsCtx)).toContain("git push");
+    expect(reason("npx -c 'bash' < scripts/release.sh", scriptsCtx)).toContain("git push");
+    expect(reason("npx --call='bash' < scripts/release.sh", scriptsCtx)).toContain("git push");
+    expect(reason("npx -c 'bash' <<EOF\ngit push\nEOF", scriptsCtx)).toContain("git push");
+    expect(reason("printf 'git push' | npx -c '(bash)'", scriptsCtx)).toContain("git push");
+    expect(reason("cat x | npx -c 'sh'", scriptsCtx)).toContain("pipes generated input");
+    expect(checkShell("printf 'go test' | npx -c 'bash'", scriptsCtx)).toEqual({ allowed: true });
+    expect(checkShell("printf 'git push' | npx -c 'bash < scripts/test.sh'", scriptsCtx)).toEqual({
+      allowed: true,
+    });
+  });
+
+  test("an alias defined inside npx -c, sh -c or a subshell does not leak to the outer script", () => {
+    for (const cmd of [
+      "npx -c 'alias git=echo' ; git push",
+      "pnpx --call='alias git=echo' ; git push",
+      "sh -c 'alias git=echo' ; git push",
+      "script -c 'alias git=echo' ; git push",
+      "(alias git=echo) ; git push",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+    expect(reason("npx -c 'alias npm=echo' ; npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+  });
+
+  test("a pipe or redirect into a subshell reaches the shell it runs", () => {
+    expect(reason("printf 'git push' | (bash)", scriptsCtx)).toContain("git push");
+    expect(reason("printf 'git push' | (sh)", scriptsCtx)).toContain("git push");
+    expect(reason("(bash) < scripts/release.sh", scriptsCtx)).toContain("git push");
+    expect(reason("npx -c '(bash) < scripts/release.sh'", scriptsCtx)).toContain("git push");
+    expect(checkShell("printf 'go test' | (bash)", scriptsCtx)).toEqual({ allowed: true });
+    expect(checkShell("(bash) < scripts/test.sh", scriptsCtx)).toEqual({ allowed: true });
+  });
+
+  test("the call flag is inspected in its `-c=<text>` and clustered spellings", () => {
+    for (const cmd of ["npx -c='git push'", "pnpx -c='git push'", "npx -yc='git push'"])
+      expect(reason(cmd, scriptsCtx)).toContain("git push");
+    expect(reason("npx -p typescript -c='npm publish'", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx -yc='npm publish'", scriptsCtx)).toContain("publishing is not allowed");
+  });
+
+  test("a value-taking shorthand cluster does not hide the wrapped command", () => {
+    expect(reason("npx -yp typescript sh -c 'git push'", scriptsCtx)).toContain("git push");
+    expect(reason("pnpx -yp typescript sh -c 'git push'", scriptsCtx)).toContain("git push");
+    expect(reason("npx -yp typescript npm publish", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(checkShell("npx -yp typescript tsc --version", realCtx)).toEqual({ allowed: true });
+  });
+
+  test("every npm config flag with a value is skipped before the wrapped command", () => {
+    for (const cmd of [
+      "npx --workspace . npm publish",
+      "npx -w . npm publish",
+      "npx --loglevel warn npm publish",
+      "npx --tag latest npm publish",
+      "npx --before 2020-01-01 npm publish",
+      "npx --browser firefox npm publish",
+      "npx --otp 123456 npm publish",
+      "npx --user-agent agent npm publish",
+      "npx --https-proxy http://proxy npm publish",
+      "npx --proxy http://proxy npm publish",
+      "npx --local-address 127.0.0.1 npm publish",
+      "npx --cache ./cache npm publish",
+      "npx --node-options loader.js npm publish",
+      "npx --package typescript npm publish",
+      "npx --prefix ./dir npm publish",
+      "npx --registry http://registry npm publish",
+      "npx --shell bash npm publish",
+      "npx --userconfig ./npmrc npm publish",
+      "npx --maxsockets 5 npm publish",
+      "npx --fetch-retries 3 npm publish",
+      "npx --fetch-timeout=1000 npm publish",
+      "npx --color always npm publish",
+      "npx --location global npm publish",
+      "npx --expires 30 npm publish",
+      "npx --min-release-age 7 npm publish",
+      "npx --password pw npm publish",
+      "npx --name token npm publish",
+      "npx --allow-git none npm publish",
+      "npx --allow-directory none npm publish",
+      "npx --allow-file none npm publish",
+      "npx --allow-remote none npm publish",
+      "npx --allow-scripts none npm publish",
+      "npx --scopes @scope npm publish",
+      "npx --orgs org npm publish",
+      "npx --packages pkg npm publish",
+      "npx --orgs-permission read-write npm publish",
+      "npx --packages-and-scopes-permission read-write npm publish",
+      "npx --token-description desc npm publish",
+      "npx --enjoy-by 2020-01-01 npm publish",
+      "npx --reg http://registry npm publish",
+      "npx -C ./prefix npm publish",
+      "pnpx --workspace . npm publish",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of [
+      "npx --omit dev npm install -g left-pad",
+      "npx --include dev npm install -g left-pad",
+      "npx --expires 30 npm install -g left-pad",
+      "npx --reg http://registry npm install --global left-pad",
+      "npx -m message npm install -g left-pad",
+      "npx -L global npm install -g left-pad",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    expect(checkShell("npx --workspace . tsc --version", realCtx)).toEqual({ allowed: true });
+    expect(reason("npx --color npm publish", scriptsCtx)).toContain("publishing is not allowed");
+  });
+
+  test("an empty short-flag value does not hide the wrapped command", () => {
+    for (const cmd of [
+      "npx -p= npm publish",
+      "npx -w= npm publish",
+      "npx -C= npm publish",
+      "npx -yp= npm publish",
+      "pnpx -p= npm publish",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of ["npx -p= npm install -g left-pad", "npx -L= npm install -g left-pad"])
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    expect(checkShell("npx -p= tsc --version", realCtx)).toEqual({ allowed: true });
+  });
+
+  test("a `cd` inside npx -c call text does not move the outer shell's directory", () => {
+    for (const cmd of [
+      "npx -c 'cd sub' ; echo x > ../escaped.txt",
+      "npx --call='cd sub' ; echo x > ../escaped.txt",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("outside the session directory");
   });
 
   test("bun test -g filters test names instead of installing globally", () => {
@@ -385,6 +658,40 @@ describe("package scripts", () => {
       expect(checkShell(cmd, realCtx)).toEqual({ allowed: true });
     }
     expect(checkShell("bun add login", scriptsCtx)).toEqual({ allowed: true });
+  });
+});
+
+describe("a child shell's `cd` does not move the outer shell's directory", () => {
+  const reason = (cmd: string, context: ShellContext = ctx): string => {
+    const v = checkShell(cmd, context);
+    expect(v.allowed).toBe(false);
+    if (v.allowed) throw new Error(`expected \`${cmd}\` to be blocked`);
+    return v.reason;
+  };
+
+  test("a `cd` inside watch or flock -c does not move the outer shell's directory", () => {
+    for (const cmd of [
+      "watch 'cd sub' ; echo x > ../escaped.txt",
+      "flock -c 'cd sub' ; echo x > ../escaped.txt",
+    ])
+      expect(reason(cmd)).toContain("outside the session directory");
+  });
+
+  test("a `cd` inside a package script body does not move the outer shell's directory", () => {
+    const pkg = JSON.stringify({ scripts: { jump: "cd sub" } });
+    const context: ShellContext = {
+      ...ctx,
+      readFile: (abs) => (abs === `${WT}/package.json` ? pkg : FILES[abs]),
+    };
+    expect(reason("npm run jump ; echo x > ../escaped.txt", context)).toContain(
+      "outside the session directory",
+    );
+  });
+
+  test("a `cd` inside a make recipe does not move the outer shell's directory", () => {
+    expect(reason("make jump ; echo x > ../escaped.txt")).toContain(
+      "outside the session directory",
+    );
   });
 });
 

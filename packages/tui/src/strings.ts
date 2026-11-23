@@ -26,6 +26,24 @@ export const emptyWorkspace = "No changes exist yet. Press n to start one.";
 
 export const replayNotice = "Replay — read-only; the workspace is not touched.";
 
+/** The land confirmation's central promise: merges happen locally, nothing leaves the machine. */
+export const landConfirmNote = "the change branches are merged into their base branches locally";
+
+export function landedNotice(id: string): string {
+  return `landed ${id} — the run is gone`;
+}
+
+/** The run-list marker beside the id and summary; only shown when there are any findings. */
+export function findingsCount(count: number): string {
+  return count === 1 ? "1 finding" : `${count} findings`;
+}
+
+/** The run view's words for a run that stopped on spec findings; the view passes the dash. */
+export function pausedFindings(dash: string, count: number): string {
+  if (count === 1) return `paused ${dash} 1 spec finding needs reword`;
+  return `paused ${dash} ${count} spec findings need reword`;
+}
+
 export function keyHint(key: string, label: string): KeyHint {
   return { key, label, enabled: true };
 }

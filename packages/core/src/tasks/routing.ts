@@ -24,6 +24,7 @@ export function agentForTask(
         try {
           return opencodeGlobRegExp(path).test(touch) || opencodeGlobRegExp(touch).test(path);
         } catch {
+          // A glob that does not compile matches nothing.
           return false;
         }
       }),

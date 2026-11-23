@@ -1,0 +1,40 @@
++----------------------------------------------------------------------------------------------------------------------+
+| Questions - add-health                                                                                               |
+| openspec/changes/add-health/questions.md                                                                             |
+|   + intake                                                                                                           |
+|   Which repo owns the endpoint?                                                                                      |
+|   answered - app                                                                                                     |
+|   - intake                                                                                                           |
+|   Is a migration needed?                                                                                             |
+|   skipped                                                                                                            |
+|   + design                                                                                                           |
+|   Which endpoints are public?                                                                                        |
+|   answered - /health                                                                                                 |
+|   o design                                                                                                           |
+|   Do health checks need auth?                                                                                        |
+|   unanswered - Enter answers                                                                                         |
+|   - design                                                                                                           |
+|   Should the probe be cached?                                                                                        |
+|   skipped                                                                                                            |
+|   + review                                                                                                           |
+|   Is the timeout a config value?                                                                                     |
+|   answered - yes                                                                                                     |
+|   o review                                                                                                           |
+|   Should the payload be JSON?                                                                                        |
+|   unanswered - Enter answers                                                                                         |
+| > o test                                                                                                             |
+|   Which responses are covered?                                                                                       |
+|   unanswered - Enter answers                                                                                         |
+| answer>                                                                                                              |
+| the answer is empty                                                                                                  |
+|                                                                                                                      |
+| Ctrl-J newline - Enter record - Esc leaves the composer to navigate                                                  |
++----------------------------------------------------------------------------------------------------------------------+
+
+
+
+
+
+
+
+Ctrl-J newline - Enter record - Esc leaves the composer to navigate

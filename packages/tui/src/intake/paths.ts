@@ -40,6 +40,7 @@ function isDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory();
   } catch {
+    // A missing path is not a directory.
     return false;
   }
 }
@@ -119,6 +120,7 @@ export function completePath(input: string, cwd: string): readonly PathCandidate
     if (blockedByFactory(listDir, cwd)) return [];
     entries = readdirSync(listDir, { withFileTypes: true });
   } catch {
+    // An unreadable directory offers no entries.
     return [];
   }
 
@@ -152,6 +154,7 @@ function readHead(absolute: string): string | null {
   try {
     fd = openSync(absolute, "r");
   } catch {
+    // An unreadable file has no preview.
     return null;
   }
   try {
@@ -159,6 +162,7 @@ function readHead(absolute: string): string | null {
     const read = readSync(fd, buffer, 0, PREVIEW_BYTES, 0);
     return buffer.toString("utf8", 0, read);
   } catch {
+    // A read that fails mid-way has no preview.
     return null;
   } finally {
     closeSync(fd);
@@ -185,6 +189,7 @@ export function checkRequestFile(path: string, cwd: string): RequestCheck {
   try {
     accessSync(absolute, constants.R_OK);
   } catch {
+    // A file without read permission is not readable.
     return { ok: false, reason: `${absolute} is not readable` };
   }
 

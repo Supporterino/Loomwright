@@ -1,0 +1,15 @@
+{
+  "changeId": "fix-correctness-and-guard-gaps",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "242a7ee4d2b190c8c49fc91fcf4bdf191b092416",
+  "hash": "0e4eac8dfbae2b89ebb8999765fa964fd3b0077ce9264e57b5070d602eee2081",
+  "approvedAt": "2026-11-23T16:38:33.361Z",
+  "history": [
+    {
+      "hash": "681b713043c2c6ad5ee394e95291142ce152297ff582440f721159d44a02f31b",
+      "specCommit": "4eca932388bd01b9961dae7f6754f1cc6ad46f89",
+      "at": "2026-11-23T10:56:22.782Z",
+      "reason": "manual re-approval"
+    }
+  ]
+}

@@ -8,7 +8,10 @@ import type { RunState, TaskState } from "@loomwright/core/state/run";
 import { totalTokens } from "@loomwright/core/usage/usage";
 import type { Phase, RunSnapshot, TaskStatus } from "@loomwright/protocol";
 import { emptyWorkspace, keyHint, replayNotice } from "../strings.ts";
+import { linesInScope, type ScopeTask } from "./activity-scope.ts";
 import type { EventFacts } from "./facts.ts";
+import { flat } from "./format.ts";
+import { nextOffset, type Window, window as windowOf } from "./viewport.ts";
 
 export type Source = "live" | "replay";
 export type Screen = "list" | "run";
@@ -22,6 +25,8 @@ export interface KeyHint {
   readonly key: string;
   readonly label: string;
   readonly enabled: boolean;
+  /** The CLI's message; only a disabled hint whose key the CLI refuses carries one. */
+  readonly reason?: string;
 }
 
 export interface RunListItem {
@@ -32,7 +37,19 @@ export interface RunListItem {
   readonly tokens: number;
   readonly cost: number;
   readonly elapsedMs: number;
+  /** Recorded spec findings; the row shows the count only when it is above zero. */
+  readonly findings: number;
   readonly selected: boolean;
+}
+
+export interface SpecFindingRow {
+  readonly severity: "must" | "should" | "nice";
+  readonly file: string | null;
+  readonly line: number | null;
+  readonly what: string;
+  readonly problem: string;
+  readonly fix: string;
+  readonly impact: string;
 }
 
 export interface TaskRow {
@@ -70,7 +87,10 @@ export interface ActivityLine {
 
 export interface QuestionRow {
   readonly step: string;
+  /** Flattened for display and the recorded-answer key. */
   readonly question: string;
+  /** The stored text, newlines intact, so `Factory.answer` can match the clarification. */
+  readonly rawQuestion: string;
   readonly status: "answered" | "skipped" | "unanswered";
   readonly answer?: string;
   readonly questionsFile: string;
@@ -83,6 +103,14 @@ export interface ApprovalView {
   readonly specHash: string | null;
   readonly specCommit: string | null;
   readonly approver: string | null;
+}
+
+export type RewordState = "available" | "inert" | "absent";
+
+export interface RewordAvailability {
+  readonly state: RewordState;
+  /** The CLI's message, present only when `state === "inert"`. */
+  readonly reason: string | null;
 }
 
 export interface TaskDetail {
@@ -107,12 +135,15 @@ export interface RunDetail {
   readonly activity: readonly ActivityLine[];
   readonly questions: readonly QuestionRow[];
   readonly approval: ApprovalView | null;
+  readonly specFindings: readonly SpecFindingRow[];
+  readonly pausedReason: string | null;
   readonly replayed: boolean;
+  readonly reword: RewordAvailability;
 }
 
-/** A panel is built by its owning module (intake, approval, questions, confirm, help). */
+/** A panel is built by its owning module (intake, approval, questions, confirm, help, activity, reword). */
 export interface PanelView {
-  readonly kind: "intake" | "approval" | "questions" | "confirm" | "help";
+  readonly kind: "intake" | "approval" | "questions" | "confirm" | "help" | "activity" | "reword";
   readonly title: string;
   readonly lines: readonly string[];
   readonly keys: readonly KeyHint[];
@@ -131,6 +162,8 @@ export interface ViewModel {
   readonly panel: PanelView | null;
   readonly footer: readonly KeyHint[];
   readonly notice: string | null;
+  readonly listWindow: Window;
+  readonly taskWindow: Window;
 }
 
 export interface ViewModelInput {
@@ -149,6 +182,8 @@ export interface ViewModelInput {
   readonly selectedTaskId: string | null;
   readonly panel?: PanelView | null;
   readonly notice?: string | null;
+  readonly listOffset?: number;
+  readonly taskOffset?: number;
 }
 
 interface RunEntry {
@@ -204,15 +239,16 @@ function taskRow(
   selectedTaskId: string | null,
 ): TaskRow {
   const seen = snapshot?.tasks[task.id];
+  const id = flat(task.id);
   return {
-    id: task.id,
-    title: task.title,
-    repo: task.repo,
+    id,
+    title: flat(task.title),
+    repo: flat(task.repo),
     status: seen?.status ?? task.status,
     attempt: seen?.attempt ?? 0,
     failures: task.failures,
     deps: task.deps,
-    selected: task.id === selectedTaskId,
+    selected: id === selectedTaskId,
   };
 }
 
@@ -224,10 +260,11 @@ function questionRows(run: RunState, snapshot: RunSnapshot | null): QuestionRow[
   // The snapshot carries `question.answered`, so rows flip without waiting for the next status poll.
   const records = snapshot?.questions ?? run.clarifications;
   return records.map((question) => ({
-    step: question.step,
-    question: question.question,
+    step: flat(question.step),
+    question: flat(question.question),
+    rawQuestion: question.question,
     status: question.status,
-    ...(question.answer === undefined ? {} : { answer: question.answer }),
+    ...(question.answer === undefined ? {} : { answer: flat(question.answer) }),
     questionsFile,
   }));
 }
@@ -236,34 +273,83 @@ function approvalView(run: RunState, snapshot: RunSnapshot | null): ApprovalView
   const pending = snapshot?.pendingApproval ?? null;
   const granted = snapshot?.approval ?? null;
   if (pending === null && granted === null && run.phase !== "awaiting-approval") return null;
+  const specHash = pending?.specHash ?? granted?.specHash ?? null;
+  const specCommit = granted !== null && granted.approver !== "" ? granted.specCommit : null;
+  const approver = granted !== null && granted.approver !== "" ? granted.approver : null;
   return {
     changeId: run.id,
-    summary: run.summary,
-    changeDir: pending?.changeDir ?? null,
-    specHash: pending?.specHash ?? granted?.specHash ?? null,
+    summary: flat(run.summary),
+    changeDir: pending === null ? null : flat(pending.changeDir),
+    specHash: specHash === null ? null : flat(specHash),
     // `approval.requested` sets `approver: ""`; only `approval.granted` names a commit and person.
-    specCommit: granted !== null && granted.approver !== "" ? granted.specCommit : null,
-    approver: granted !== null && granted.approver !== "" ? granted.approver : null,
+    specCommit: specCommit === null ? null : flat(specCommit),
+    approver: approver === null ? null : flat(approver),
   };
 }
 
-function taskDetail(row: TaskRow, facts: EventFacts): TaskDetail {
+function findingRows(run: RunState): SpecFindingRow[] {
+  // Run-state order is the 1-based order `reword --finding <n>` uses; never sort it.
+  return run.specFindings.map((finding) => ({
+    severity: finding.severity,
+    file: finding.file === undefined ? null : flat(finding.file),
+    line: finding.line === undefined ? null : finding.line,
+    what: flat(finding.what),
+    problem: flat(finding.problem),
+    fix: flat(finding.fix),
+    impact: flat(finding.impact),
+  }));
+}
+
+function taskDetail(row: TaskRow, facts: EventFacts, tasks: readonly ScopeTask[]): TaskDetail {
   return {
     task: row,
     agent: facts.agents[row.id] ?? null,
     retries: facts.retries[row.id] ?? 0,
     gates: facts.gates[row.id] ?? [],
-    activity: facts.activity.filter((line) => line.step === row.id),
+    activity: linesInScope(tasks, facts.activity, { kind: "task", taskId: row.id }),
   };
+}
+
+/** The CLI's `CHANGE_PHASES`: the phases `reword` accepts once a run is approved. */
+const REWORD_PHASES: ReadonlySet<Phase> = new Set<Phase>([
+  "queued",
+  "implementing",
+  "reviewing",
+  "contracts",
+  "full-suite",
+  "closing",
+  "paused",
+  "aborted",
+]);
+
+/** The CLI's preconditions as far as the read API can see them; the approval file is not read. */
+function rewordAvailability(run: RunState, input: ViewModelInput): RewordAvailability {
+  if (input.source === "replay" || !REWORD_PHASES.has(run.phase))
+    return { state: "absent", reason: null };
+  // `roleOf` already treats a lock with a dead driver as idle, so liveness lives in one place.
+  const role = roleOf(run.id, input.status);
+  if (role.kind === "active")
+    return {
+      state: "inert",
+      reason: `${run.id} is being driven by pid ${role.pid}; stop it first`,
+    };
+  const active = input.status.active;
+  if (input.status.driverAlive && active !== null && active.changeId !== run.id)
+    return {
+      state: "inert",
+      reason: `${active.changeId} is the active change; finish or abort it before rewording ${run.id}`,
+    };
+  return { state: "available", reason: null };
 }
 
 function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
   const { run } = entry;
   const tasks = run.tasks.map((task) => taskRow(task, input.snapshot, input.selectedTaskId));
+  const scopeTasks: ScopeTask[] = tasks.map(({ id, repo }) => ({ id, repo }));
   const selected = tasks.find((task) => task.id === input.selectedTaskId) ?? null;
   return {
     id: run.id,
-    summary: run.summary,
+    summary: flat(run.summary),
     phase: run.phase,
     elapsedMs: elapsedSince(run.createdAt, input.now),
     tokens: entry.tokens,
@@ -271,17 +357,25 @@ function runDetail(entry: RunEntry, input: ViewModelInput): RunDetail {
     lock: roleOf(run.id, input.status),
     tasks,
     selectedTaskId: input.selectedTaskId,
-    detail: selected === null ? null : taskDetail(selected, input.facts),
+    detail: selected === null ? null : taskDetail(selected, input.facts, scopeTasks),
     activity: input.facts.activity,
     questions: questionRows(run, input.snapshot),
     approval: approvalView(run, input.snapshot),
+    specFindings: findingRows(run),
+    pausedReason: run.pausedReason === undefined ? null : flat(run.pausedReason),
     replayed: input.source === "replay",
+    reword: rewordAvailability(run, input),
   };
 }
 
 /** Paused, aborted and queued runs resume; the footer and `resumeFor` share this predicate. */
 export function canResume(phase: Phase): boolean {
   return phase === "paused" || phase === "aborted" || phase === "queued";
+}
+
+/** Only a done run lands; the footer and `landFor` share this predicate. */
+export function canLand(phase: Phase): boolean {
+  return phase === "done";
 }
 
 function listFooter(input: ViewModelInput): KeyHint[] {
@@ -293,21 +387,137 @@ function listFooter(input: ViewModelInput): KeyHint[] {
   ];
 }
 
-// The approval overlay owns a/A/w/R: its panel keys replace this footer while it is open.
-function runFooter(run: RunDetail | null): KeyHint[] {
+// The approval overlay owns a/A/R: its panel keys replace this footer while it is open.
+function runFooter(input: ViewModelInput, run: RunDetail | null): KeyHint[] {
   if (run === null) return [keyHint("q", "quit"), keyHint("?", "help")];
+  // Replay intercepts every write key (see `REPLAY_WRITE_KEYS` in the entry); the log pane still opens.
+  if (input.source === "replay")
+    return [keyHint("L", "log"), keyHint("?", "help"), keyHint("q", "quit")];
   const hints: KeyHint[] = [];
   if (canResume(run.phase)) hints.push(keyHint("r", "resume"));
+  if (canLand(run.phase)) hints.push(keyHint("l", "land"));
+  hints.push(...rewordHints(run.reword));
   if (run.phase !== "done" && run.phase !== "aborted") hints.push(keyHint("x", "abort"));
   if (run.detail?.task.status === "failed") hints.push(keyHint("t", "retry task"));
   if (run.questions.length > 0) hints.push(keyHint("Q", "questions"));
-  hints.push(keyHint("?", "help"), keyHint("q", "quit"));
+  hints.push(keyHint("L", "log"), keyHint("?", "help"), keyHint("q", "quit"));
   return hints;
+}
+
+/** One hint at most: an inert key keeps the CLI's reason for the footer that learns to print it. */
+function rewordHints(reword: RewordAvailability): KeyHint[] {
+  switch (reword.state) {
+    case "available":
+      return [keyHint("w", "reword")];
+    case "inert":
+      return [
+        {
+          key: "w",
+          label: "reword",
+          enabled: false,
+          ...(reword.reason === null ? {} : { reason: reword.reason }),
+        },
+      ];
+    case "absent":
+      return [];
+    default: {
+      const unhandled: never = reword.state;
+      throw new Error(`unknown reword state: ${String(unhandled)}`);
+    }
+  }
 }
 
 function footerFor(input: ViewModelInput, run: RunDetail | null): readonly KeyHint[] {
   if (input.panel !== undefined && input.panel !== null) return input.panel.keys;
-  return input.screen === "list" ? listFooter(input) : runFooter(run);
+  return input.screen === "list" ? listFooter(input) : runFooter(input, run);
+}
+
+/** The overview's compact tail never drops below four rows; a shorter terminal scrolls the graph. */
+export const TAIL_FLOOR = 4;
+
+/** Header rows: the phase line, plus the approving or paused-findings banner when it renders. */
+function headerRows(run: RunDetail | null): number {
+  if (run === null) return 1;
+  if (run.phase === "awaiting-approval") return 2;
+  if (run.phase === "paused" && run.specFindings.length > 0) return 2;
+  return 1;
+}
+
+/**
+ * A notice keeps the exit code and log path (its first two rows) and the newest tail rows. A
+ * failure notice can be twelve rows and would otherwise leave no room for a task detail.
+ */
+function capNotice(notice: string, maxRows: number): string | null {
+  const lines = notice.split("\n");
+  if (lines.length <= maxRows) return notice;
+  if (maxRows <= 0) return null;
+  const head = lines.slice(0, Math.min(2, maxRows));
+  const tailRows = maxRows - head.length;
+  return [...head, ...(tailRows === 0 ? [] : lines.slice(-tailRows))].join("\n");
+}
+
+/** Rows a detail's notice may take before it pushes the always-rendered detail rows off screen. */
+function detailNoticeRows(rows: number, header: number): number {
+  return Math.max(0, rows - header - 1 - DETAIL_MIN_ROWS);
+}
+
+/** Rows left for the tail in one pane: header, notice, graph title and rows, footer. */
+export function singlePaneTailRows(viewModel: ViewModel): number {
+  const run = viewModel.run;
+  if (run === null) return 0;
+  const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
+  const graphRows = 1 + Math.min(run.tasks.length, viewModel.taskWindow.size);
+  return Math.max(0, viewModel.rows - headerRows(run) - noticeRows - graphRows - 1);
+}
+
+/** Rows left for the two-pane run tail: header, notice, footer. */
+export function twoPaneTailRows(viewModel: ViewModel): number {
+  const run = viewModel.run;
+  if (run === null) return 0;
+  const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
+  return Math.max(0, viewModel.rows - headerRows(run) - noticeRows - 1);
+}
+
+/** The detail rows that are never windowed: eight facts plus the `Gates` and `Activity` titles. */
+const DETAIL_FIXED_ROWS = 10;
+
+/** The detail's minimum: the fixed rows plus the `no gate results` row an empty gate list renders. */
+const DETAIL_MIN_ROWS = DETAIL_FIXED_ROWS + 1;
+
+/** The detail tail keeps this many rows; the gate list may only grow into the ones above. */
+const DETAIL_TAIL_FLOOR = 4;
+
+/** Rows left for the detail body: header, notice and footer removed. */
+function detailBodyRows(viewModel: ViewModel, run: RunDetail): number {
+  const noticeRows = viewModel.notice === null ? 0 : viewModel.notice.split("\n").length;
+  return Math.max(0, viewModel.rows - headerRows(run) - noticeRows - 1);
+}
+
+/** Fixed rows plus the empty states an empty gate list or activity tail still renders. */
+function detailFixedRows(detail: TaskDetail): number {
+  return (
+    DETAIL_FIXED_ROWS + (detail.gates.length === 0 ? 1 : 0) + (detail.activity.length === 0 ? 1 : 0)
+  );
+}
+
+/** Rows the gate list may render, the last one counting the hidden gates; the tail keeps its floor. */
+export function taskDetailGateRows(viewModel: ViewModel): number {
+  const run = viewModel.run;
+  if (run === null || run.detail === null) return 0;
+  return Math.max(
+    0,
+    detailBodyRows(viewModel, run) - detailFixedRows(run.detail) - DETAIL_TAIL_FLOOR,
+  );
+}
+
+/** Rows left for the detail tail: the body minus the fixed rows and the gates that fit. */
+export function taskDetailTailRows(viewModel: ViewModel): number {
+  const run = viewModel.run;
+  if (run === null || run.detail === null) return 0;
+  const gates = run.detail.gates.length;
+  // An empty gate list still renders its `no gate results` row.
+  const gateRows = gates === 0 ? 1 : Math.min(gates, taskDetailGateRows(viewModel));
+  return Math.max(0, detailBodyRows(viewModel, run) - detailFixedRows(run.detail) - gateRows);
 }
 
 export function buildViewModel(input: ViewModelInput): ViewModel {
@@ -316,21 +526,47 @@ export function buildViewModel(input: ViewModelInput): ViewModel {
   );
   const list: RunListItem[] = ordered.map(({ run, tokens, cost }) => ({
     id: run.id,
-    summary: run.summary,
+    summary: flat(run.summary),
     phase: run.phase,
     role: roleOf(run.id, input.status),
     tokens,
     cost,
     elapsedMs: elapsedSince(run.createdAt, input.now),
+    findings: run.specFindings.length,
     selected: run.id === input.selectedRunId,
   }));
 
   const entry = ordered.find((candidate) => candidate.run.id === input.selectedRunId);
   const run = entry === undefined ? null : runDetail(entry, input);
-  const notice =
+  const header = headerRows(run);
+  const rawNotice =
     input.notice ??
     (input.source === "replay" ? replayNotice : null) ??
     (list.length === 0 ? emptyWorkspace : null);
+  // A detail always needs its fixed rows; a long notice is windowed so it cannot push them away.
+  const notice =
+    rawNotice === null || run === null || run.detail === null
+      ? rawNotice
+      : capNotice(rawNotice, detailNoticeRows(input.rows, header));
+
+  // Every growing region gets a budget; the footer and a one-row title are never spent on rows.
+  const noticeRows = notice === null ? 0 : notice.split("\n").length;
+  const footerRows = 1;
+  const listSize = Math.max(0, input.rows - 1 - footerRows - noticeRows);
+  const graphSize = Math.min(
+    run?.tasks.length ?? 0,
+    Math.max(0, input.rows - header - noticeRows - 2 - TAIL_FLOOR),
+  );
+
+  const listIndex = list.findIndex((item) => item.id === input.selectedRunId);
+  const taskIndex = run?.tasks.findIndex((task) => task.id === input.selectedTaskId) ?? -1;
+  const listOffset = nextOffset(input.listOffset ?? 0, listIndex, list.length, listSize);
+  const taskOffset = nextOffset(
+    input.taskOffset ?? 0,
+    taskIndex,
+    run?.tasks.length ?? 0,
+    graphSize,
+  );
 
   return {
     source: input.source,
@@ -344,5 +580,7 @@ export function buildViewModel(input: ViewModelInput): ViewModel {
     panel: input.panel ?? null,
     footer: footerFor(input, run),
     notice,
+    listWindow: windowOf(listOffset, list.length, listSize),
+    taskWindow: windowOf(taskOffset, run?.tasks.length ?? 0, graphSize),
   };
 }

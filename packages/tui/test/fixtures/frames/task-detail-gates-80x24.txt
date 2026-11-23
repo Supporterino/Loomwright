@@ -1,0 +1,24 @@
+ > add-health implementing 8s - 0 tokens - $0.00 - idle
+ task     first - Health endpoint
+ status   running
+ repo     app
+ attempt  0
+ retries  0
+ agent    (none)
+ model    unknown
+ duration -
+ Gates
+ x lint-1          fail 0s
+ + format-2        pass 0s
+ + types-3         pass 0s
+ + test-4          pass 0s
+ x testAffected-5  fail 0s
+ + lint-6          pass 0s
+ + format-7        pass 0s
+ 13 more gates
+ Activity
+ first - tool - activity line 17
+ first - tool - activity line 18
+ first - tool - activity line 19
+ first - tool - activity line 20
+w reword - x abort - L log - ? help - q quit

@@ -250,6 +250,51 @@ describe("text intake", () => {
     const newline = intakeKeys(typed, "j", key({ ctrl: true }), ctx).state;
     expect(newline.text).toBe("first\nsecond\n");
   });
+
+  test("a multi-line request is split into panel rows and names the shown count", () => {
+    const text = Array.from({ length: 25 }, (_, index) => `line ${index + 1}`).join("\n");
+    const lines = intakePanel({ ...initialIntake, text }, ASCII_GLYPHS, 24).lines;
+
+    expect(lines.some((line) => line.includes("\n"))).toBe(false);
+    expect(lines).toContain("request (18 of 25 lines):");
+    expect(lines).toContain("  | line 18");
+    expect(lines).not.toContain("  | line 19");
+    // The rows plus the panel's five chrome rows fit the 24-row terminal.
+    expect(lines.length).toBeLessThanOrEqual(24 - 5);
+  });
+
+  test("a multi-line request leaves the error notice a row and fits 80x24", () => {
+    const text = Array.from({ length: 25 }, (_, index) => `line ${index + 1}`).join("\n");
+    const lines = intakePanel(
+      { ...initialIntake, text, error: "the request is empty" },
+      ASCII_GLYPHS,
+      24,
+    ).lines;
+
+    expect(lines).toContain("request (17 of 25 lines):");
+    expect(lines.length).toBeLessThanOrEqual(24 - 5 - 1);
+  });
+
+  test("the physical Backspace key Ink reports as delete removes the last character", () => {
+    const ws = workspace();
+    const ctx = context(ws);
+    const typed = typeText("draft", ctx);
+    const deleted = intakeKeys(typed, "", key({ delete: true }), ctx).state;
+    expect(deleted.text).toBe("draf");
+  });
+
+  test("a paste with an embedded ESC is stripped in the text and path fields", () => {
+    const ws = workspace();
+    const ctx = context(ws);
+    const typed = intakeKeys(initialIntake, "prefix\u001b[2J", key(), ctx).state;
+    expect(typed.text).not.toContain("\u001b");
+    expect(typed.text).toBe("prefix[2J");
+
+    const fileMode = intakeKeys(initialIntake, "", key({ tab: true }), ctx).state;
+    const path = intakeKeys(fileMode, "a\u001b]52;c;x", key(), ctx).state;
+    expect(path.path).not.toContain("\u001b");
+    expect(path.path).toBe("a]52;c;x");
+  });
 });
 
 describe("a blank request is rejected", () => {

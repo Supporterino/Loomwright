@@ -1,10 +1,64 @@
 import { describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { headerLine } from "../scripts/e2e-header.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const RENAME_VERSION = "0.12.0";
+
+/** Runs git in the repository root and returns trimmed stdout. */
+function git(...args: string[]): string {
+  return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+}
+
+const CHANGE_ID = "fix-correctness-and-guard-gaps";
+const CHANGE_DIR = `openspec/changes/${CHANGE_ID}`;
+
+/**
+ * The commit before the change added its proposal. The historical-file assertion compares
+ * against it so a later ADR or index row cannot accidentally look like a change to history.
+ */
+function changeBase(): string {
+  // `--full-history` disables path-limited history simplification: on a pull-request merge ref
+  // git otherwise walks only the parent that differs for this path and never reaches the commit
+  // that added it. Locally on a linear branch the flag changes nothing.
+  const added = git(
+    "log",
+    "--full-history",
+    "--diff-filter=A",
+    "--format=%H",
+    "--",
+    `${CHANGE_DIR}/proposal.md`,
+  )
+    .split("\n")
+    .filter(Boolean);
+  const first = added[added.length - 1];
+  if (first === undefined) throw new Error("the change proposal is not in history");
+  return git("rev-parse", `${first}^`);
+}
+
+/**
+ * The change's own last commit: the newest commit carrying its `Change-Id`, or for a squash
+ * landing the newest that touched its directory. Bounding the range here keeps a later change
+ * that edits an ADR from looking like a change to history.
+ */
+function changeTip(): string {
+  const [trailer] = git(
+    "log",
+    "--extended-regexp",
+    "--format=%H",
+    `--grep=^Change-Id: ${CHANGE_ID}$`,
+  )
+    .split("\n")
+    .filter(Boolean);
+  if (trailer !== undefined) return trailer;
+  const [touching] = git("log", "--full-history", "--format=%H", "--", CHANGE_DIR)
+    .split("\n")
+    .filter(Boolean);
+  if (touching === undefined) throw new Error("the change is not in history");
+  return touching;
+}
 
 function read(...parts: string[]): string {
   return readFileSync(join(ROOT, ...parts), "utf8");
@@ -209,6 +263,19 @@ describe("documentation", () => {
     expect(read("docs/decisions/README.md")).toContain("| [0046](0046-typed-event-stream.md)");
   });
 
+  test("the ADR exists and is indexed (ADR-0049)", () => {
+    const adr = read("docs/decisions/0049-package-runner-aliases.md");
+    expect(adr.startsWith("# 0049 — ")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).toContain("npx");
+    expect(adr).toContain("pnpx");
+    expect(adr).toContain("routed, not blocked");
+    expect(adr).not.toContain("Loomwright");
+    expect(read("docs/decisions/README.md")).toContain("| [0049](0049-package-runner-aliases.md)");
+  });
+
   test("docs/events.md covers the contract", () => {
     const events = read("docs/events.md");
     for (const topic of [
@@ -279,6 +346,34 @@ describe("documentation", () => {
     const fleet = read("docs/fleet-update.sh");
     expect(fleet).toMatch(/bunx "@loomwright\/cli@\$\{version\}"/);
     expect(fleet).toContain("loomwright rollback");
+  });
+
+  test("the README rows describe the override precedence", () => {
+    const readme = read("README.md");
+    const scriptsRow = readme.split("\n").find((l) => l.startsWith("| `gates.scripts`"));
+    expect(scriptsRow).toBeDefined();
+    expect(scriptsRow).toContain("replaces the script lookup");
+    expect(scriptsRow).toContain("write-mode script warning");
+
+    const doctorRow = readme
+      .split("\n")
+      .find((l) => l.includes("`doctor` / `gate`: `no format gate`"));
+    expect(doctorRow).toBeDefined();
+    expect(doctorRow).toContain("replaces the script lookup");
+    expect(doctorRow).toContain("write-mode script warning");
+  });
+
+  test("the CLI reference describes the override precedence", () => {
+    const cli = read("docs/cli.md");
+
+    const doctorBullet = cli.split("\n").find((l) => l.startsWith("- **Gates:**"));
+    expect(doctorBullet).toBeDefined();
+    expect(doctorBullet).toContain("skips the write-mode script warning");
+    expect(doctorBullet).toContain("replaces the script lookup");
+
+    const gateBullet = cli.split("\n").find((l) => l.startsWith("- Gates resolve as"));
+    expect(gateBullet).toBeDefined();
+    expect(gateBullet).toContain("replaces the script lookup");
   });
 });
 
@@ -370,10 +465,68 @@ describe("compatibility surface", () => {
     expect(isHistoricalSnapshot("test/fixtures/install-0.13.0.json")).toBe(false);
   });
 
-  test("the workspace sandbox setting is pinned to off (ADR-0041)", () => {
+  test("the ADR says superseded and the setting stays off (ADR-0041)", () => {
     const config = read("factory.config.jsonc");
     expect(config).toContain('"security": { "sandbox": "off" }');
     expect(config).toContain("ADR-0041");
+
+    const adr = read("docs/decisions/0041-unsandboxed-workspace.md");
+    expect(adr).toContain("The nesting guard supersedes this exception");
+    expect(adr).toContain("manual, post-landing edit of the protected `factory.config.jsonc`");
+    expect(adr).not.toContain("Loomwright");
+  });
+
+  test("ADR-0026 names the off-macOS residual", () => {
+    const adr = read("docs/decisions/0026-hardening-and-sandbox.md");
+    expect(adr).toContain("heuristic");
+    expect(adr).toContain("glob expansion and other-language source scans");
+    expect(adr).toContain(
+      "the shell parser and the edit-scope check are the only backstop on hosts without a sandbox",
+    );
+    expect(adr).not.toContain("Loomwright");
+  });
+
+  test("the named ADRs are corrected", () => {
+    const named: ReadonlyArray<readonly [file: string, sections: readonly string[]]> = [
+      ["0026-hardening-and-sandbox.md", ["**Context.**", "**Decision.**", "**Consequences.**"]],
+      ["0041-unsandboxed-workspace.md", ["**Context.**", "**Decision.**", "**Consequences.**"]],
+      ["0047-tui.md", ["## Context", "## Decision", "## Consequences"]],
+      ["0049-package-runner-aliases.md", ["## Context", "## Decision", "## Consequences"]],
+    ];
+    for (const [file, sections] of named) {
+      const adr = read("docs/decisions", file);
+      expect(adr.length, file).toBeGreaterThan(0);
+      for (const section of sections) expect(adr, file).toContain(section);
+      expect(adr, file).not.toContain("Loomwright");
+    }
+  });
+
+  test("every other historical file keeps its text", () => {
+    const base = changeBase();
+    const historical = git(
+      "ls-tree",
+      "-r",
+      "--name-only",
+      base,
+      "--",
+      "docs/decisions",
+      "docs/research",
+      "docs/audit",
+    )
+      .split("\n")
+      .filter((file) => file.length > 0 && file !== "docs/decisions/README.md");
+    expect(historical.length).toBeGreaterThan(0);
+
+    // 0049 is new, so it is not in the base tree; the named-ADR test above covers it.
+    const changed = git("diff", "--name-only", base, changeTip(), "--", ...historical)
+      .split("\n")
+      .filter(Boolean)
+      .sort();
+    expect(changed).toEqual([
+      "docs/decisions/0026-hardening-and-sandbox.md",
+      "docs/decisions/0041-unsandboxed-workspace.md",
+      "docs/decisions/0047-tui.md",
+    ]);
   });
 });
 
@@ -384,6 +537,8 @@ describe("terminal UI documentation", () => {
       "# The terminal UI",
       "## The run list",
       "## The run view",
+      "## Findings and reword",
+      "## The activity log",
       "## Layout",
       "## Keys",
       "## Starting a change",
@@ -395,6 +550,11 @@ describe("terminal UI documentation", () => {
     ])
       expect(tui).toContain(heading);
     expect(tui).toContain("recorded — applies at the next step");
+    expect(tui).toContain("`l`");
+    expect(tui).toContain("`L`");
+    expect(tui).toContain("`w`");
+    expect(tui).toContain("every run event");
+    expect(tui).toContain("full-height");
 
     // The long actions are detached children; answer, abort and retry are in-process writes.
     expect(tui).toContain("detached CLI children");
@@ -405,6 +565,7 @@ describe("terminal UI documentation", () => {
     expect(readme).toContain("loomwright tui");
     expect(readme).toContain("recorded — applies at the next step");
     expect(readme).toContain("in-process");
+    expect(readme).toContain("`l`");
     expect(readme).toContain("docs/tui.md");
 
     const cli = read("docs/cli.md");
@@ -413,10 +574,11 @@ describe("terminal UI documentation", () => {
     expect(cli).toContain("status --watch");
     expect(cli).toContain("events --follow");
     expect(cli).toContain("in-process");
+    expect(cli).toContain("`l`");
     expect(cli).toContain("docs/tui.md");
   });
 
-  test("the ADR is valid and indexed", () => {
+  test("the size is measured, not estimated, and the ADR is valid and indexed", () => {
     const adr = read("docs/decisions/0047-tui.md");
     expect(adr.startsWith("# 0047 — ")).toBe(true);
     expect(adr).toContain("## Context");
@@ -426,8 +588,25 @@ describe("terminal UI documentation", () => {
     expect(adr).toContain("React **19.3.1**");
     expect(adr).toContain("approval.pending");
     expect(adr).toContain("--replay");
+    expect(adr).not.toContain("about 1 MB");
+    expect(adr).toMatch(/\d{1,3}(,\d{3})* bytes/);
+    expect(adr).toContain("bun run build");
+    expect(adr).toContain("wc -c");
     expect(adr).not.toContain("Loomwright");
-    expect(read("docs/decisions/README.md")).toContain("| [0047](0047-tui.md)");
+
+    const next = read("docs/decisions/0048-tui-scroll-log-and-reword.md");
+    expect(next.startsWith("# 0048 — ")).toBe(true);
+    expect(next).toContain("## Context");
+    expect(next).toContain("## Decision");
+    expect(next).toContain("## Consequences");
+    expect(next).toContain("Ink 6.4.0");
+    expect(next).toContain("React 19.3.1");
+    expect(next).not.toContain("[");
+    expect(next).not.toContain("Loomwright");
+
+    const index = read("docs/decisions/README.md");
+    expect(index).toContain("| [0047](0047-tui.md)");
+    expect(index).toContain("| [0048](0048-tui-scroll-log-and-reword.md)");
   });
 
   test("the keys are documented", () => {
@@ -436,6 +615,7 @@ describe("terminal UI documentation", () => {
       ["n", "new change"],
       ["Tab", "file mode"],
       ["Tab", "text mode"],
+      ["Tab", "scope"],
       ["a", "approve and run"],
       ["A", "approve only"],
       ["w", "reword"],
@@ -443,19 +623,36 @@ describe("terminal UI documentation", () => {
       ["r", "resume"],
       ["x", "abort"],
       ["t", "retry task"],
+      ["l", "land"],
       ["Q", "questions"],
+      ["PgUp/PgDn", "page"],
+      ["g/G", "ends"],
+      ["f", "follow on"],
+      ["Ctrl-J", "newline"],
+      ["Esc", "collapse"],
       ["?", "help"],
       ["q", "quit"],
     ];
-    for (const [key] of hints) expect(tui).toContain(`\`${key}\``);
+    for (const [key] of hints)
+      for (const part of key.split("/")) expect(tui).toContain(`\`${part}\``);
+    expect(tui).toContain("`L`");
+
+    // `q` quits from the list, the run view, help and the approval overlay; an open panel or a
+    // text field owns the key, so the table must not promise "Everywhere".
+    const quitRow = tui.split("\n").find((line) => line.startsWith("| `q`"));
+    expect(quitRow).toContain("Run list, run view, help and the approval overlay");
 
     // The footer is built from these pure hints, so checking them covers the rendered footer.
     const sources = [
       read("packages/tui/src/model/view-model.ts"),
       read("packages/tui/src/intake/dialog.tsx"),
       read("packages/tui/src/approval/overlay.ts"),
+      read("packages/tui/src/controls/activity-pane.ts"),
     ].join("\n");
-    for (const [key, label] of hints) expect(sources).toContain(`keyHint("${key}", "${label}")`);
+    for (const [key, label] of hints)
+      if (key === "f") expect(sources).toContain('keyHint("f"');
+      else expect(sources).toContain(`keyHint("${key}", "${label}")`);
+    expect(read("packages/tui/src/help.ts")).toContain("L open the activity log");
 
     // The honest answer wording is shared with the questions pane.
     expect(read("packages/tui/src/strings.ts")).toContain("recorded — applies at the next step");

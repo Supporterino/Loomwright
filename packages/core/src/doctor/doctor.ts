@@ -9,6 +9,7 @@ import { parseJsonc } from "../config/jsonc.ts";
 import { loadConfig } from "../config/load.ts";
 import {
   type FactoryConfig,
+  GATE_TYPES,
   type GateType,
   modelEntries,
   type RepoConfig,
@@ -131,6 +132,7 @@ export function gateExecutables(command: string): string[] {
   try {
     commandNames(parseScript(command), out);
   } catch {
+    // An unparsable gate command yields no executables.
     return [];
   }
   return [...out];
@@ -150,6 +152,7 @@ function dirSize(path: string): number {
     try {
       entries = readdirSync(dir);
     } catch {
+      // A directory that vanished mid-walk contributes no entries.
       continue;
     }
     for (const name of entries) {
@@ -379,15 +382,35 @@ async function checkRepos(
   return ready;
 }
 
-function packageScript(dir: string, name: string): string | undefined {
+type ScriptLookup =
+  | { readonly kind: "body"; readonly body: string }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly error: string };
+
+function errnoOf(err: unknown): unknown {
+  return typeof err === "object" && err !== null && "code" in err ? err.code : undefined;
+}
+
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function packageScript(dir: string, name: string): ScriptLookup {
+  let text: string;
   try {
-    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
-      scripts?: Record<string, unknown>;
-    };
+    text = readFileSync(join(dir, "package.json"), "utf8");
+  } catch (err: unknown) {
+    // A missing package.json is normal outside Node; any other read error is worth reporting.
+    return errnoOf(err) === "ENOENT"
+      ? { kind: "absent" }
+      : { kind: "unreadable", error: messageOf(err) };
+  }
+  try {
+    const pkg = JSON.parse(text) as { scripts?: Record<string, unknown> };
     const value = pkg.scripts?.[name];
-    return typeof value === "string" ? value : undefined;
-  } catch {
-    return undefined;
+    return typeof value === "string" ? { kind: "body", body: value } : { kind: "absent" };
+  } catch (err: unknown) {
+    return { kind: "unreadable", error: messageOf(err) };
   }
 }
 
@@ -402,15 +425,27 @@ function checkWriteModeScripts(
   c.in("gates");
   for (const repo of repos.filter((r) => r.role === "code")) {
     const dir = join(root, repo.path);
-    for (const [type, name] of Object.entries(config.gates.scripts)) {
-      if (typeof name !== "string") continue;
+    for (const type of GATE_TYPES) {
+      const name = config.gates.scripts[type];
+      if (name === undefined) continue;
+      // An override (a command or "skip") replaces the script lookup entirely.
+      if (config.gates.overrides[repo.name]?.[type] !== undefined) continue;
       const script = packageScript(dir, name);
-      if (script !== undefined && WRITE_FLAG.test(script)) {
+      if (script.kind === "unreadable") {
         c.add(
           "warn",
           `${repo.name} ${type} script`,
-          `\`${name}\` writes files: ${script}`,
-          `point gates.scripts.${type} at a check-only variant, or set gates.overrides.${repo.name}.${type}`,
+          `package.json cannot be read (${script.error}); the gate script cannot be checked`,
+          "fix the JSON in package.json",
+        );
+        continue;
+      }
+      if (script.kind === "body" && WRITE_FLAG.test(script.body)) {
+        c.add(
+          "warn",
+          `${repo.name} ${type} script`,
+          `\`${name}\` writes files: ${script.body}`,
+          `set gates.overrides.${repo.name}.${type} to a check-only variant (it replaces the script lookup), or point gates.scripts.${type} at a check-only variant`,
         );
       }
     }
@@ -499,6 +534,7 @@ function looseTsconfig(dir: string, gates: readonly ResolvedGate[]): string | un
   try {
     text = readFileSync(join(dir, rel), "utf8");
   } catch {
+    // An unreadable tsconfig is not second-guessed.
     return undefined;
   }
   const tsconfig = parseJsonc(text).value as
@@ -872,7 +908,8 @@ function checkSandbox(c: Checks, config: FactoryConfig): void {
       "off: agent shells and gates run unsandboxed",
       'set security.sandbox to "auto"',
     );
-  else if (sandboxEnabled(config.security.sandbox))
+  // Doctor reports the workspace setting; a doctor run inside a wrapped gate still says ok.
+  else if (sandboxEnabled(config.security.sandbox, process.platform, existsSync, {}))
     c.add("ok", "sandbox", "agent shells and gates run under macOS sandbox-exec");
   else
     c.add(

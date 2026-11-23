@@ -200,6 +200,8 @@ describe("probes that were already blocked stay blocked", () => {
     "ls | xargs sh -c 'git push'",
     "mv -t .. f",
     "git config --rename-section a b",
+    "npx sh -c 'git push'",
+    "npx npm publish",
   ])("%s", (cmd) => {
     expect(checkShell(cmd, ctx).allowed).toBe(false);
   });

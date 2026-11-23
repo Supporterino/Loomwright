@@ -199,10 +199,36 @@ afterAll(() => rmSync(ws, { recursive: true, force: true }));
 beforeEach(() => rmSync(approvalFile(ws, ID), { force: true }));
 
 describe("plugin bundle", () => {
-  test("the committed bundle is current and carries the new reason (run `bun run build:plugin`)", async () => {
+  test("the regenerated bundle is committed and a root build matches it (run `bun run build:plugin`)", async () => {
     const bundle = readFileSync(PLUGIN_OUT, "utf8");
     expect(bundle).toContain("expands into itself");
+    expect(bundle).toContain("npx");
     expect(bundle).toBe(await bundlePlugin());
+  });
+
+  test("the committed bundle carries the alias checks", () => {
+    const bundle = readFileSync(PLUGIN_OUT, "utf8");
+    expect(bundle).toContain("npx");
+    expect(bundle).toContain("pnpx");
+  });
+
+  test("a subdirectory build matches the committed file", async () => {
+    const bundleFrom = async (dir: string): Promise<string> => {
+      const cwd = process.cwd();
+      process.chdir(dir);
+      try {
+        return await bundlePlugin();
+      } finally {
+        process.chdir(cwd);
+      }
+    };
+    const fromRoot = await bundlePlugin();
+    const fromSubdirectory = await bundleFrom(join(ROOT, "packages", "core"));
+    expect(fromSubdirectory).toBe(fromRoot);
+    expect(fromSubdirectory).toBe(readFileSync(PLUGIN_OUT, "utf8"));
+    expect(fromSubdirectory).toContain("// packages/core/src/plugin/entry.ts");
+    expect(fromSubdirectory).not.toContain("../");
+    expect(fromSubdirectory).not.toContain(ROOT);
   });
 
   test("an in-memory build leaves the tracked file alone", async () => {
@@ -318,7 +344,12 @@ describe("plugin guards", () => {
     expect(() => create({ command: "id", env: {} })).toThrow("only through a factory agent");
 
     process.env.AI_FACTORY_SCRUB = "ANTHROPIC_API_KEY";
-    process.env.AI_FACTORY_SANDBOX = process.platform === "darwin" ? "seatbelt" : "off";
+    // A gate that wrapped this suite passes the marker down: keep it, since macOS cannot nest
+    // sandbox-exec. Otherwise force the profile this test asserts.
+    const saved = process.env.AI_FACTORY_SANDBOX;
+    const inherited = saved === "wrapped";
+    const profile = process.platform === "darwin" && !inherited;
+    process.env.AI_FACTORY_SANDBOX = profile ? "seatbelt" : inherited ? "wrapped" : "off";
     try {
       // A write the parser cannot see; the sandbox must stop it.
       const command = `echo inside > ok.txt; python3 -c "open('../escape.txt','w').write('x')"`;
@@ -332,11 +363,16 @@ describe("plugin guards", () => {
         >,
       };
       create(event);
-      expect(event.env).toEqual({ PATH: "/usr/bin:/bin" });
+      expect(event.env).toEqual({
+        PATH: "/usr/bin:/bin",
+        ...(profile ? { AI_FACTORY_SANDBOX: "wrapped" } : {}),
+      });
       // The same command again needs its own guard pass.
       expect(() => create({ command, env: {} })).toThrow("only through a factory agent");
-      if (process.platform === "darwin") {
-        expect(event.command).toStartWith("exec '/usr/bin/sandbox-exec' -p");
+      if (profile) {
+        expect(event.command).toStartWith(
+          "export AI_FACTORY_SANDBOX=wrapped; exec '/usr/bin/sandbox-exec' -p",
+        );
         spawnSync("/bin/sh", ["-c", event.command], { cwd: wt });
         expect(existsSync(join(wt, "ok.txt"))).toBe(true);
         expect(existsSync(join(wt, "..", "escape.txt"))).toBe(false);
@@ -344,7 +380,42 @@ describe("plugin guards", () => {
       }
     } finally {
       delete process.env.AI_FACTORY_SCRUB;
-      delete process.env.AI_FACTORY_SANDBOX;
+      if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
+      else process.env.AI_FACTORY_SANDBOX = saved;
+    }
+  });
+
+  test("the plugin marks the shell it wraps", async () => {
+    const create = hooks.get("shell.create.before") as unknown as (e: {
+      command: string;
+      shell?: string;
+      env?: Record<string, string | undefined>;
+    }) => unknown;
+    const saved = process.env.AI_FACTORY_SANDBOX;
+    try {
+      process.env.AI_FACTORY_SANDBOX = "seatbelt";
+      expect(
+        await call("impl", "implementer-app", "shell", { command: "echo marked" }),
+      ).toBeUndefined();
+      const wrappedEnv: Record<string, string | undefined> = { PATH: "/bin" };
+      const wrapped = { command: "echo marked", shell: "/bin/sh", env: wrappedEnv };
+      create(wrapped);
+      expect(wrapped.command).toContain("sandbox-exec");
+      expect(wrapped.command).toContain("AI_FACTORY_SANDBOX=wrapped");
+      expect(wrappedEnv).toEqual({ PATH: "/bin", AI_FACTORY_SANDBOX: "wrapped" });
+
+      process.env.AI_FACTORY_SANDBOX = "wrapped";
+      expect(
+        await call("impl", "implementer-app", "shell", { command: "echo plain" }),
+      ).toBeUndefined();
+      const plainEnv: Record<string, string | undefined> = { PATH: "/bin" };
+      const plain = { command: "echo plain", shell: "/bin/sh", env: plainEnv };
+      create(plain);
+      expect(plain.command).toBe("echo plain");
+      expect(plainEnv).toEqual({ PATH: "/bin" });
+    } finally {
+      if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
+      else process.env.AI_FACTORY_SANDBOX = saved;
     }
   });
 

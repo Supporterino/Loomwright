@@ -10,6 +10,7 @@ import {
   confirmFor,
   confirmKeys,
   confirmPanel,
+  landFor,
   resumeFor,
   retryFor,
 } from "../src/controls/actions.ts";
@@ -18,24 +19,36 @@ import {
   type QuestionsState,
   questionsKeys,
   questionsPanel,
+  recordAnswerInState,
+  recordKey,
 } from "../src/controls/questions.tsx";
-import {
-  createResumeGuard,
-  performControl,
-  recordAnswer,
-  resumeFailed,
-  runInSession,
-  startResume,
-  type UiData,
-} from "../src/entry.tsx";
+import { initialReword, openReword, type RewordState, rewordKeys } from "../src/controls/reword.ts";
+import { runInSession, viewOf } from "../src/entry.tsx";
 import {
   actionArgs,
   type ExitResult,
   type LaunchAction,
   type LaunchResult,
 } from "../src/launch/launcher.ts";
+import {
+  createLandGuard,
+  createResumeGuard,
+  landConfirmation,
+  landFailed,
+  landSettled,
+  performControl,
+  recordAnswer,
+  resumeFailed,
+  resumeStarted,
+  rewordFailed,
+  settleLanding,
+  startLand,
+  startResume,
+  startReword,
+} from "../src/model/controls.ts";
 import { collectFacts } from "../src/model/facts.ts";
 import type { KeyInput } from "../src/model/keys.ts";
+import type { UiData } from "../src/model/ui-data.ts";
 import { buildViewModel, type RunDetail, type ViewModelInput } from "../src/model/view-model.ts";
 import { createTerminalSession, type TerminalSession } from "../src/session.ts";
 import { answerRecorded } from "../src/strings.ts";
@@ -164,8 +177,13 @@ function askRun(
   );
 }
 
-function panelText(run: RunDetail, state: QuestionsState): string {
-  const panel = questionsPanel({ run, state, glyphs: UNICODE_GLYPHS });
+function panelText(run: RunDetail, state: QuestionsState, rows?: number): string {
+  const panel = questionsPanel({
+    run,
+    state,
+    glyphs: UNICODE_GLYPHS,
+    ...(rows === undefined ? {} : { rows }),
+  });
   return [
     panel.title,
     ...panel.lines,
@@ -237,7 +255,10 @@ function fakeLauncher(): {
 }
 
 /** A launcher that spawns at once and lets the test decide when (and how) the child exits. */
-function resumeLauncher(logPath = LOG): {
+function resumeLauncher(
+  logPath = LOG,
+  displayPath = LOG,
+): {
   readonly launcher: { launch(action: LaunchAction): Promise<LaunchResult> };
   readonly launches: readonly LaunchAction[];
   readonly exit: (code: number | null) => void;
@@ -253,7 +274,7 @@ function resumeLauncher(logPath = LOG): {
     launcher: {
       async launch(action: LaunchAction): Promise<LaunchResult> {
         launches.push(action);
-        return { pid: 4242, logPath, displayPath: logPath, exited };
+        return { pid: 4242, logPath, displayPath, exited };
       },
     },
   };
@@ -278,6 +299,7 @@ function uiData(overrides: Partial<UiData> = {}): UiData {
     confirmation: null,
     help: false,
     identity: null,
+    pendingLand: null,
     ...overrides,
   };
 }
@@ -308,7 +330,7 @@ describe("Q opens the questions pane only when questions exist", () => {
     expect(quiet.footer.some((hint) => hint.key === "Q")).toBe(false);
   });
 
-  test("an unanswered record opens its draft directly", () => {
+  test("openQuestions selects the first unanswered record with focus record and no text", () => {
     const run = askRun([
       { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
       { step: "design", question: "Do health checks need auth?", status: "skipped" },
@@ -316,17 +338,16 @@ describe("Q opens the questions pane only when questions exist", () => {
     const state = openQuestions(run);
     expect(state).toEqual({
       selected: 0,
-      draft: {
-        step: "design",
-        question: "Which endpoints should be public?",
-        text: "",
-        recorded: false,
-      },
+      focus: "record",
+      text: "",
+      offset: 0,
+      recorded: new Set(),
       notice: null,
     });
     if (state === null) throw new Error("the pane did not open");
     expect(questionsPanel({ run, state, glyphs: UNICODE_GLYPHS }).kind).toBe("questions");
-    expect(panelText(run, state)).toContain("answer>");
+    expect(panelText(run, state)).toContain("unanswered");
+    expect(panelText(run, state)).not.toContain("answer>");
   });
 });
 
@@ -337,12 +358,14 @@ describe("an answer is recorded, then confirmed", () => {
     ]);
     const opened = openQuestions(run);
     if (opened === null) throw new Error("the pane did not open");
-    const typed = typeText(run, opened, "public /health");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "public /health");
 
     const outcome = questionsKeys(run, typed, "Enter", key({ return: true }));
     expect(outcome.answer).toEqual({
       answer: "public /health",
       question: "Which endpoints should be public?",
+      rawQuestion: "Which endpoints should be public?",
     });
 
     const fake = fakeFactory();
@@ -355,24 +378,55 @@ describe("an answer is recorded, then confirmed", () => {
     expect(fake.resumes).toEqual([]);
   });
 
+  test("a two-line question sends its raw text to Factory.answer so the pipeline matches it", async () => {
+    const raw = "Which endpoints?\nShould health be public?";
+    const run = askRun([{ step: "design", question: raw, status: "unanswered" }]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "public /health");
+
+    const outcome = questionsKeys(run, typed, "Enter", key({ return: true }));
+    expect(outcome.answer).toEqual({
+      answer: "public /health",
+      question: "Which endpoints? Should health be public?",
+      rawQuestion: raw,
+    });
+
+    const fake = fakeFactory();
+    if (outcome.answer === undefined) throw new Error("the typed answer did not emit");
+    await recordAnswer(fake.factory, run.id, outcome.answer.answer, outcome.answer.rawQuestion);
+    expect(fake.answers).toEqual([{ id: RUN, answer: "public /health", question: raw }]);
+
+    // Display and the recorded-answer key stay flattened, so the row still flips to recorded.
+    const recorded = recordAnswerInState(run, outcome.state, "design", outcome.answer.question);
+    expect(recorded.recorded.has(recordKey("design", outcome.answer.question))).toBe(true);
+    const panel = panelText(run, recorded);
+    expect(panel).toContain(answerRecorded);
+    expect(panel).toContain("Which endpoints? Should health be public?");
+  });
+
   test("blank answer does not emit and the row is recorded only after the call", () => {
     const run = askRun([
       { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
     ]);
     const opened = openQuestions(run);
     if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
 
-    const blank = questionsKeys(run, opened, "Enter", key({ return: true }));
+    const blank = questionsKeys(run, composing, "Enter", key({ return: true }));
     expect(blank.answer).toBeUndefined();
     expect(blank.state.notice).toBe("the answer is empty");
 
     const typed = typeText(run, blank.state, "public");
     const emitted = questionsKeys(run, typed, "Enter", key({ return: true }));
     if (emitted.answer === undefined) throw new Error("the typed answer did not emit");
-    const recorded: QuestionsState = {
-      ...emitted.state,
-      draft: emitted.state.draft === null ? null : { ...emitted.state.draft, recorded: true },
-    };
+    const recorded = recordAnswerInState(
+      run,
+      emitted.state,
+      "design",
+      "Which endpoints should be public?",
+    );
     const pending = panelText(run, recorded);
     expect(pending).toContain(answerRecorded);
     expect(pending).not.toContain("answered -");
@@ -385,11 +439,9 @@ describe("an answer is recorded, then confirmed", () => {
         answer: "public /health",
       },
     ]);
-    const answered = panelText(answeredRun, {
-      selected: 0,
-      draft: null,
-      notice: null,
-    });
+    const answeredState = openQuestions(answeredRun);
+    if (answeredState === null) throw new Error("the pane did not open");
+    const answered = panelText(answeredRun, answeredState);
     expect(answered).toContain("answered");
     expect(answered).toContain("public /health");
   });
@@ -400,17 +452,259 @@ describe("an answer is recorded, then confirmed", () => {
     ]);
     const opened = openQuestions(run);
     if (opened === null) throw new Error("the pane did not open");
-    const typed = typeText(run, opened, "public /health");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "public /health");
     const first = questionsKeys(run, typed, "Enter", key({ return: true }));
     if (first.answer === undefined) throw new Error("the first Enter did not emit");
 
     const recorded: QuestionsState = {
       ...first.state,
-      draft: first.state.draft === null ? null : { ...first.state.draft, recorded: true },
+      recorded: new Set([recordKey("design", "Which endpoints should be public?")]),
     };
     const second = questionsKeys(run, recorded, "Enter", key({ return: true }));
     expect(second.answer).toBeUndefined();
     expect(second.state).toEqual(recorded);
+  });
+});
+
+describe("answer then advance keeps the pane open", () => {
+  test("answering the first of three records selects the second and keeps the pane open", () => {
+    const run = askRun([
+      { step: "design", question: "First?", status: "unanswered" },
+      { step: "design", question: "Second?", status: "unanswered" },
+      { step: "design", question: "Third?", status: "answered", answer: "done" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "one");
+    const emitted = questionsKeys(run, typed, "Enter", key({ return: true }));
+    if (emitted.answer === undefined) throw new Error("the answer did not emit");
+
+    const recorded = recordAnswerInState(run, emitted.state, "design", "First?");
+    expect(recorded.selected).toBe(1);
+    expect(recorded.focus).toBe("record");
+    expect(recorded.text).toBe("");
+    expect(recorded.recorded.has(recordKey("design", "First?"))).toBe(true);
+
+    const panel = questionsPanel({ run, state: recorded, glyphs: UNICODE_GLYPHS });
+    expect(panel.kind).toBe("questions");
+    const text = panel.lines.join("\n");
+    expect(text).toContain(answerRecorded);
+    expect(text).toContain("Second?");
+    expect(text).toContain("Enter answers");
+    expect(panel.keys.map((hint) => `${hint.key} ${hint.label}`)).toEqual([
+      "j/k navigate",
+      "Enter answer",
+      "Esc close",
+    ]);
+  });
+});
+
+describe("a re-opened questions pane keeps what it already recorded", () => {
+  test("answer a record, close the pane and press Q: the row stays recorded and Enter emits no second answer", () => {
+    const run = askRun([
+      { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
+      { step: "design", question: "Do health checks need auth?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "public /health");
+    const emitted = questionsKeys(run, typed, "Enter", key({ return: true }));
+    if (emitted.answer === undefined) throw new Error("the answer did not emit");
+    const recorded = recordAnswerInState(
+      run,
+      emitted.state,
+      "design",
+      "Which endpoints should be public?",
+    );
+
+    // Esc closes the pane; Q re-opens it over the same run.
+    const closed = questionsKeys(run, recorded, "", key({ escape: true }));
+    expect(closed.close).toBe(true);
+    const reopened = openQuestions(run, recorded.recorded);
+    if (reopened === null) throw new Error("the pane did not reopen");
+
+    const panel = questionsPanel({ run, state: reopened, glyphs: UNICODE_GLYPHS });
+    const answeredBlock = panel.lines.slice(1, 4).join("\n");
+    expect(answeredBlock).toContain(answerRecorded);
+    expect(answeredBlock).not.toContain("unanswered");
+    expect(panel.keys.map((hint) => hint.key)).toEqual(["j/k", "Esc"]);
+
+    const enter = questionsKeys(run, reopened, "Enter", key({ return: true }));
+    expect(enter.state).toEqual(reopened);
+    expect(enter.answer).toBeUndefined();
+    expect(enter.state.focus).toBe("record");
+  });
+});
+
+describe("Ctrl-J inserts a newline", () => {
+  test("first, Ctrl-J, second emits one answer with a newline and the composer shows two lines", () => {
+    const run = askRun([
+      { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const first = typeText(run, composing, "first");
+    const newline = questionsKeys(run, first, "j", key({ ctrl: true }));
+    expect(newline.state.text).toBe("first\n");
+    const second = typeText(run, newline.state, "second");
+
+    const outcome = questionsKeys(run, second, "Enter", key({ return: true }));
+    expect(outcome.answer).toEqual({
+      answer: "first\nsecond",
+      question: "Which endpoints should be public?",
+      rawQuestion: "Which endpoints should be public?",
+    });
+    const panel = questionsPanel({ run, state: outcome.state, glyphs: UNICODE_GLYPHS });
+    expect(panel.lines).toContain("answer> first");
+    expect(panel.lines).toContain("  second");
+  });
+});
+
+describe("Esc discards the composer, then closes", () => {
+  test("the first Esc clears the text and keeps the pane, the second closes it", () => {
+    const run = askRun([
+      { step: "design", question: "First?", status: "unanswered" },
+      { step: "design", question: "Second?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "draft");
+
+    const left = questionsKeys(run, typed, "", key({ escape: true }));
+    expect(left.close).toBeUndefined();
+    expect(left.answer).toBeUndefined();
+    expect(left.state.focus).toBe("record");
+    expect(left.state.text).toBe("");
+    expect(left.state.selected).toBe(0);
+
+    const moved = questionsKeys(run, left.state, "j", key()).state;
+    expect(moved.selected).toBe(1);
+
+    const closed = questionsKeys(run, moved, "", key({ escape: true }));
+    expect(closed.close).toBe(true);
+  });
+});
+
+describe("an empty answer is refused", () => {
+  test("spaces and newlines show the notice and record nothing", () => {
+    const run = askRun([
+      { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    let state = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    state = typeText(run, state, "  ");
+    state = questionsKeys(run, state, "j", key({ ctrl: true })).state;
+    state = typeText(run, state, " ");
+
+    const refused = questionsKeys(run, state, "Enter", key({ return: true }));
+    expect(refused.answer).toBeUndefined();
+    expect(refused.state.notice).toBe("the answer is empty");
+    expect(refused.state.focus).toBe("composer");
+    expect(panelText(run, refused.state)).toContain("the answer is empty");
+  });
+});
+
+describe("many records scroll", () => {
+  test("eight records at 80x24 show the selected last record and not the first", () => {
+    const run = askRun(
+      Array.from({ length: 8 }, (_, index) => ({
+        step: "design",
+        question: `Question ${index}?`,
+        status: "unanswered" as const,
+      })),
+    );
+    let state = openQuestions(run);
+    if (state === null) throw new Error("the pane did not open");
+    for (let step = 0; step < 7; step += 1) {
+      state = questionsKeys(run, state, "j", key(), 24).state;
+    }
+    expect(state.selected).toBe(7);
+    expect(state.offset).toBeGreaterThan(0);
+
+    const panel = questionsPanel({
+      run,
+      state,
+      glyphs: ASCII_GLYPHS,
+      rows: 24,
+    });
+    const text = panel.lines.join("\n");
+    expect(text).toContain("Question 7?");
+    expect(text).not.toContain("Question 0?");
+
+    // The window moves with the selection: back at the top the first record is visible again.
+    for (let step = 0; step < 7; step += 1) {
+      state = questionsKeys(run, state, "k", key(), 24).state;
+    }
+    expect(state.selected).toBe(0);
+    expect(state.offset).toBe(0);
+    expect(panelText(run, state, 24)).toContain("Question 0?");
+  });
+});
+
+describe("the questions footer names the keys that work", () => {
+  test("record focus lists j/k, Enter and Esc and composer focus names Ctrl-J and Esc leaves", () => {
+    const run = askRun([
+      { step: "design", question: "Which endpoints should be public?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const recordPanel = questionsPanel({ run, state: opened, glyphs: UNICODE_GLYPHS });
+    expect(recordPanel.keys.map((hint) => `${hint.key} ${hint.label}`)).toEqual([
+      "j/k navigate",
+      "Enter answer",
+      "Esc close",
+    ]);
+
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const composerPanel = questionsPanel({ run, state: composing, glyphs: UNICODE_GLYPHS });
+    expect(composerPanel.keys.map((hint) => `${hint.key} ${hint.label}`)).toEqual([
+      "Ctrl-J newline",
+      "Enter record",
+      "Esc leaves the composer to navigate",
+    ]);
+  });
+});
+
+describe("printable keys append in the composer", () => {
+  test("j appends text and leaves the selection alone", () => {
+    const run = askRun([
+      { step: "design", question: "First?", status: "unanswered" },
+      { step: "design", question: "Second?", status: "unanswered" },
+    ]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = questionsKeys(run, composing, "j", key()).state;
+    expect(typed.text).toBe("j");
+    expect(typed.selected).toBe(0);
+  });
+
+  test("a paste with an embedded ESC is stripped before the composer renders it", () => {
+    const run = askRun([{ step: "design", question: "First?", status: "unanswered" }]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const pasted = questionsKeys(run, composing, "prefix\u001b]52;c;aGFjaw==", key()).state;
+    expect(pasted.text).not.toContain("\u001b");
+    expect(pasted.text).toBe("prefix]52;c;aGFjaw==");
+  });
+});
+
+describe("Backspace deletes the last character in the composer", () => {
+  test("the physical Backspace key Ink reports as delete removes one code point", () => {
+    const run = askRun([{ step: "design", question: "First?", status: "unanswered" }]);
+    const opened = openQuestions(run);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(run, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(run, composing, "draft");
+    const deleted = questionsKeys(run, typed, "", key({ delete: true })).state;
+    expect(deleted.text).toBe("draf");
   });
 });
 
@@ -425,8 +719,8 @@ describe("the run is not asked", () => {
     expect(text).toContain("openspec/changes/add-health/questions.md");
     expect(text).toContain("Which endpoints should be public?");
     expect(text).toContain("unanswered");
-    expect(text).toContain("answer>");
-    // No stdin prompt: the pane only holds a draft, and no answer exists until the user types.
+    expect(text).not.toContain("answer>");
+    // No stdin prompt: the record has no composer until the user presses Enter.
     expect(text.split("\n").some((line) => line.trim().startsWith("answered"))).toBe(false);
   });
 
@@ -449,7 +743,8 @@ describe("a skipped question is shown as skipped", () => {
     ]);
     const state = openQuestions(run);
     if (state === null) throw new Error("the pane did not open");
-    expect(state.draft).toBeNull();
+    expect(state.focus).toBe("record");
+    expect(state.text).toBe("");
     const text = panelText(run, state);
     expect(text).toContain("skipped");
     expect(text).not.toContain("Enter answers");
@@ -611,9 +906,10 @@ describe("a resumed child is guarded and observed", () => {
         (_, index) => `log line ${String(index + 1).padStart(2, "0")}`,
       );
       writeFileSync(logPath, lines.join("\n"));
-      const data = resumeFailed(uiData(), RUN, logPath, 3);
+      const data = resumeFailed(uiData(), RUN, { logPath, displayPath: LOG }, 3);
       expect(data.approval).toBeNull();
       expect(data.notice).toContain(`resume ${RUN} exited with code 3`);
+      expect(data.notice).toContain(`spawn log: ${LOG}`);
       for (const line of lines.slice(-10)) expect(data.notice).toContain(line);
       expect(data.notice).not.toContain(lines[0]);
       expect(data.notice).not.toContain(lines[1]);
@@ -628,7 +924,12 @@ describe("a resumed child is guarded and observed", () => {
       const logPath = join(dir, "resume.log");
       writeFileSync(logPath, "boom\n");
       const waiting = approvalStarted({ kind: "launching", action: "approve-only" }, LOG);
-      const data = resumeFailed(uiData({ approval: waiting }), RUN, logPath, 4);
+      const data = resumeFailed(
+        uiData({ approval: waiting }),
+        RUN,
+        { logPath, displayPath: LOG },
+        4,
+      );
       expect(data.notice).toBeNull();
       expect(data.approval).toEqual({
         kind: "failed",
@@ -639,12 +940,52 @@ describe("a resumed child is guarded and observed", () => {
       });
 
       // An overlay state with nothing to fail keeps its state and reports through the notice.
-      const idle = resumeFailed(uiData({ approval: { kind: "idle" } }), RUN, logPath, 4);
+      const idle = resumeFailed(
+        uiData({ approval: { kind: "idle" } }),
+        RUN,
+        { logPath, displayPath: LOG },
+        4,
+      );
       expect(idle.approval).toEqual({ kind: "idle" });
       expect(idle.notice).toContain("exited with code 4");
+      expect(idle.notice).toContain(`spawn log: ${LOG}`);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("a running resume keeps its spawn log path on screen", async () => {
+    const fake = fakeFactory();
+    const { launcher } = resumeLauncher(join(tmpdir(), "resume.log"), LOG);
+    const states: UiData[] = [];
+    startResume(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createResumeGuard(),
+        update: (change: (data: UiData) => UiData) => states.push(change(uiData())),
+        refresh: async () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+
+    expect(states.at(-1)?.notice).toContain(`resume ${RUN}`);
+    expect(states.at(-1)?.notice).toContain(`spawn log: ${LOG}`);
+  });
+
+  test("a resume from the approve-only wait points the overlay at the resume child's log", () => {
+    const waiting = approvalStarted({ kind: "launching", action: "approve-only" }, "old.log");
+    const started = resumeStarted(uiData({ approval: waiting }), RUN, LOG);
+    expect(started.notice).toContain(`spawn log: ${LOG}`);
+    expect(started.approval).toMatchObject({
+      kind: "waiting",
+      action: "approve-only",
+      logPath: LOG,
+    });
+
+    // Without the overlay the same path goes to the notice alone.
+    expect(resumeStarted(uiData(), RUN, LOG).notice).toContain(`spawn log: ${LOG}`);
   });
 
   test("startResume surfaces a failed child through the UI update", async () => {
@@ -653,7 +994,7 @@ describe("a resumed child is guarded and observed", () => {
     try {
       const logPath = join(dir, "resume.log");
       writeFileSync(logPath, "boom\n");
-      const { launcher, exit } = resumeLauncher(logPath);
+      const { launcher, exit } = resumeLauncher(logPath, LOG);
       const states: UiData[] = [];
       startResume(
         {
@@ -670,6 +1011,7 @@ describe("a resumed child is guarded and observed", () => {
       await Bun.sleep(0);
       expect(states.at(-1)?.notice).toContain("exited with code 3");
       expect(states.at(-1)?.notice).toContain("boom");
+      expect(states.at(-1)?.notice).toContain(`spawn log: ${LOG}`);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -699,6 +1041,418 @@ describe("a resumed child is guarded and observed", () => {
     startResume(deps, RUN);
     await Bun.sleep(0);
     expect(attempts).toBe(2);
+  });
+});
+
+describe("land confirms before merging", () => {
+  test("the confirmation names the change id, local merges, cleanup and that nothing is pushed", () => {
+    const view = buildViewModel(viewInput(runState({ phase: "done" })));
+    const action = landFor(view);
+    expect(action).toEqual({ kind: "land", id: RUN });
+    if (action === null) throw new Error("the land confirmation did not open");
+
+    const panel = confirmPanel(action, ASCII_GLYPHS);
+    expect(panel.kind).toBe("confirm");
+    expect(panel.title).toBe(`Land ${RUN}?`);
+    expect(panel.keys.map((hint) => hint.key)).toEqual(["Enter", "Esc"]);
+    const text = panel.lines.join("\n");
+    expect(text).toContain(RUN);
+    expect(text).toContain("merged into their base branches locally");
+    expect(text).toContain("worktrees and run state removed");
+    expect(text).toContain("nothing is pushed");
+  });
+
+  test("no child runs until Enter or y confirms and Esc or n cancels", async () => {
+    const fake = fakeFactory();
+    const { launcher, launches } = resumeLauncher();
+    const view = buildViewModel(viewInput(runState({ phase: "done" })));
+    const action = landFor(view);
+    if (action === null) throw new Error("land was not offered");
+
+    expect(confirmKeys("n", key())).toBe("cancel");
+    expect(confirmKeys("", key({ escape: true }))).toBe("cancel");
+    expect(launches).toEqual([]);
+
+    expect(confirmKeys("", key({ return: true }))).toBe("confirm");
+    expect(confirmKeys("y", key())).toBe("confirm");
+    await performControl({ factory: fake.factory, launcher }, action);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
+  });
+});
+
+describe("land is offered only for a done run", () => {
+  test("every other phase has no l hint, no landFor and no confirmation", () => {
+    for (const phase of [
+      "paused",
+      "aborted",
+      "queued",
+      "implementing",
+      "reviewing",
+      "awaiting-approval",
+    ] as const) {
+      const view = buildViewModel(viewInput(runState({ phase })));
+      expect(
+        view.footer.some((hint) => hint.key === "l"),
+        phase,
+      ).toBe(false);
+      expect(landFor(view), phase).toBeNull();
+    }
+
+    const done = buildViewModel(viewInput(runState({ phase: "done" })));
+    expect(landFor(done)).toEqual({ kind: "land", id: RUN });
+    expect(done.footer).toContainEqual({ key: "l", label: "land", enabled: true });
+  });
+});
+
+describe("a double-tapped land launches one child", () => {
+  test("two startLand calls launch one child and a finished child frees the guard", async () => {
+    const fake = fakeFactory();
+    const { launcher, launches, exit } = resumeLauncher();
+    const run = runState({ phase: "done" });
+    const deps = {
+      factory: fake.factory,
+      launcher,
+      guard: createLandGuard(),
+      update: () => {},
+      refresh: async () => ({ status: statusDoc(run), runs: [run] }),
+      stopTail: () => {},
+    };
+
+    startLand(deps, RUN);
+    startLand(deps, RUN);
+    await Bun.sleep(0);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
+
+    exit(0);
+    await Bun.sleep(0);
+    startLand(deps, RUN);
+    await Bun.sleep(0);
+    expect(launches).toHaveLength(2);
+  });
+
+  test("status is polled once a second: a land spawn triggers one refresh immediately", async () => {
+    const fake = fakeFactory();
+    const { launcher } = resumeLauncher();
+    const notices: (string | null)[] = [];
+    let refreshes = 0;
+    const refreshNotices: (string | null)[] = [];
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createLandGuard(),
+        update: (change) => {
+          const data = change(uiData());
+          notices.push(data.notice);
+          return data;
+        },
+        refresh: async () => {
+          refreshes += 1;
+          refreshNotices.push(notices.at(-1) ?? null);
+          return null;
+        },
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+
+    // One refresh right after the spawn, once the spawn's log path is already on screen.
+    expect(refreshes).toBe(1);
+    const noticeAtRefresh = refreshNotices[0] ?? null;
+    expect(noticeAtRefresh).toContain(`land ${RUN}`);
+    expect(noticeAtRefresh).toContain(`spawn log: ${LOG}`);
+  });
+
+  test("the second confirmation is ignored while the land child is in flight", () => {
+    const view = buildViewModel(viewInput(runState({ phase: "done" })));
+    const guard = createLandGuard();
+    expect(landConfirmation(view, guard)).toEqual({ kind: "land", id: RUN });
+
+    expect(guard.begin()).toBe(true);
+    expect(landConfirmation(view, guard)).toBeNull();
+
+    guard.end();
+    expect(landConfirmation(view, guard)).toEqual({ kind: "land", id: RUN });
+  });
+
+  test("a land child for one run blocks a land started for another run", async () => {
+    const fake = fakeFactory();
+    const { launcher, launches, exit } = resumeLauncher();
+    const other = "add-other";
+    const run = runState({ phase: "done" });
+    const otherRun = runState({ id: other, phase: "done" });
+    const deps = {
+      factory: fake.factory,
+      launcher,
+      guard: createLandGuard(),
+      update: () => {},
+      refresh: async () => ({ status: statusDoc(run), runs: [run, otherRun] }),
+      stopTail: () => {},
+    };
+
+    startLand(deps, RUN);
+    startLand(deps, other);
+    await Bun.sleep(0);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
+
+    exit(0);
+    await Bun.sleep(0);
+    startLand(deps, other);
+    await Bun.sleep(0);
+    expect(launches).toEqual([
+      { kind: "land", id: RUN },
+      { kind: "land", id: other },
+    ]);
+  });
+});
+
+describe("a landed run leaves the screen", () => {
+  test("a zero exit and a refreshed status without the run returns to the list with a notice", async () => {
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher();
+    const empty: StatusDocument = {
+      active: null,
+      driverAlive: false,
+      queue: [],
+      corrupt: [],
+      runs: [],
+    };
+    const states: UiData[] = [];
+    let stopped = 0;
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createLandGuard(),
+        update: (change) => states.push(change(uiData())),
+        refresh: async () => ({ status: empty, runs: [] }),
+        stopTail: () => {
+          stopped += 1;
+        },
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    exit(0);
+    await Bun.sleep(0);
+
+    const last = states.at(-1);
+    expect(last?.screen).toBe("list");
+    expect(last?.selectedRunId).toBeNull();
+    expect(last?.selectedTaskId).toBeNull();
+    expect(last?.snapshot).toBeNull();
+    expect(last?.notice).toContain(`landed ${RUN}`);
+    expect(last?.notice).toContain("the run is gone");
+    expect(stopped).toBe(1);
+  });
+
+  test("a still-listed run stays selected after a zero exit", () => {
+    const run = runState({ phase: "done" });
+    const next = landSettled(uiData(), RUN, { status: statusDoc(run), runs: [run] });
+    expect(next.screen).toBe("run");
+    expect(next.selectedRunId).toBe(RUN);
+    expect(next.notice).toBeNull();
+  });
+
+  test("a landed run leaves the screen when its first refresh fails and the retry succeeds", async () => {
+    const empty: StatusDocument = {
+      active: null,
+      driverAlive: false,
+      queue: [],
+      corrupt: [],
+      runs: [],
+    };
+    const run = runState({ phase: "done" });
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher();
+    let state = uiData();
+    const states: UiData[] = [];
+    let exited = false;
+    let failures = 0;
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createLandGuard(),
+        update: (change) => {
+          state = change(state);
+          states.push(state);
+        },
+        refresh: async () => {
+          if (!exited) return { status: statusDoc(run), runs: [run] };
+          if (failures === 0) {
+            failures += 1;
+            return null;
+          }
+          return { status: empty, runs: [] };
+        },
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    exited = true;
+    exit(0);
+    await Bun.sleep(0);
+
+    expect(failures).toBe(1);
+    const last = states.at(-1);
+    expect(last?.screen).toBe("list");
+    expect(last?.selectedRunId).toBeNull();
+    expect(last?.pendingLand).toBeNull();
+    expect(last?.notice).toContain(`landed ${RUN}`);
+  });
+
+  test("a landed run leaves the screen when its first refresh fails and a later poll succeeds", async () => {
+    const empty: StatusDocument = {
+      active: null,
+      driverAlive: false,
+      queue: [],
+      corrupt: [],
+      runs: [],
+    };
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher();
+    let state = uiData();
+    const states: UiData[] = [];
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createLandGuard(),
+        update: (change) => {
+          state = change(state);
+          states.push(state);
+        },
+        refresh: async () => null,
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    exit(0);
+    await Bun.sleep(0);
+
+    // The zero exit armed the settlement even though its own refresh failed.
+    const armed = states.at(-1);
+    expect(armed?.pendingLand).toBe(RUN);
+    expect(armed?.screen).toBe("run");
+
+    // The next successful poll sees the run is gone and leaves the screen.
+    const settled = settleLanding({ ...(armed ?? uiData()), status: empty, runs: [] });
+    expect(settled.screen).toBe("list");
+    expect(settled.selectedRunId).toBeNull();
+    expect(settled.pendingLand).toBeNull();
+    expect(settled.notice).toContain(`landed ${RUN}`);
+  });
+
+  test("a still-listed run keeps its selection when a later poll settles the land", () => {
+    const run = runState({ phase: "done" });
+    const armed: UiData = { ...uiData(), pendingLand: RUN };
+    const settled = settleLanding({ ...armed, status: statusDoc(run), runs: [run] });
+    expect(settled.screen).toBe("run");
+    expect(settled.selectedRunId).toBe(RUN);
+    expect(settled.pendingLand).toBeNull();
+    expect(settled.notice).toBeNull();
+  });
+});
+
+describe("a failed land is visible", () => {
+  test("a non-zero exit shows the code and the last ten log lines and never says it landed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-land-"));
+    try {
+      const logPath = join(dir, "land.log");
+      const lines = Array.from(
+        { length: 12 },
+        (_, index) => `log line ${String(index + 1).padStart(2, "0")}`,
+      );
+      writeFileSync(logPath, lines.join("\n"));
+      const data = landFailed(uiData(), RUN, { logPath, displayPath: LOG }, 5);
+      expect(data.notice).toContain(`land ${RUN} exited with code 5`);
+      expect(data.notice).toContain(`spawn log: ${LOG}`);
+      for (const line of lines.slice(-10)) expect(data.notice).toContain(line);
+      expect(data.notice).not.toContain(lines[0]);
+      expect(data.notice).not.toContain(lines[1]);
+      expect(data.notice).not.toContain("landed");
+      expect(data.selectedRunId).toBe(RUN);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a running land keeps its spawn log path on screen until the child settles", async () => {
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher(join(tmpdir(), "land.log"), LOG);
+    const states: UiData[] = [];
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createLandGuard(),
+        update: (change) => states.push(change(uiData())),
+        refresh: async () => null,
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    expect(states.at(-1)?.notice).toContain(`land ${RUN}`);
+    expect(states.at(-1)?.notice).toContain(`spawn log: ${LOG}`);
+
+    // A child that never reports a code keeps the path next to the reason.
+    exit(null);
+    await Bun.sleep(0);
+    expect(states.at(-1)?.notice).toContain("ended without an exit code");
+    expect(states.at(-1)?.notice).toContain(`spawn log: ${LOG}`);
+  });
+
+  test("startLand surfaces a failed child and leaves the run selected", async () => {
+    const fake = fakeFactory();
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-land-"));
+    try {
+      const logPath = join(dir, "land.log");
+      writeFileSync(logPath, "merge conflict\n");
+      const { launcher, exit } = resumeLauncher(logPath, LOG);
+      const states: UiData[] = [];
+      startLand(
+        {
+          factory: fake.factory,
+          launcher,
+          guard: createLandGuard(),
+          update: (change) => states.push(change(uiData())),
+          refresh: async () => null,
+          stopTail: () => {},
+        },
+        RUN,
+      );
+      await Bun.sleep(0);
+      exit(3);
+      await Bun.sleep(0);
+
+      const last = states.at(-1);
+      expect(last?.notice).toContain("exited with code 3");
+      expect(last?.notice).toContain(`spawn log: ${LOG}`);
+      expect(last?.notice).toContain("merge conflict");
+      expect(last?.notice).not.toContain("landed");
+      expect(last?.selectedRunId).toBe(RUN);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("land is a child, not a call", () => {
+  test("performControl launches the detached land and never calls Factory.land", async () => {
+    const fake = fakeFactory();
+    const { launcher, launches } = resumeLauncher();
+    const result = await performControl(
+      { factory: fake.factory, launcher },
+      { kind: "land", id: RUN },
+    );
+    expect(result.pid).toBe(4242);
+    expect(launches).toEqual([{ kind: "land", id: RUN }]);
+    expect("land" in fake.factory).toBe(false);
   });
 });
 
@@ -804,6 +1558,122 @@ describe("quit restores the terminal", () => {
   });
 });
 
+function typeReword(run: RunDetail, state: RewordState, text: string): RewordState {
+  let current = state;
+  for (const character of text) {
+    current = rewordKeys(run, current, character, key(), 24, 120).state;
+  }
+  return current;
+}
+
+describe("the reword panel is a detached child", () => {
+  test("an open reword state renders the panel through viewOf", () => {
+    const view = viewOf(uiData({ reword: initialReword }), ASCII_GLYPHS);
+    expect(view.panel?.kind).toBe("reword");
+    expect(view.panel?.title).toContain(RUN);
+    expect(view.footer).toEqual(view.panel?.keys ?? []);
+  });
+
+  test("confirming with a prompt launches one reword with the prompt", async () => {
+    const run = detail(
+      runState({
+        phase: "paused",
+        specFindings: [
+          { severity: "must", what: "w", problem: "p", fix: "f", impact: "i" },
+          { severity: "should", what: "w", problem: "p", fix: "f", impact: "i" },
+        ],
+      }),
+    );
+    const opened = openReword(run);
+    if (opened === null) throw new Error("the reword panel did not open");
+    const typed = typeReword(run, opened, "apply finding 1");
+    const outcome = rewordKeys(run, typed, "Enter", key({ return: true }), 24, 120);
+    if (outcome.launch === undefined) throw new Error("the confirm did not launch");
+
+    const { launcher, launches } = resumeLauncher();
+    startReword(
+      { launcher, guard: createResumeGuard(), update: () => {} },
+      RUN,
+      outcome.launch.prompt,
+    );
+    await Bun.sleep(0);
+    expect(launches).toEqual([{ kind: "reword", id: RUN, prompt: "apply finding 1" }]);
+  });
+
+  test("a whitespace prompt is no prompt: the child gets reword <id> without a prompt key", async () => {
+    const { launcher, launches } = resumeLauncher();
+    startReword({ launcher, guard: createResumeGuard(), update: () => {} }, RUN, "   ");
+    await Bun.sleep(0);
+    expect(launches).toEqual([{ kind: "reword", id: RUN }]);
+    expect(Object.keys(launches[0] ?? {})).not.toContain("prompt");
+  });
+
+  test("the reword panel becomes actionable again after a failed child", () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-reword-"));
+    try {
+      const logPath = join(dir, "reword.log");
+      const lines = Array.from(
+        { length: 12 },
+        (_, index) => `log line ${String(index + 1).padStart(2, "0")}`,
+      );
+      writeFileSync(logPath, lines.join("\n"));
+      const data = rewordFailed(
+        uiData({ reword: initialReword }),
+        RUN,
+        { logPath, displayPath: LOG },
+        3,
+      );
+      expect(data.notice).toBeNull();
+      expect(data.reword?.failure?.code).toBe(3);
+      expect(data.reword?.failure?.logPath).toBe(LOG);
+      for (const line of lines.slice(-10)) expect(data.reword?.failure?.lines).toContain(line);
+      expect(data.reword?.failure?.lines).not.toContain(lines[0]);
+      expect(data.reword?.failure?.lines).not.toContain(lines[1]);
+
+      const state = data.reword;
+      if (state === null || state === undefined) throw new Error("the panel closed on failure");
+      const typed = typeReword(detail(runState()), state, "apply finding 1");
+      const outcome = rewordKeys(
+        detail(runState()),
+        typed,
+        "Enter",
+        key({ return: true }),
+        24,
+        120,
+      );
+      expect(outcome.launch).toEqual({ prompt: "apply finding 1" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("startReword surfaces a failed child as code and tail on the open panel", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-reword-"));
+    try {
+      const logPath = join(dir, "reword.log");
+      writeFileSync(logPath, "prompt rejected\n");
+      const { launcher, exit } = resumeLauncher(logPath, LOG);
+      const states: UiData[] = [];
+      startReword(
+        {
+          launcher,
+          guard: createResumeGuard(),
+          update: (change) => states.push(change(uiData({ reword: initialReword }))),
+        },
+        RUN,
+      );
+      await Bun.sleep(0);
+      exit(3);
+      await Bun.sleep(0);
+      expect(states.at(-1)?.reword?.failure?.code).toBe(3);
+      expect(states.at(-1)?.reword?.failure?.lines).toContain("prompt rejected");
+      expect(states.at(-1)?.reword?.failure?.logPath).toBe(LOG);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("the launcher matrix is complete", () => {
   test("resume is already in the argv matrix and the UI never waits for it", () => {
     const actions: readonly LaunchAction[] = [
@@ -814,6 +1684,7 @@ describe("the launcher matrix is complete", () => {
       { kind: "reword", id: RUN },
       { kind: "reapprove", id: RUN },
       { kind: "resume", id: RUN },
+      { kind: "land", id: RUN },
     ];
     expect(actions.map((action) => actionArgs(action)[0])).toEqual([
       "run",
@@ -823,6 +1694,7 @@ describe("the launcher matrix is complete", () => {
       "reword",
       "reapprove",
       "resume",
+      "land",
     ]);
   });
 });

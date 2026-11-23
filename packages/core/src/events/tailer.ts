@@ -57,6 +57,7 @@ function parseLine(line: string): StoredItem | undefined {
   try {
     value = JSON.parse(line);
   } catch {
+    // A line that is not JSON is kept verbatim as raw text.
     return { kind: "raw", reason: "invalid", text: line };
   }
   const envelope = EventEnvelope.safeParse(value);
@@ -174,6 +175,7 @@ export async function* tailEvents(
       try {
         watcher = watch(factoryDir(root, "events"), () => notify());
       } catch {
+        // Watch is unavailable: polling still delivers events.
         watcher = undefined;
       }
       watcher?.on("error", onWatchError);

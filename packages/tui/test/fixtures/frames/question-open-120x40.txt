@@ -4,11 +4,11 @@
 | > o design                                                                                                           |
 |   Which endpoints should be public?                                                                                  |
 |   unanswered - Enter answers                                                                                         |
-|   answer>                                                                                                            |
 |   - design                                                                                                           |
 |   Do health checks need auth?                                                                                        |
 |   skipped                                                                                                            |
-| Enter answer - Esc close                                                                                             |
+|                                                                                                                      |
+| j/k navigate - Enter answer - Esc close                                                                              |
 +----------------------------------------------------------------------------------------------------------------------+
 
 
@@ -37,4 +37,4 @@
 
 
 
-Enter answer - Esc close
+j/k navigate - Enter answer - Esc close

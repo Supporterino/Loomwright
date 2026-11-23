@@ -1,0 +1,24 @@
+ ! add-health awaiting approval 8s - 0 tokens - $0.00 - idle
+ ! awaiting approval - a approve and run - A approve only - R reapprove
+ task     first - Health endpoint
+ status   pending
+ repo     app
+ attempt  0
+ retries  0
+ agent    (none)
+ model    unknown
+ duration -
+ Gates
+ no gate results
+ Activity
+ no activity yet
+
+
+
+
+
+
+
+
+
+x abort - L log - ? help - q quit

@@ -5,12 +5,27 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Factory } from "@loomwright/core/factory";
 import { MISSING_IDENTITY } from "../src/approval/overlay.ts";
-import { isReadOnly, REPLAY_READ_ONLY, replayKey, replayView, runTui } from "../src/entry.tsx";
+import {
+  activityPaneBodyRows,
+  activityPaneKeys,
+  openActivityPane,
+} from "../src/controls/activity-pane.ts";
+import {
+  isReadOnly,
+  nextReplaySize,
+  REPLAY_READ_ONLY,
+  replayActivityView,
+  replayHelpView,
+  replayKey,
+  replayView,
+  runTui,
+} from "../src/entry.tsx";
 import type { Launcher } from "../src/launch/launcher.ts";
 import type { KeyInput } from "../src/model/keys.ts";
 import { renderOnceFrame } from "../src/replay/once.ts";
 import { readReplayFile, replayModel } from "../src/replay/replay.ts";
 import { replayNotice } from "../src/strings.ts";
+import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
 
 const FIXTURE = fileURLToPath(
   new URL("../../../test/fixtures/tui/approval-gate.jsonl", import.meta.url),
@@ -30,6 +45,20 @@ function tempFile(name: string, text: string): string {
   const path = join(dir, name);
   writeFileSync(path, text);
   return path;
+}
+
+/** One valid event per object, JSON-escaped as the writer would have written it. */
+function replayLines(events: readonly { readonly type: string; readonly data: unknown }[]): string {
+  const lines = events.map((entry, index) =>
+    JSON.stringify({
+      v: 1,
+      runId: "add-health",
+      seq: index + 1,
+      ts: "2026-11-18T10:00:00.000Z",
+      ...entry,
+    }),
+  );
+  return `${lines.join("\n")}\n`;
 }
 
 function key(overrides: Partial<KeyInput> = {}): KeyInput {
@@ -119,6 +148,32 @@ describe("replay shows the recorded screens", () => {
     expect(view.panel?.lines).toContain("spec hash: unknown (older stream)");
   });
 
+  test("phase.changed, install and progress lines in the stream appear in the tail", async () => {
+    const path = tempFile(
+      "activity.jsonl",
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"intake","to":"design"}}',
+        '{"v":1,"runId":"add-health","seq":3,"ts":"2026-11-18T10:00:00.000Z","type":"install.started","data":{"step":"deps","repo":"loomwright","detail":"bun install"}}',
+        '{"v":1,"runId":"add-health","seq":4,"ts":"2026-11-18T10:00:00.000Z","type":"install.finished","data":{"step":"deps","repo":"loomwright","durationMs":1200,"detail":"bun install"}}',
+        '{"v":1,"runId":"add-health","seq":5,"ts":"2026-11-18T10:00:00.000Z","type":"progress.line","data":{"level":"always","text":"design: 3 capabilities planned"}}',
+        "",
+      ].join("\n"),
+    );
+
+    const view = viewOf(await readReplayFile(path));
+    const activity = view.run?.activity ?? [];
+    expect(activity.map((line) => line.kind)).toEqual([
+      "run",
+      "phase",
+      "install",
+      "install",
+      "log",
+    ]);
+    expect(activity.map((line) => line.step)).toContain("loomwright");
+    expect(activity.some((line) => line.text.includes("design"))).toBe(true);
+  });
+
   test("a replayed approval frame does not report a missing git identity", async () => {
     const view = viewOf(await readReplayFile(FIXTURE));
     expect(view.panel?.kind).toBe("approval");
@@ -189,6 +244,115 @@ describe("once prints one frame", () => {
     expect(frames[0]).not.toContain("\u001b[");
     expect(frames[0]).toContain("add-health");
   });
+
+  test("a crafted --replay file cannot inject terminal controls", async () => {
+    const taskPath = tempFile(
+      "crafted-task.jsonl",
+      replayLines([
+        { type: "run.started", data: { phase: "implementing" } },
+        {
+          type: "task.queued",
+          data: {
+            task: { id: "\u001b[2Jtask", repo: "rep\u001b]52;c;o\u0007" },
+            attempt: 1,
+          },
+        },
+        {
+          type: "task.started",
+          data: {
+            task: { id: "\u001b[2Jtask", repo: "rep\u001b]52;c;o\u0007" },
+            attempt: 1,
+          },
+        },
+        {
+          type: "agent.started",
+          data: {
+            step: "\u001b[2Jtask",
+            agent: "\u001b[2Jimpl",
+            model: "model\u001b]52;c;x\u0007",
+          },
+        },
+        {
+          type: "gate.finished",
+          data: {
+            name: "\u001b[2Jlint",
+            type: "lint",
+            status: "pass",
+            durationMs: 5,
+            step: "\u001b[2Jtask",
+          },
+        },
+      ]),
+    );
+    const taskText = await renderOnceFrame(viewOf(await readReplayFile(taskPath)), SIZE);
+    expect(taskText).toContain("[2Jtask");
+    expect(taskText).toContain("[2Jlint");
+    expect(taskText).not.toContain("\u001b]");
+    expect(taskText).not.toContain("\u0007");
+
+    const approvalPath = tempFile(
+      "crafted-approval.jsonl",
+      replayLines([
+        { type: "run.started", data: { phase: "design" } },
+        { type: "phase.changed", data: { from: "design", to: "awaiting-approval" } },
+        {
+          type: "approval.pending",
+          data: { specHash: "\u001b]52;c;h\u0007", changeDir: "\u001b[2Jdir" },
+        },
+      ]),
+    );
+    const panelText = await renderOnceFrame(viewOf(await readReplayFile(approvalPath)), SIZE);
+    expect(panelText).toContain("[2Jdir");
+    expect(panelText).toContain("]52;c;h");
+    expect(panelText).not.toContain("\u001b]");
+    expect(panelText).not.toContain("\u0007");
+  });
+});
+
+describe("replay follows a terminal resize", () => {
+  test("a replay resized after launch rebuilds the view at the new size", async () => {
+    const load = await readReplayFile(FIXTURE);
+    const wide = replayView(load, { now: NOW, ascii: true, columns: 120, rows: 40 });
+    expect(wide.rows).toBe(40);
+
+    const size = nextReplaySize({ columns: wide.columns, rows: wide.rows }, 80, 24);
+    expect(size).toEqual({ columns: 80, rows: 24 });
+    const shrunkOptions = { now: NOW, ascii: true, ...size };
+    const shrunk = replayView(load, shrunkOptions);
+    expect(shrunk.columns).toBe(80);
+    expect(shrunk.rows).toBe(24);
+
+    const lines = (await renderOnceFrame(shrunk, shrunkOptions)).split("\n");
+    expect(lines.length).toBeLessThanOrEqual(24);
+    expect(lines.every((line) => line.length <= 80)).toBe(true);
+  });
+
+  test("a resized replay rebuilds its activity pane inside the new rows", async () => {
+    const load = await readReplayFile(FIXTURE);
+    const wide = replayView(load, { now: NOW, ascii: true, columns: 120, rows: 40 });
+    const run = wide.run;
+    if (run === null) throw new Error("the replay fixture has no run");
+    const size = nextReplaySize({ columns: wide.columns, rows: wide.rows }, 80, 24);
+    const shrunkOptions = { now: NOW, ascii: true, ...size };
+    const shrunk = replayView(load, shrunkOptions);
+    const frame = await renderOnceFrame(
+      replayActivityView(shrunk, openActivityPane(run), ASCII_GLYPHS),
+      shrunkOptions,
+    );
+    expect(frame).toContain("Activity");
+    expect(frame.split("\n").length).toBeLessThanOrEqual(24);
+  });
+
+  test("a resize keeps the last known dimension when stdout reports none", () => {
+    expect(nextReplaySize({ columns: 80, rows: 24 }, undefined, 30)).toEqual({
+      columns: 80,
+      rows: 30,
+    });
+    expect(nextReplaySize({ columns: 80, rows: 24 }, 100, undefined)).toEqual({
+      columns: 100,
+      rows: 24,
+    });
+  });
 });
 
 describe("replay is read-only", () => {
@@ -224,12 +388,114 @@ describe("replay is read-only", () => {
 
   test("every write key produces the read-only notice and quits only on q or Ctrl-C", async () => {
     const view = viewOf(await readReplayFile(FIXTURE));
-    for (const input of ["n", "a", "A", "w", "R", "r", "x", "t", "Q"]) {
+    for (const input of ["n", "a", "A", "w", "R", "r", "x", "t", "l", "Q"]) {
       const outcome = replayKey(view, input, key());
       expect(outcome.quit).toBe(false);
       expect(outcome.notice).toBe(REPLAY_READ_ONLY);
     }
+    expect(replayKey(view, "l", key()).notice).toBe(REPLAY_READ_ONLY);
     expect(replayKey(view, "q", key()).quit).toBe(true);
     expect(replayKey(view, "c", key({ ctrl: true })).quit).toBe(true);
+  });
+
+  test("replay scrolls the pane but launches nothing", async () => {
+    const view = viewOf(await readReplayFile(FIXTURE));
+    // The log navigation keys are not writes: none produces the read-only notice.
+    for (const input of ["L", "j", "k", "g", "G", "f"]) {
+      const outcome = replayKey(view, input, key());
+      expect(outcome.quit, input).toBe(false);
+      expect(outcome.notice, input).toBeNull();
+    }
+    const tab = replayKey(view, "", key({ tab: true }));
+    expect(tab.quit).toBe(false);
+    expect(tab.notice).toBeNull();
+  });
+
+  test("L opens and scrolls the pane with no notice, and the frame stays inside rows", async () => {
+    const view = viewOf(await readReplayFile(FIXTURE));
+    const opened = replayKey(view, "L", key());
+    expect(opened.notice).toBeNull();
+    expect(opened.help).toBeNull();
+    expect(opened.quit).toBe(false);
+
+    const run = view.run;
+    if (run === null) throw new Error("the replay fixture has no run");
+    // The fixture is short; a longer stream proves the pane scrolls and still fits.
+    const activity = Array.from({ length: 40 }, (_, index) => ({
+      seq: index + 1,
+      step: "run",
+      kind: "log",
+      text: `recorded line ${index + 1}`,
+    }));
+    const longer = { ...view, run: { ...run, activity } };
+    const pane = openActivityPane(longer.run);
+    const scrolled = activityPaneKeys(
+      longer.run,
+      pane,
+      "k",
+      key(),
+      activityPaneBodyRows(SIZE.rows),
+    );
+    expect(scrolled.state.follow).toBe(false);
+    expect(scrolled.state.offset).toBeGreaterThan(0);
+
+    const frame = await renderOnceFrame(
+      replayActivityView(longer, scrolled.state, ASCII_GLYPHS),
+      SIZE,
+    );
+    expect(frame).toContain("Activity");
+    expect(frame.split("\n").length).toBeLessThanOrEqual(SIZE.rows);
+  });
+
+  test("? opens the help panel in replay and Esc closes it", async () => {
+    const path = tempFile(
+      "implementing.jsonl",
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"implementing"}}',
+        "",
+      ].join("\n"),
+    );
+    const view = viewOf(await readReplayFile(path));
+    expect(view.footer.map((hint) => hint.key)).toContain("?");
+
+    const pressed = replayKey(view, "?", key());
+    expect(pressed.help).toBe(true);
+    expect(pressed.quit).toBe(false);
+    expect(pressed.notice).toBeNull();
+
+    const help = replayHelpView(view);
+    expect(help.panel?.kind).toBe("help");
+    expect(help.footer.map((hint) => hint.key)).toEqual(["Esc", "q"]);
+    const frame = await renderOnceFrame(help, SIZE);
+    expect(frame).toContain("Help");
+    expect(frame).toContain("Esc close");
+
+    const closed = replayKey(help, "", key({ escape: true }));
+    expect(closed.help).toBe(false);
+    expect(closed.quit).toBe(false);
+    expect(replayKey(help, "q", key()).quit).toBe(true);
+  });
+
+  test("Ctrl-C quits the replay with the help panel open", async () => {
+    const path = tempFile(
+      "implementing.jsonl",
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"implementing"}}',
+        "",
+      ].join("\n"),
+    );
+    const view = viewOf(await readReplayFile(path));
+    const help = replayHelpView(view);
+    expect(help.panel?.kind).toBe("help");
+    expect(replayKey(help, "c", key({ ctrl: true })).quit).toBe(true);
+  });
+
+  test("the replay approval overlay never advertises ? and ignores it", async () => {
+    const view = viewOf(await readReplayFile(FIXTURE));
+    expect(view.panel?.kind).toBe("approval");
+    expect(view.footer.map((hint) => hint.key)).not.toContain("?");
+    expect(replayKey(view, "?", key()).help).toBeNull();
   });
 });

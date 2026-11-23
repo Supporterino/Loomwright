@@ -2,6 +2,37 @@
 
 All notable changes per release. `loomwright update` applies them to an installed workspace (see [docs/cli.md](docs/cli.md#update)).
 
+## 1.3.0
+
+### Minor Changes
+
+- b711355: The shell guard treats `npx` and `pnpx` as package runners: it skips their own flags and inspects the wrapped command with the same wrapped-command, publish and global-install checks `bunx` gets, including `-c`/`--call` text.
+- 93c287b: The shell guard resolves package-runner option arity per runner and inspects an option with unknown arity both as a bare flag and as value-taking. `npm exec -p` is the boolean `--parseable`, while npm's value-taking configs and aliases (`--expires`, `--min-release-age`, `--password`, `--name`, `--allow-git`, `--scopes`, `--orgs`, `--packages`, `--token-description`, `--enjoy-by`, `--reg`) can no longer hide `npm publish` or a global install behind their value.
+- b41f277: Gates and sandboxed shells mark the commands they wrap with `AI_FACTORY_SANDBOX=wrapped`, so a
+  gate that already runs inside a Seatbelt profile is not wrapped again.
+- 5bcc334: The terminal UI folds every run event into the activity tail and can land a done run with `l`.
+- af740e1: The terminal UI scrolls its lists and log, scopes a task's activity to its repo, surfaces spec
+  findings and rewords from the run view; this ships in 1.3.0.
+
+### Patch Changes
+
+- 3d1ca3c: `-h`/`--help` is help only before the command or as its first token after it; later occurrences reach the command as flag values or positional text.
+- ce5ee38: `loomwright doctor` no longer warns about a gate script that a `gates.overrides` entry replaces.
+- edca7eb: The shell guard routes `npm exec` and its `x` alias through the same wrapped-command and `-c`/`--call` checks as `npx`, so `npm exec -- git push` and `npm x -c 'git push'` are no longer allowed unchecked.
+- 01fd664: The shell-policy tests now name every security-critical `npx` value-taking flag (`--shell`, `--prefix`, `--userconfig`, `--registry`, `--cache`, `--node-options`, `--package`), so dropping or misspelling one in the table fails a test instead of reopening the publish/global-install bypass.
+- ebf959e: The shell guard dispatches package-manager handling on the version-stripped name, so `npx npm@latest run deploy` and `npx bun@1 run deploy` inspect the named script body instead of being allowed unchecked.
+- 72ff30b: The shell guard strips a version tag from a package-manager name before its publish and global-install checks, so `npx npm@latest publish` and `npx npm@10 install -g left-pad` are no longer allowed unchecked.
+- 60ad674: The plugin bundle build pins its root to the repository root and normalises module labels, so
+  `bun run build:plugin` produces the committed bundle from any working directory.
+- 7198943: Every binding-less `catch` in shipped code now states why its failure is ignored, and `doctor`
+  warns when a repo's `package.json` cannot be parsed instead of silently treating a configured gate
+  script as absent.
+- af4e1cc: The shell guard passes a subshell's piped input and input redirects to the shell it runs, so `printf 'git push' | (bash)` and `(bash) < script.sh` are no longer allowed unchecked.
+- 5461d27: A run started with `n` from an open run view is found by the next poll, so its view opens instead of leaving the intake dialog stranded.
+- 3cda850: The terminal UI polls only the open run's status and its controls and status wiring live behind testable modules.
+- 34cd76b: The `status --watch` suite waits for observed frames instead of an 80 ms window, so it is green
+  under `--parallel`.
+
 ## 1.2.0
 
 ### Minor Changes

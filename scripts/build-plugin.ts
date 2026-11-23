@@ -7,13 +7,32 @@
  *   bun run build:plugin
  */
 import { renameSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 
-export const PLUGIN_OUT = join(import.meta.dir, "..", "templates", "plugin", "factory-plugin.txt");
+const REPO_ROOT = join(import.meta.dir, "..");
+
+export const PLUGIN_OUT = join(REPO_ROOT, "templates", "plugin", "factory-plugin.txt");
+
+const MODULE_LABEL = /^\/\/ (.+\.[cm]?[jt]sx?)$/;
+
+/**
+ * Bun prints module labels relative to the working directory and ignores `root` for a single
+ * entry point, so rewrite each one against the repository root to keep the bundle byte-stable.
+ */
+function normalizeLabels(code: string): string {
+  return code
+    .split("\n")
+    .map((line) => {
+      const label = MODULE_LABEL.exec(line)?.[1];
+      return label === undefined ? line : `// ${relative(REPO_ROOT, resolve(label))}`;
+    })
+    .join("\n");
+}
 
 export async function bundlePlugin(): Promise<string> {
   const result = await Bun.build({
-    entrypoints: [join(import.meta.dir, "..", "packages", "core", "src", "plugin", "entry.ts")],
+    entrypoints: [join(REPO_ROOT, "packages", "core", "src", "plugin", "entry.ts")],
+    root: REPO_ROOT,
     target: "bun",
     format: "esm",
     minify: false,
@@ -21,7 +40,7 @@ export async function bundlePlugin(): Promise<string> {
   if (!result.success || result.outputs[0] === undefined) {
     throw new Error(`plugin build failed:\n${result.logs.join("\n")}`);
   }
-  const code = await result.outputs[0].text();
+  const code = normalizeLabels(await result.outputs[0].text());
   return `// Loomwright opencode plugin — generated from packages/core/src/plugin/entry.ts; do not edit.\n${code}`;
 }
 

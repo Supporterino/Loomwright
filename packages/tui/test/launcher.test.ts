@@ -140,8 +140,17 @@ const MATRIX: readonly { readonly action: LaunchAction; readonly expected: reado
     expected: ["approve", "add-health", "--no-continue"],
   },
   { action: { kind: "reword", id: "add-health" }, expected: ["reword", "add-health"] },
+  {
+    action: {
+      kind: "reword",
+      id: "add-health",
+      prompt: "apply findings 1 and 2",
+    },
+    expected: ["reword", "add-health", "--prompt", "apply findings 1 and 2"],
+  },
   { action: { kind: "reapprove", id: "add-health" }, expected: ["reapprove", "add-health"] },
   { action: { kind: "resume", id: "add-health" }, expected: ["resume", "add-health"] },
+  { action: { kind: "land", id: "add-health" }, expected: ["land", "add-health"] },
 ];
 
 describe("the argv for every action", () => {
@@ -194,6 +203,26 @@ describe("text stays one argv element", () => {
   });
 });
 
+describe("the reword prompt is one argv element", () => {
+  test("a two-line prompt keeps its newline and no quoting", () => {
+    expect(actionArgs({ kind: "reword", id: "add-health", prompt: "  first\nsecond  " })).toEqual([
+      "reword",
+      "add-health",
+      "--prompt",
+      "first\nsecond",
+    ]);
+  });
+
+  test("an empty prompt after trimming launches without --prompt", () => {
+    for (const prompt of ["", "   \n ", "\n\t "]) {
+      expect(
+        actionArgs({ kind: "reword", id: "add-health", prompt }),
+        JSON.stringify(prompt),
+      ).toEqual(["reword", "add-health"]);
+    }
+  });
+});
+
 describe("a failed child is visible", () => {
   test("exited carries code 3 and tailLog returns the last ten lines", async () => {
     const ws = workspace();
@@ -211,6 +240,22 @@ describe("a failed child is visible", () => {
     expect(tailLog(logPath)).toEqual(lines.slice(-10));
     expect(tailLog(logPath, 2)).toEqual(lines.slice(-2));
     expect(tailLog(join(ws, "missing.log"))).toEqual([]);
+  });
+
+  test("a failed land's log tail carries no escape sequences", () => {
+    const ws = workspace();
+    const logPath = join(ws, "spawn.log");
+    writeFileSync(
+      logPath,
+      "\u001b[2Jcleared\u0007\n\u001b]52;c;SGVsbG8=\u0007clip\u009b\tkept\r\nplain\n",
+    );
+
+    const tail = tailLog(logPath);
+
+    expect(tail).toEqual(["[2Jcleared", "]52;c;SGVsbG8=clip\tkept", "plain"]);
+    const isControl = (character: string): boolean =>
+      /\p{Cc}/u.test(character) && character !== "\t" && character !== "\n";
+    for (const line of tail) expect([...line].some(isControl)).toBe(false);
   });
 
   test("a failed spawn is visible: error resolves a non-zero exit and the tail", async () => {

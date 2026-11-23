@@ -109,7 +109,11 @@ export async function askText(question: string, initial?: string): Promise<strin
 }
 
 /** Runs the CLI against injected I/O; returns the exit code. */
-export async function runCli(argv: readonly string[], io: Io): Promise<ExitCode> {
+export async function runCli(
+  argv: readonly string[],
+  io: Io,
+  commands: readonly Command[] = COMMANDS,
+): Promise<ExitCode> {
   let cwd = io.cwd;
   let i = 0;
   for (; i < argv.length; i++) {
@@ -137,14 +141,15 @@ export async function runCli(argv: readonly string[], io: Io): Promise<ExitCode>
     io.err(usage());
     return ExitCode.Usage;
   }
-  const command = COMMANDS.find((c) => c.name === name);
+  const command = commands.find((c) => c.name === name);
   if (command === undefined) {
     io.err(`error: unknown command "${name}"\n\n${usage()}`);
     return ExitCode.Usage;
   }
   const rest = argv.slice(i + 1);
+  const first = rest[0];
   // Hidden commands own their arguments: `__complete` must see a literal `--help` as a word.
-  if (command.hidden !== true && (rest.includes("-h") || rest.includes("--help"))) {
+  if (command.hidden !== true && (first === "-h" || first === "--help")) {
     io.out(command.help);
     return ExitCode.Ok;
   }

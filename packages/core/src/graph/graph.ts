@@ -43,6 +43,7 @@ function readGraph(root: string): GraphDoc | undefined {
   try {
     return JSON.parse(readFileSync(graphFile(root), "utf8")) as GraphDoc;
   } catch {
+    // An absent or unreadable graph reads as missing.
     return undefined;
   }
 }
@@ -137,7 +138,8 @@ export function graphStatus(root: string): GraphStatus {
   try {
     meta = existsSync(metaFile(root)) ? (readJson(metaFile(root)) as GraphMeta) : undefined;
   } catch {
-    meta = undefined; // unreadable metadata only loses the age details (audit P15)
+    // Unreadable metadata only loses the age details (audit P15).
+    meta = undefined;
   }
   return {
     state: "ok",

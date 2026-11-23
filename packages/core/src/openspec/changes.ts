@@ -46,6 +46,7 @@ export function pendingChanges(root: string): PendingChange[] {
       .filter((name) => CHANGE_ID.test(name))
       .sort();
   } catch {
+    // No changes directory: nothing is pending.
     return [];
   }
   return entries.flatMap((id) => {

@@ -3,14 +3,15 @@
  * functions here are pure, and `entry.tsx` performs the effect the confirmation emits.
  */
 import type { KeyInput } from "../model/keys.ts";
-import { canResume, type PanelView, type ViewModel } from "../model/view-model.ts";
-import { keyHint } from "../strings.ts";
+import { canLand, canResume, type PanelView, type ViewModel } from "../model/view-model.ts";
+import { keyHint, landConfirmNote } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
 
 export type ControlAction =
   | { readonly kind: "abort"; readonly id: string }
   | { readonly kind: "retry"; readonly id: string; readonly taskId: string }
-  | { readonly kind: "resume"; readonly id: string };
+  | { readonly kind: "resume"; readonly id: string }
+  | { readonly kind: "land"; readonly id: string };
 
 /** The abort confirmation for the selected run; null when the run cannot be aborted. */
 export function confirmFor(viewModel: ViewModel): ControlAction | null {
@@ -34,6 +35,13 @@ export function resumeFor(viewModel: ViewModel): ControlAction | null {
   const run = viewModel.run;
   if (run === null) return null;
   return canResume(run.phase) ? { kind: "resume", id: run.id } : null;
+}
+
+/** Only a done run lands; the footer and this predicate share `canLand`. */
+export function landFor(viewModel: ViewModel): ControlAction | null {
+  const run = viewModel.run;
+  if (run === null) return null;
+  return canLand(run.phase) ? { kind: "land", id: run.id } : null;
 }
 
 function dash(glyphs: GlyphSet): string {
@@ -75,6 +83,19 @@ export function confirmPanel(action: ControlAction, glyphs: GlyphSet): PanelView
         lines: [
           `change: ${action.id}`,
           `the detached child runs resume ${dash(glyphs)} the UI keeps its view`,
+        ],
+        keys: [keyHint("Enter", "confirm"), keyHint("Esc", "cancel")],
+        notice: null,
+      };
+    case "land":
+      return {
+        kind: "confirm",
+        title: `Land ${action.id}?`,
+        lines: [
+          `change: ${action.id}`,
+          landConfirmNote,
+          `merged change branches are deleted ${dash(glyphs)} its worktrees and run state removed`,
+          "nothing is pushed",
         ],
         keys: [keyHint("Enter", "confirm"), keyHint("Esc", "cancel")],
         notice: null,

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { changelogSection } from "../scripts/changelog-section.ts";
+import { checkTarball } from "../scripts/check-tarball.ts";
 import { syncVersionText } from "../scripts/sync-version.ts";
 
 const CI_WORKFLOW = readFileSync(join(import.meta.dir, "../.github/workflows/ci.yml"), "utf8");
@@ -49,6 +50,14 @@ describe("release scripts", () => {
 });
 
 describe("release workflows", () => {
+  test("the release jobs check out full history so the docs tests can read the change base", () => {
+    const checkouts = RELEASE_WORKFLOW.split(/^ {6}- /m).filter((step) =>
+      step.startsWith("uses: actions/checkout@"),
+    );
+    expect(checkouts.length).toBeGreaterThan(0);
+    for (const step of checkouts) expect(step).toContain("fetch-depth: 0");
+  });
+
   test("sync-version keeps the version file in lockstep and the release plan checks the new package", () => {
     expect(RELEASE_WORKFLOW).toContain('npm view "@loomwright/cli@$VERSION"');
     expect(RELEASE_WORKFLOW).toContain("require('./packages/cli/package.json')");
@@ -78,13 +87,37 @@ describe("release workflows", () => {
     );
   });
 
-  test("the tarball file list matches the baseline", () => {
+  test("both workflows use the one tarball check", () => {
     for (const workflow of [CI_WORKFLOW, RELEASE_WORKFLOW]) {
-      expect(workflow).toContain('grep -qx "package/dist/cli.js"');
-      expect(workflow).toContain('grep -qx "package/dist/package.json"');
-      expect(workflow).toContain("^package/(src|test|scripts)/");
+      expect(workflow).toContain("bun scripts/check-tarball.ts");
+      expect(workflow).not.toContain('grep -qx "package/dist/');
     }
-    expect(CI_WORKFLOW).toContain('grep -qx "package/dist/tui.js"');
+  });
+
+  test("a good tarball listing passes", () => {
+    const listing = [
+      "package/dist/cli.js",
+      "package/dist/tui.js",
+      "package/dist/package.json",
+      "package/README.md",
+    ].join("\n");
+    expect(checkTarball(listing)).toEqual([]);
+  });
+
+  test("a missing lazy entry fails", () => {
+    const listing = ["package/dist/cli.js", "package/dist/package.json"].join("\n");
+    expect(checkTarball(listing)).toContain("missing required entry: package/dist/tui.js");
+  });
+
+  test("source files fail", () => {
+    const listing = [
+      "package/dist/cli.js",
+      "package/dist/tui.js",
+      "package/dist/package.json",
+      "package/src/main.ts",
+    ].join("\n");
+    const problems = checkTarball(listing);
+    expect(problems.some((problem) => problem.includes("package/src/main.ts"))).toBe(true);
   });
 
   test("the e2e workflow runs the moved runtime test", () => {

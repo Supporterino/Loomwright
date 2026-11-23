@@ -49,6 +49,7 @@ export function listFiles(root: string, options: WalkOptions): FileEntry[] {
       try {
         names = readdirSync(abs).sort();
       } catch {
+        // An unreadable directory has no entries to walk.
         continue;
       }
       for (const name of names) {
@@ -57,6 +58,7 @@ export function listFiles(root: string, options: WalkOptions): FileEntry[] {
         try {
           stat = statSync(join(abs, name));
         } catch {
+          // A path that vanished mid-walk is skipped.
           continue;
         }
         if (stat.isDirectory()) {

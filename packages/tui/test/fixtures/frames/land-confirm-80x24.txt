@@ -1,0 +1,24 @@
++------------------------------------------------------------------------------+
+| Land add-health?                                                             |
+| change: add-health                                                           |
+| the change branches are merged into their base branches locally              |
+| merged change branches are deleted - its worktrees and run state removed     |
+| nothing is pushed                                                            |
+|                                                                              |
+| Enter confirm - Esc cancel                                                   |
++------------------------------------------------------------------------------+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Enter confirm - Esc cancel

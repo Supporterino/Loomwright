@@ -1,6 +1,6 @@
-Runs                                                         > add-health - implementing - 8s - 0 tokens - $0.00 - idle
-> > add-health - implementing - idle - 0 tokens - $0.00 - 8s first - tool - edited src/health.ts
-  + faster-imports - done - idle - 0 tokens - $0.00 - 1h00m
+Runs                                                         > add-health implementing 8s - 0 tokens - $0.00 - idle
+> > add-health  Add health endpoints  - implementing - id... first - task - started (attempt 1)
+  + faster-imports  Add health endpoints  - done - idle -... first - tool - edited src/health.ts
 
 
 

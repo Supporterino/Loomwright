@@ -4,7 +4,8 @@
  */
 import type { StatusDocument } from "@loomwright/core/factory";
 import type { LaunchAction } from "../launch/launcher.ts";
-import type { KeyInput } from "../model/keys.ts";
+import { stripControls } from "../model/format.ts";
+import { deletesLast, type KeyInput } from "../model/keys.ts";
 import type { PanelView } from "../model/view-model.ts";
 import { keyHint } from "../strings.ts";
 import type { GlyphSet } from "../theme/glyphs.ts";
@@ -128,11 +129,14 @@ export function intakeKeys(
       ? { state: { ...state, text: `${state.text}\n`, error: null } }
       : { state };
   }
-  if (key.backspace) return { state: removeLast(state, ctx) };
-  if (key.escape || input.length === 0) return { state };
+  if (deletesLast(key)) return { state: removeLast(state, ctx) };
+  if (key.escape) return { state };
+  // A paste arrives as one string; its embedded controls must never reach the terminal.
+  const typed = stripControls(input);
+  if (typed.length === 0) return { state };
   return state.mode === "text"
-    ? { state: { ...state, text: state.text + input, error: null } }
-    : { state: editFile(state, input, ctx) };
+    ? { state: { ...state, text: state.text + typed, error: null } }
+    : { state: editFile(state, typed, ctx) };
 }
 
 function title(state: IntakeState, glyphs: GlyphSet): string {
@@ -145,6 +149,25 @@ function title(state: IntakeState, glyphs: GlyphSet): string {
 const PANEL_CHROME_ROWS = 5;
 /** The chosen file's fixed header: the path, the byte size and the preview's label. */
 const PREVIEW_HEADER_ROWS = 3;
+
+/**
+ * The typed request split into panel rows. `PanelBox` renders an embedded newline as its own row,
+ * so a multi-line paste is windowed like the file preview and names the shown count when it trims.
+ */
+function requestLines(state: IntakeState, rows: number, trailing: number): string[] {
+  if (state.text === "") return ["request: (empty)"];
+  // One line keeps the compact form the frame fixtures pin.
+  if (!state.text.includes("\n")) return [`request: ${state.text}`];
+  const all = state.text.split("\n");
+  const room = Math.max(0, rows - PANEL_CHROME_ROWS - trailing);
+  if (room === 0) return [];
+  const shown = all.slice(0, room - 1);
+  const label =
+    shown.length < all.length
+      ? `request (${shown.length} of ${all.length} lines):`
+      : `request (${all.length} lines):`;
+  return [label, ...shown.map((line) => `  | ${line}`)];
+}
 
 /**
  * The file keeps its first twenty lines; the dialog shows as many as the terminal has room for and
@@ -176,13 +199,15 @@ function fileLines(state: IntakeState, glyphs: GlyphSet, rows: number, trailing:
 /** The panel the frame renders; the error rides in `notice` so it stays inline and visible. */
 export function intakePanel(state: IntakeState, glyphs: GlyphSet, rows = 40): PanelView {
   const spawnedRows = state.spawned === null ? 0 : 1 + state.spawned.tail.length;
+  const noticeRows = state.error === null ? 0 : state.error.split("\n").length;
   const trailing =
     (state.submitting && state.spawned === null ? 1 : 0) +
     spawnedRows +
-    (state.queuedNote === null ? 0 : 1);
+    (state.queuedNote === null ? 0 : 1) +
+    noticeRows;
   const lines: string[] =
     state.mode === "text"
-      ? [state.text === "" ? "request: (empty)" : `request: ${state.text}`]
+      ? requestLines(state, rows, trailing)
       : fileLines(state, glyphs, rows, trailing);
   if (state.submitting && state.spawned === null) lines.push("starting...");
   if (state.spawned !== null) {

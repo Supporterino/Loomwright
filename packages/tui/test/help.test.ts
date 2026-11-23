@@ -33,6 +33,13 @@ describe("help", () => {
     expect(panel.notice).toBeNull();
   });
 
+  test("the help panel names l as the land key for a done run", () => {
+    const line = helpPanel().lines.find((candidate) => candidate.startsWith("l "));
+    expect(line).toBeDefined();
+    expect(line).toContain("l");
+    expect(line).toContain("land");
+  });
+
   test("Esc closes help and q quits while it is open", () => {
     expect(helpKeys("", key({ escape: true }))).toBe("close");
     expect(helpKeys("q", key())).toBe("quit");

@@ -1,0 +1,758 @@
+{
+  "version": 1,
+  "changeId": "fix-correctness-and-guard-gaps",
+  "entries": [
+    {
+      "at": "2026-11-23T10:33:30.957Z",
+      "sessionId": "ses_df80855aeffeybzffWJh1NBy5T",
+      "agent": "orchestrator",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "intake",
+      "kind": "step",
+      "usage": {
+        "input": 11219,
+        "output": 473,
+        "reasoning": 301,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T10:37:42.131Z",
+      "sessionId": "ses_df8082f61ffet7n1m3UPhPMRxd",
+      "agent": "explorer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "explore:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 139734,
+        "output": 11503,
+        "reasoning": 8105,
+        "cacheRead": 4862080,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T10:52:05.168Z",
+      "sessionId": "ses_df804592cffePCkrBw412r8J6e",
+      "agent": "architect",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "design",
+      "kind": "step",
+      "usage": {
+        "input": 213985,
+        "output": 24955,
+        "reasoning": 55924,
+        "cacheRead": 11459200,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:04:37.556Z",
+      "sessionId": "ses_df7f33dbeffeT0lBa7N1Fbr69g",
+      "agent": "architect",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "context-packs",
+      "kind": "step",
+      "usage": {
+        "input": 146371,
+        "output": 29204,
+        "reasoning": 15752,
+        "cacheRead": 7545856,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:08:40.781Z",
+      "sessionId": "ses_df7ebad33ffekiiS6Ulz0ynSGs",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.4",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 31928,
+        "output": 3241,
+        "reasoning": 1603,
+        "cacheRead": 448768,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:10:11.622Z",
+      "sessionId": "ses_df7ebad34ffdmN8EfP3NZ0lrGG",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.7",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 39015,
+        "output": 4059,
+        "reasoning": 3976,
+        "cacheRead": 432128,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:15:28.537Z",
+      "sessionId": "ses_df7ebad34ffeMHlDqFCj03XUGA",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 51597,
+        "output": 9208,
+        "reasoning": 10288,
+        "cacheRead": 2049664,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:18:04.910Z",
+      "sessionId": "ses_df7ebad33ffdmF6vgfyWCeep48",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.5",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 112101,
+        "output": 12475,
+        "reasoning": 20592,
+        "cacheRead": 5481600,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:21:18.240Z",
+      "sessionId": "ses_df7e05c9effeC0ZhuIx2OwYd3y",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.6",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 44051,
+        "output": 4613,
+        "reasoning": 1587,
+        "cacheRead": 721280,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:21:34.941Z",
+      "sessionId": "ses_df7e03ec8ffed762kaTRmPxDjq",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 32924,
+        "output": 4542,
+        "reasoning": 4675,
+        "cacheRead": 483968,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:26:11.808Z",
+      "sessionId": "ses_df7dbefeeffeWtEQc8zGoW3Yo0",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.3",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 43756,
+        "output": 5985,
+        "reasoning": 3414,
+        "cacheRead": 998400,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:36:36.086Z",
+      "sessionId": "ses_df7d7c295ffe4Z4ETlAuL23OMX",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "1.8",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 86412,
+        "output": 18020,
+        "reasoning": 10602,
+        "cacheRead": 3409664,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T11:59:07.749Z",
+      "sessionId": "ses_df7c94c16ffeqZTRDz5dUt06SC",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 219155,
+        "output": 17603,
+        "reasoning": 58726,
+        "cacheRead": 12951552,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T12:06:11.987Z",
+      "sessionId": "ses_df7b9caedffe7Kuuh3x0eP2UgR",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-1-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 47081,
+        "output": 6258,
+        "reasoning": 7236,
+        "cacheRead": 989312,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T12:09:09.852Z",
+      "sessionId": "ses_df7b340a6ffeycs3eggqt4eVrT",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-1-2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 28302,
+        "output": 1789,
+        "reasoning": 1391,
+        "cacheRead": 257536,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T12:14:15.199Z",
+      "sessionId": "ses_df7b088f7ffeuQjfZnMbHU3IZa",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-1-3",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 59664,
+        "output": 4622,
+        "reasoning": 9557,
+        "cacheRead": 1261824,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T12:23:37.630Z",
+      "sessionId": "ses_df7abe0edffeO0r7bXw4zY3n5e",
+      "agent": "tester",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "test-loomwright",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 102492,
+        "output": 10619,
+        "reasoning": 18504,
+        "cacheRead": 3737600,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T12:41:29.216Z",
+      "sessionId": "ses_df7a30fbeffelwSNouuIgJlEaX",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 220243,
+        "output": 10716,
+        "reasoning": 70555,
+        "cacheRead": 10080256,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T12:44:48.891Z",
+      "sessionId": "ses_df79302e0ffe2T0eXk5Sj3pPQQ",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-2-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 27968,
+        "output": 1687,
+        "reasoning": 3945,
+        "cacheRead": 308992,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T12:50:16.678Z",
+      "sessionId": "ses_df78fe6d7ffeuN8Qo8XJ9fLRX5",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-2-2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 52994,
+        "output": 4648,
+        "reasoning": 8508,
+        "cacheRead": 1053056,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T13:10:17.326Z",
+      "sessionId": "ses_df78a3e1cffel7FoYQA8oY1GEW",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 238890,
+        "output": 14589,
+        "reasoning": 86493,
+        "cacheRead": 15022592,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T13:13:49.779Z",
+      "sessionId": "ses_df778a45cffeTgomy2PMUUnFrY",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-3-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 36633,
+        "output": 3475,
+        "reasoning": 1536,
+        "cacheRead": 594432,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T13:20:49.468Z",
+      "sessionId": "ses_df775564cffeIzjSrvMe8TnYAM",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-3-2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 37163,
+        "output": 3295,
+        "reasoning": 10977,
+        "cacheRead": 753792,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T13:44:07.275Z",
+      "sessionId": "ses_df76ed436ffe6k5feqef15paoo",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 260097,
+        "output": 13905,
+        "reasoning": 120911,
+        "cacheRead": 14680320,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T13:54:16.919Z",
+      "sessionId": "ses_df759aba2ffei8khot4LRlSV1V",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-4-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 81206,
+        "output": 7297,
+        "reasoning": 20310,
+        "cacheRead": 2525056,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T14:00:06.932Z",
+      "sessionId": "ses_df7504c8bffeNX5nSC3Pczvief",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-4-2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 43374,
+        "output": 3509,
+        "reasoning": 4333,
+        "cacheRead": 843008,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T14:19:43.692Z",
+      "sessionId": "ses_df74adc99ffe8haL843pA8OUtN",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 309618,
+        "output": 12040,
+        "reasoning": 77850,
+        "cacheRead": 19199488,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T14:25:29.730Z",
+      "sessionId": "ses_df7391242ffegw2YE1z4JNKaWK",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-5-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 48272,
+        "output": 3727,
+        "reasoning": 4583,
+        "cacheRead": 942720,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T14:45:08.292Z",
+      "sessionId": "ses_df7339e3fffeoraHXqZNeEL8tf",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 266251,
+        "output": 12485,
+        "reasoning": 92077,
+        "cacheRead": 14026112,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T14:50:42.044Z",
+      "sessionId": "ses_df721ceb7ffeBL5ZFsKojyNLm0",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-6-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 37573,
+        "output": 3101,
+        "reasoning": 3154,
+        "cacheRead": 687232,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T14:55:47.361Z",
+      "sessionId": "ses_df71ca5ceffekTiaLFRoKrmeyS",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-6-2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 25317,
+        "output": 2533,
+        "reasoning": 990,
+        "cacheRead": 258176,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T15:00:21.040Z",
+      "sessionId": "ses_df717fdbdffeM4VpypuIintsuc",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-6-3",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 46104,
+        "output": 4293,
+        "reasoning": 7636,
+        "cacheRead": 615680,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T15:29:16.516Z",
+      "sessionId": "ses_df713b5e2ffer3qgg9ci1qDpDO",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 287580,
+        "output": 12900,
+        "reasoning": 93995,
+        "cacheRead": 16268288,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T15:35:09.205Z",
+      "sessionId": "ses_df6f9661affeHSwhDdh1u5YpI0",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-7-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 47116,
+        "output": 3929,
+        "reasoning": 5871,
+        "cacheRead": 817536,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T15:39:19.471Z",
+      "sessionId": "ses_df6f3f271ffeboiktTKPv6i06L",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-7-2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 50346,
+        "output": 3833,
+        "reasoning": 3971,
+        "cacheRead": 995200,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T15:44:51.898Z",
+      "sessionId": "ses_df6f00e6affeevrXY4CWLBe5j0",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-7-3",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 26846,
+        "output": 3263,
+        "reasoning": 2774,
+        "cacheRead": 464896,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T15:49:37.012Z",
+      "sessionId": "ses_df6eb0f85ffeINegMpfPTKl8tN",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-7-4",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 50905,
+        "output": 2814,
+        "reasoning": 7877,
+        "cacheRead": 760704,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T16:09:38.766Z",
+      "sessionId": "ses_df6e698d7ffet7rAzpATmbAvu9",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 262666,
+        "output": 14442,
+        "reasoning": 90830,
+        "cacheRead": 17190656,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T16:13:44.958Z",
+      "sessionId": "ses_df6d47028ffe7xN1Weybk79azr",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-8-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 39279,
+        "output": 3390,
+        "reasoning": 4478,
+        "cacheRead": 740224,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T16:16:27.758Z",
+      "sessionId": "ses_df6d09d74ffeXOnrEPaS1swW5V",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-8-2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 44394,
+        "output": 6176,
+        "reasoning": 3142,
+        "cacheRead": 649472,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T16:36:51.501Z",
+      "sessionId": "ses_df6cd6939ffe8QQv12GoiWzjpS",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 246676,
+        "output": 12374,
+        "reasoning": 95586,
+        "cacheRead": 14554624,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T16:41:38.363Z",
+      "sessionId": "ses_df6b9ea8dffe9HQjEDB0guit7V",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-9-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 21532,
+        "output": 1208,
+        "reasoning": 894,
+        "cacheRead": 205312,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T17:11:34.769Z",
+      "sessionId": "ses_df6b63109ffeC6G0WKsBrdj3jF",
+      "agent": "reviewer",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "review:loomwright",
+      "kind": "step",
+      "usage": {
+        "input": 305142,
+        "output": 12781,
+        "reasoning": 87924,
+        "cacheRead": 17602048,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T17:25:10.568Z",
+      "sessionId": "ses_df69bbce6ffegVApY8ziyA2aPg",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-10-1",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 106948,
+        "output": 15083,
+        "reasoning": 36885,
+        "cacheRead": 4727168,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    },
+    {
+      "at": "2026-11-23T17:30:50.873Z",
+      "sessionId": "ses_df68f3901ffe2BRvESc9Lo0zV2",
+      "agent": "implementer-loomwright",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "step": "fix-loomwright-10-2",
+      "kind": "attempt",
+      "attempt": 1,
+      "usage": {
+        "input": 39065,
+        "output": 4451,
+        "reasoning": 5383,
+        "cacheRead": 758400,
+        "cacheWrite": 0,
+        "cost": 0
+      }
+    }
+  ],
+  "wastedReads": 323
+}

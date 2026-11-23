@@ -1,0 +1,40 @@
+ > add-health implementing 8s - 0 tokens - $0.00 - idle
+ Tasks
+   [o] task-1 pending app attempt 0 Task 1                  Activity
+   [o] task-2 pending api attempt 0 Task 2                  run - tool - queued 12 tasks
+   [o] task-3 pending app attempt 0 Task 3
+   [o] task-4 pending api attempt 0 Task 4
+   [o] task-5 pending app attempt 0 Task 5
+   [o] task-6 pending api attempt 0 Task 6
+   [o] task-7 pending app attempt 0 Task 7
+   [o] task-8 pending api attempt 0 Task 8
+   [o] task-9 pending app attempt 0 Task 9
+   [o] task-10 pending api attempt 0 Task 10
+   [o] task-11 pending app attempt 0 Task 11
+   [o] task-12 pending api attempt 0 Task 12
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+w reword - x abort - L log - ? help - q quit

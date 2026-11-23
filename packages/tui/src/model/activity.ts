@@ -27,6 +27,21 @@ export class ActivityRing {
     this.start = (this.start + 1) % ACTIVITY_LIMIT;
   }
 
+  /** True when the newest retained line was pushed with `kind`. */
+  lastIs(kind: string): boolean {
+    if (this.count === 0) return false;
+    return this.slots[(this.start + this.count - 1) % ACTIVITY_LIMIT]?.kind === kind;
+  }
+
+  /** Replace the newest line in place; no growth and no eviction when the ring is full. */
+  replaceLast(line: ActivityLine): void {
+    if (this.count === 0) {
+      this.push(line);
+      return;
+    }
+    this.slots[(this.start + this.count - 1) % ACTIVITY_LIMIT] = line;
+  }
+
   toArray(): readonly ActivityLine[] {
     const lines: ActivityLine[] = [];
     for (let index = 0; index < this.count; index += 1) {

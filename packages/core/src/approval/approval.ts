@@ -143,6 +143,7 @@ export function readApproval(root: string, id: string): Approval | undefined {
   try {
     return parseApproval(JSON.parse(readFileSync(file, "utf8")));
   } catch {
+    // An unreadable approval file counts as unapproved.
     return undefined;
   }
 }

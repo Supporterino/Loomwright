@@ -163,6 +163,7 @@ function worktreeEntries(root: string, id: string): WorktreeEntry[] {
     try {
       tasks = readdirSync(repoDir);
     } catch {
+      // A repo entry that is not a directory has no tasks.
       continue;
     }
     for (const task of tasks) {

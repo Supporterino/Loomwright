@@ -15,6 +15,7 @@ function current(dir: string, file: string): string | undefined {
   try {
     return readFileSync(join(dir, file), "utf8");
   } catch {
+    // An absent or unreadable host file has no definition.
     return undefined;
   }
 }
@@ -33,6 +34,7 @@ function definition(file: string, text: string | undefined, name: string): strin
       const v = scripts?.[name];
       return typeof v === "string" ? v : undefined;
     } catch {
+      // The broken text is itself the comparable definition.
       return "(unparsable package.json)";
     }
   }
@@ -41,6 +43,7 @@ function definition(file: string, text: string | undefined, name: string): strin
       const tasks = (parseYaml(text) as { tasks?: Record<string, unknown> } | null)?.tasks;
       return tasks && name in tasks ? JSON.stringify(tasks[name]) : undefined;
     } catch {
+      // The broken text is itself the comparable definition.
       return "(unparsable Taskfile)";
     }
   }

@@ -112,6 +112,21 @@ esac
     expect(find(json, "run broken")).toMatchObject({ status: "fail" });
   });
 
+  test.skipIf(process.platform !== "darwin")(
+    "doctor reports the configured setting, not the nesting state",
+    async () => {
+      const root = await installed(createSingleRepoFixture, { app: passAll });
+      const saved = process.env.AI_FACTORY_SANDBOX;
+      process.env.AI_FACTORY_SANDBOX = "wrapped";
+      try {
+        expect(find(await report(root), "sandbox")).toMatchObject({ status: "ok" });
+      } finally {
+        if (saved === undefined) delete process.env.AI_FACTORY_SANDBOX;
+        else process.env.AI_FACTORY_SANDBOX = saved;
+      }
+    },
+  );
+
   test("warns about proxy variables and checks the graphify env (audit C)", async () => {
     const root = await installed(createSingleRepoFixture, { app: passAll });
     process.env.HTTPS_PROXY = "http://proxy.example:3128";
@@ -140,6 +155,97 @@ esac
     );
     await fixtureGit(root, "commit", "-q", "-am", "chore: strict");
     expect(find(await report(root), "app strict")).toBeUndefined();
+  });
+
+  const writePackage = (root: string, scripts: Record<string, string>): void => {
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify(
+        { name: "app", private: true, scripts, devDependencies: { typescript: "5.9.3" } },
+        null,
+        2,
+      ),
+    );
+  };
+
+  test("does not warn about a script replaced by an override", async () => {
+    const root = await installed(createSingleRepoFixture, {
+      app: { ...passAll, lint: "biome check ." },
+    });
+    writePackage(root, {
+      lint: "biome check --fix .",
+      typecheck: "tsc --noEmit",
+      test: "bun test",
+    });
+    await fixtureGit(root, "commit", "-q", "-am", "chore: writing lint script");
+    const json = await report(root);
+    expect(find(json, "app lint script")).toBeUndefined();
+    expect(json.gates.find((g) => g.repo === "app" && g.type === "lint")).toMatchObject({
+      source: "override",
+      command: "biome check .",
+    });
+  });
+
+  test("still warns about a writing script without an override", async () => {
+    const root = await installed(createSingleRepoFixture, {
+      app: { format: "true", types: "true", test: "true", testAffected: "true" },
+    });
+    writePackage(root, {
+      lint: "biome check --fix .",
+      typecheck: "tsc --noEmit",
+      test: "bun test",
+    });
+    await fixtureGit(root, "commit", "-q", "-am", "chore: writing lint script");
+    const check = find(await report(root), "app lint script");
+    expect(check).toMatchObject({ status: "warn" });
+    expect(check?.detail).toContain("`lint`");
+    expect(check?.detail).toContain("biome check --fix .");
+    expect(check?.fix).toContain("gates.overrides.app.lint");
+    expect(check?.fix).toContain("replaces the script lookup");
+  });
+
+  test("doctor reports an unreadable package.json instead of hiding the gate script", async () => {
+    const root = await installed(createSingleRepoFixture, {
+      app: { format: "true", types: "true", test: "true", testAffected: "true" },
+    });
+    writeFileSync(join(root, "package.json"), '{ "scripts": { ');
+    await fixtureGit(root, "commit", "-q", "-am", "chore: broken package.json");
+    const check = find(await report(root), "app lint script");
+    expect(check).toMatchObject({ status: "warn" });
+    expect(check?.detail).toContain("package.json");
+  });
+
+  test("does not warn about a skipped script", async () => {
+    const root = await installed(createSingleRepoFixture, {
+      app: { ...passAll, lint: "skip" },
+    });
+    writePackage(root, {
+      lint: "biome check --fix .",
+      typecheck: "tsc --noEmit",
+      test: "bun test",
+    });
+    await fixtureGit(root, "commit", "-q", "-am", "chore: writing lint script");
+    const json = await report(root);
+    expect(find(json, "app lint script")).toBeUndefined();
+    expect(json.gates.find((g) => g.repo === "app" && g.type === "lint")?.problem).toContain(
+      "skip: gates.overrides.app.lint",
+    );
+  });
+
+  test("scopes an override to its gate type", async () => {
+    const root = await installed(createSingleRepoFixture, {
+      app: { format: "skip", types: "true", test: "true", testAffected: "true" },
+    });
+    writePackage(root, {
+      "format:check": "biome format --write .",
+      lint: "biome check --fix .",
+      typecheck: "tsc --noEmit",
+      test: "bun test",
+    });
+    await fixtureGit(root, "commit", "-q", "-am", "chore: writing scripts");
+    const json = await report(root);
+    expect(find(json, "app format script")).toBeUndefined();
+    expect(find(json, "app lint script")).toMatchObject({ status: "warn" });
   });
 
   test("doctor suggests the new command: a healthy install passes, with the resolved gate table", async () => {

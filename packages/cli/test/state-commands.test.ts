@@ -133,21 +133,27 @@ describe("status, retry and abort", () => {
     expect(json.active?.changeId).toBe("add-x");
   });
 
-  test("status --watch reprints frames until interrupted", async () => {
+  test("two observed frames, then abort: status --watch reprints frames until interrupted", async () => {
     const out: string[] = [];
-    const code = await runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
+    const frames = (): number => out.filter((line) => line.startsWith("updated ")).length;
+    const controller = new AbortController();
+    const pending = runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
       cwd: fx.root,
       out: (line) => out.push(line),
       err: () => {},
-      signal: AbortSignal.timeout(80),
+      signal: controller.signal,
     });
-    expect(code).toBe(ExitCode.Ok);
-    expect(out.filter((line) => line.startsWith("updated ")).length).toBeGreaterThanOrEqual(2);
+    try {
+      await waitFor(() => frames() >= 2);
+    } finally {
+      controller.abort();
+    }
+    expect(await pending).toBe(ExitCode.Ok);
     expect(out.join("\n")).toContain("change add-x — paused");
     expect((await cli(fx.root, "status", "add-x", "--watch", "--json")).code).toBe(ExitCode.Usage);
   });
 
-  test("a new event produces a frame", async () => {
+  test("an event-triggered frame is awaited by status --watch", async () => {
     const log = eventLogPath(fx.root, "add-x");
     mkdirSync(dirname(log), { recursive: true });
     writeFileSync(log, `${heartbeat(1)}\n`);
@@ -236,7 +242,6 @@ describe("status, retry and abort", () => {
       cwd: fx.root,
       out: (line) => out.push(line),
       err: (line) => err.push(line),
-      signal: AbortSignal.timeout(20_000),
     });
     await waitFor(() => out.some((line) => line.startsWith("updated ")));
     rmSync(runFile(fx.root, "add-x"));
@@ -248,25 +253,40 @@ describe("status, retry and abort", () => {
   test("the frame format is unchanged", async () => {
     const body = (await cli(fx.root, "status", "add-x")).out.split("\n");
     const tty: string[] = [];
-    await runCli(["status", "add-x", "--watch", "--interval", "10"], {
+    const ttyController = new AbortController();
+    const ttyWatch = runCli(["status", "add-x", "--watch", "--interval", "10"], {
       cwd: fx.root,
       out: (line) => tty.push(line),
       err: () => {},
       tty: true,
-      signal: AbortSignal.timeout(50),
+      signal: ttyController.signal,
     });
+    try {
+      await waitFor(() => tty.length >= 2 + body.length);
+    } finally {
+      ttyController.abort();
+    }
+    expect(await ttyWatch).toBe(ExitCode.Ok);
     expect(tty[0]).toBe("\x1b[2J\x1b[H");
     expect(tty[1]).toStartWith("updated ");
     expect(tty[1]).toEndWith(" · Ctrl-C to stop");
     expect(tty.slice(2, 2 + body.length)).toEqual(body);
 
     const piped: string[] = [];
-    await runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
+    const frames = (): number => piped.filter((line) => line.startsWith("updated ")).length;
+    const controller = new AbortController();
+    const watch = runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
       cwd: fx.root,
       out: (line) => piped.push(line),
       err: () => {},
-      signal: AbortSignal.timeout(80),
+      signal: controller.signal,
     });
+    try {
+      await waitFor(() => frames() >= 2);
+    } finally {
+      controller.abort();
+    }
+    expect(await watch).toBe(ExitCode.Ok);
     expect(piped[0]).toStartWith("updated ");
     expect(piped.includes("")).toBe(true);
     expect(piped.join("\n")).toContain(body.join("\n"));
@@ -274,14 +294,21 @@ describe("status, retry and abort", () => {
 
   test("a missing event log falls back to polling", async () => {
     const out: string[] = [];
-    const code = await runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
+    const frames = (): number => out.filter((line) => line.startsWith("updated ")).length;
+    const controller = new AbortController();
+    const pending = runCli(["status", "add-x", "--watch", "--interval", "0.01"], {
       cwd: fx.root,
       out: (line) => out.push(line),
       err: () => {},
-      signal: AbortSignal.timeout(80),
+      signal: controller.signal,
     });
-    expect(code).toBe(ExitCode.Ok);
-    expect(out.filter((line) => line.startsWith("updated ")).length).toBeGreaterThanOrEqual(2);
+    try {
+      await waitFor(() => frames() >= 2);
+    } finally {
+      controller.abort();
+    }
+    expect(await pending).toBe(ExitCode.Ok);
+    expect(frames()).toBeGreaterThanOrEqual(2);
   });
 
   test("the existing watch guards still apply", async () => {

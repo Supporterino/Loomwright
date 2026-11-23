@@ -8,20 +8,16 @@ import process from "node:process";
 import { type Factory, open, openReadOnly, type StatusDocument } from "@loomwright/core/factory";
 import type { Io } from "@loomwright/core/io";
 import type { RunState } from "@loomwright/core/state/run";
-import type { RunEvent, RunSnapshot } from "@loomwright/protocol";
+import type { RunEvent } from "@loomwright/protocol";
 import { render, useApp, useInput } from "ink";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type ExecResult, readApprover } from "./approval/identity.ts";
 import {
   type ApprovalActionKind,
-  type ApprovalEvidence,
-  type ApprovalState,
   approvalAvailable,
   approvalExited,
-  approvalForPhase,
   approvalKeys,
   approvalPanel,
-  approvalProgress,
   approvalStarted,
 } from "./approval/overlay.ts";
 import {
@@ -33,13 +29,22 @@ import {
   retryFor,
 } from "./controls/actions.ts";
 import {
+  type ActivityPaneState,
+  activityPaneBodyRows,
+  activityPaneKeys,
+  activityPanePanel,
+  openActivityPane,
+} from "./controls/activity-pane.ts";
+import {
   openQuestions,
-  type QuestionsState,
   questionsKeys,
   questionsPanel,
+  recordAnswerInState,
+  withRecordedAnswer,
 } from "./controls/questions.tsx";
+import { openReword, rewordKeys, rewordPanel } from "./controls/reword.ts";
 import { helpKeys, helpPanel } from "./help.ts";
-import { type IntakeState, initialIntake, intakeKeys, intakePanel } from "./intake/dialog.tsx";
+import { initialIntake, intakeKeys, intakePanel } from "./intake/dialog.tsx";
 import { watchSpawn } from "./intake/follow.ts";
 import {
   createLauncher,
@@ -48,23 +53,73 @@ import {
   type LaunchResult,
   tailLog,
 } from "./launch/launcher.ts";
-import { collectFacts, type EventFacts } from "./model/facts.ts";
+import {
+  createLandGuard,
+  createResumeGuard,
+  type LandGuard,
+  type LandRefresh,
+  landConfirmation,
+  performControl,
+  type ResumeGuard,
+  recordAnswer,
+  type SessionRun,
+  settleLanding,
+  startLand,
+  startResume,
+  startReword,
+} from "./model/controls.ts";
+import { collectFacts } from "./model/facts.ts";
 import { type FoldedRun, foldRun } from "./model/fold.ts";
 import { applyKey, type KeyInput } from "./model/keys.ts";
 import { createStatusPoller, type StatusPoller } from "./model/poll.ts";
 import { createFrameScheduler, type FrameScheduler } from "./model/render-loop.ts";
-import {
-  buildViewModel,
-  type Screen,
-  type ViewModel,
-  type ViewModelInput,
-} from "./model/view-model.ts";
+import { createStatusSource } from "./model/status.ts";
+import type { UiData } from "./model/ui-data.ts";
+import { evidenceOf, panelOpen, selectedRunState, syncApproval } from "./model/ui-data.ts";
+import { buildViewModel, type ViewModel, type ViewModelInput } from "./model/view-model.ts";
+import { firstOffset, lastOffset, moveBy, nextOffset, pageSize } from "./model/viewport.ts";
 import { type ReplayLoad, readReplayFile, replayModel } from "./replay/replay.ts";
 import { createTerminalSession, type TerminalSession } from "./session.ts";
 import { detectColorDepth, type TerminalEnv, terminalEnv } from "./theme/env.ts";
 import { type GlyphSet, glyphsFor } from "./theme/glyphs.ts";
 import type { ColorDepth } from "./theme/tokens.ts";
 import { Frame, renderFrame } from "./views/frame.tsx";
+
+export {
+  type ControlDeps,
+  createLandGuard,
+  createResumeGuard,
+  type LandGuard,
+  type LandRefresh,
+  type LandRun,
+  landConfirmation,
+  landFailed,
+  landSettled,
+  landStarted,
+  performControl,
+  type ResumeGuard,
+  type ResumeRun,
+  type RewordRun,
+  recordAnswer,
+  resumeFailed,
+  resumeStarted,
+  rewordFailed,
+  rewordStarted,
+  rewordSucceeded,
+  type SessionRun,
+  settleLanding,
+  startLand,
+  startResume,
+  startReword,
+} from "./model/controls.ts";
+export type { UiData } from "./model/ui-data.ts";
+export {
+  evidenceOf,
+  grantedCommit,
+  panelOpen,
+  selectedRunState,
+  syncApproval,
+} from "./model/ui-data.ts";
 
 export interface TuiOptions {
   /** Resolved workspace root; null when replaying a recording. */
@@ -115,12 +170,21 @@ function themeFor(options: TuiOptions): ResolvedTheme {
 
 function keyName(
   input: string,
-  key: { return: boolean; escape: boolean; upArrow: boolean; downArrow: boolean },
+  key: {
+    return: boolean;
+    escape: boolean;
+    upArrow: boolean;
+    downArrow: boolean;
+    pageUp: boolean;
+    pageDown: boolean;
+  },
 ): string {
   if (key.return) return "Enter";
   if (key.escape) return "Esc";
   if (key.upArrow) return "Up";
   if (key.downArrow) return "Down";
+  if (key.pageUp) return "PgUp";
+  if (key.pageDown) return "PgDn";
   return input;
 }
 
@@ -142,107 +206,100 @@ const REPLAY_WRITE_KEYS: ReadonlySet<string> = new Set([
   "r",
   "x",
   "t",
+  "l",
   "Q",
 ]);
 
 export interface ReplayKeyOutcome {
   readonly quit: boolean;
   readonly notice: string | null;
-}
-
-/** A replay consumes only quit; every write key becomes the read-only notice. */
-export function replayKey(view: ViewModel, input: string, key: KeyInput): ReplayKeyOutcome {
-  if (key.ctrl && input === "c") return { quit: true, notice: null };
-  if (!key.ctrl && input === "q") return { quit: true, notice: null };
-  if (isReadOnly(view) && REPLAY_WRITE_KEYS.has(input)) {
-    return { quit: false, notice: REPLAY_READ_ONLY };
-  }
-  return { quit: false, notice: null };
-}
-
-export interface UiData {
-  readonly screen: Screen;
-  readonly selectedRunId: string | null;
-  readonly selectedTaskId: string | null;
-  readonly columns: number;
-  readonly rows: number;
-  readonly status: StatusDocument;
-  readonly runs: readonly RunState[];
-  readonly snapshot: RunSnapshot | null;
-  readonly facts: EventFacts;
-  readonly notice: string | null;
-  /** The new-run dialog, or null when no panel is open. */
-  readonly intake: IntakeState | null;
-  /** The approval overlay, or null when the selected run is not at the gate. */
-  readonly approval: ApprovalState | null;
-  /** The questions pane, or null when it is closed. */
-  readonly questions: QuestionsState | null;
-  /** The abort confirmation, or null when no confirmation is open. */
-  readonly confirmation: ControlAction | null;
-  /** The help panel is open; `?` sets it and Esc clears it. */
-  readonly help: boolean;
-  /** `git config user.email`; null until the overlay has read it once. */
-  readonly identity: string | null;
-}
-
-function selectedRunState(data: UiData): RunState | undefined {
-  const id = data.selectedRunId;
-  if (id === null) return undefined;
-  return data.status.runs.find((run) => run.id === id) ?? data.runs.find((run) => run.id === id);
-}
-
-function grantedCommit(snapshot: RunSnapshot | null): string | null {
-  const approval = snapshot?.approval ?? null;
-  return approval === null || approval.approver === "" ? null : approval.specCommit;
-}
-
-function evidenceOf(data: UiData): ApprovalEvidence {
-  return {
-    identity: data.identity ?? "",
-    findings: selectedRunState(data)?.specFindings.length ?? 0,
-    specCommit: grantedCommit(data.snapshot),
-  };
-}
-
-/** Intake, questions, help and confirmations own the screen while they are open. */
-function panelOpen(data: UiData): boolean {
-  return data.intake !== null || data.questions !== null || data.confirmation !== null || data.help;
+  /** The help panel's next open state; null leaves it as it is. */
+  readonly help: boolean | null;
 }
 
 /**
- * Opens on the phase and advances a launch from the facts the stream now carries. Run state is
- * canonical: a tail snapshot can lag behind a phase another process already drove.
+ * A replay consumes quit and help; every write key becomes the read-only notice, and `?` opens
+ * help only where the footer advertises it (the approval overlay owns the screen otherwise).
  */
-export function syncApproval(data: UiData): UiData {
-  if (data.screen !== "run" || data.selectedRunId === null) return data;
-  const run = selectedRunState(data);
-  const phase = run?.phase ?? data.snapshot?.phase ?? null;
-  if (data.approval === null) {
-    // A poll never steals an open panel; the next one opens the gate once the panel closes.
-    if (panelOpen(data)) return data;
-    if (phase === null) return data;
-    const opened = approvalForPhase(phase, null);
-    return opened === null ? data : { ...data, approval: opened, identity: null };
+export function replayKey(view: ViewModel, input: string, key: KeyInput): ReplayKeyOutcome {
+  // Ctrl-C quits before any panel, help included: the terminal must be restored on an interrupt.
+  if (key.ctrl && input === "c") return { quit: true, notice: null, help: null };
+  if (view.panel?.kind === "help") {
+    const outcome = helpKeys(input, key);
+    if (outcome === "quit") return { quit: true, notice: null, help: null };
+    return { quit: false, notice: null, help: outcome === "close" ? false : null };
   }
-  // Another process may approve while the overlay sits idle: clear it once the run leaves the
-  // gate, but keep a launch that is still waiting for its own outcome.
-  if (
-    (data.approval.kind === "idle" || data.approval.kind === "failed") &&
-    phase !== null &&
-    phase !== "awaiting-approval"
-  ) {
-    return { ...data, approval: null };
+  if (!key.ctrl && input === "q") return { quit: true, notice: null, help: null };
+  if (!key.ctrl && input === "?" && view.footer.some((hint) => hint.key === "?")) {
+    return { quit: false, notice: null, help: true };
   }
-  if (data.approval.kind !== "waiting") return data;
-  const next = approvalProgress(data.approval, {
-    phase,
-    granted: grantedCommit(data.snapshot) !== null,
-  });
-  if (next === data.approval) return data;
-  return { ...data, approval: next.kind === "done" ? null : next };
+  if (isReadOnly(view) && REPLAY_WRITE_KEYS.has(input)) {
+    return { quit: false, notice: REPLAY_READ_ONLY, help: null };
+  }
+  return { quit: false, notice: null, help: null };
 }
 
-function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
+/** The help panel over a replay view; the footer lists the panel's own keys while it is open. */
+export function replayHelpView(view: ViewModel): ViewModel {
+  const panel = helpPanel();
+  return { ...view, panel, footer: panel.keys };
+}
+
+/** The activity pane over a replay view; it renders and scrolls, and has no write path. */
+export function replayActivityView(
+  view: ViewModel,
+  state: ActivityPaneState,
+  glyphs: GlyphSet,
+): ViewModel {
+  if (view.run === null) return view;
+  const panel = activityPanePanel({ run: view.run, state, glyphs, rows: view.rows });
+  return { ...view, panel, footer: panel.keys };
+}
+
+/**
+ * The collapsed overlay is one key away: `a`/`A`/`R` reopen it and the next press confirms. Esc
+ * leaves an actionable overlay but is inert while nothing can be done with it.
+ */
+export type ApprovalKeyRoute = "overlay" | "collapse" | "reopen" | "run";
+
+export function approvalKeyRoute(
+  data: Pick<UiData, "screen" | "approval" | "approvalCollapsed">,
+  key: KeyInput,
+  input: string,
+): ApprovalKeyRoute {
+  if (data.approval === null) return "run";
+  if (data.screen !== "run") return "overlay";
+  if (data.approvalCollapsed === true) {
+    if (key.escape) return "overlay"; // already collapsed: the key goes nowhere
+    if (!key.ctrl && (input === "a" || input === "A" || input === "R")) return "reopen";
+    return "run";
+  }
+  if (key.escape && (data.approval.kind === "idle" || data.approval.kind === "failed")) {
+    return "collapse";
+  }
+  return "overlay";
+}
+
+/**
+ * `q` quits from every screen and panel, but a text field open over them owns printable keys: the
+ * intake dialog, the answer composer and the reword prompt append a bare `q`. Ctrl-C always quits
+ * so an interrupt still restores the terminal.
+ */
+export function quitsOnKey(
+  data: Pick<UiData, "intake" | "questions" | "reword">,
+  input: string,
+  key: KeyInput,
+): boolean {
+  if (key.ctrl && input === "c") return true;
+  if (key.ctrl || input !== "q") return false;
+  return !(
+    data.intake !== null ||
+    data.questions?.focus === "composer" ||
+    (data.reword ?? null) !== null
+  );
+}
+
+export function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
   const baseInput: ViewModelInput = {
     source: "live",
     screen: data.screen,
@@ -257,12 +314,26 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
     selectedTaskId: data.selectedTaskId,
     panel: null,
     notice: data.notice,
+    listOffset: data.listOffset ?? 0,
+    taskOffset: data.taskOffset ?? 0,
   };
   const base = buildViewModel(baseInput);
+  const activity = data.activity ?? null;
   if (data.help) {
     return buildViewModel({ ...baseInput, panel: helpPanel() });
   }
-  if (data.approval !== null && data.screen === "run") {
+  if (activity !== null && base.run !== null) {
+    return buildViewModel({
+      ...baseInput,
+      panel: activityPanePanel({
+        run: base.run,
+        state: activity,
+        glyphs,
+        rows: data.rows,
+      }),
+    });
+  }
+  if (data.approval !== null && data.screen === "run" && data.approvalCollapsed !== true) {
     if (base.run === null) return base;
     const run = selectedRunState(data);
     const panel = approvalPanel({
@@ -274,13 +345,24 @@ function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
     });
     return buildViewModel({ ...baseInput, panel });
   }
+  const reword = data.reword ?? null;
+  if (reword !== null && base.run !== null) {
+    const panel = rewordPanel({
+      run: base.run,
+      state: reword,
+      glyphs,
+      rows: data.rows,
+      columns: data.columns,
+    });
+    return buildViewModel({ ...baseInput, panel });
+  }
   if (data.intake !== null) {
     return buildViewModel({ ...baseInput, panel: intakePanel(data.intake, glyphs, data.rows) });
   }
   if (data.questions !== null && base.run !== null) {
     return buildViewModel({
       ...baseInput,
-      panel: questionsPanel({ run: base.run, state: data.questions, glyphs }),
+      panel: questionsPanel({ run: base.run, state: data.questions, glyphs, rows: data.rows }),
     });
   }
   if (data.confirmation !== null) {
@@ -306,12 +388,18 @@ function initialData(
     snapshot: null,
     facts: collectFacts([]),
     notice: null,
+    listOffset: 0,
+    taskOffset: 0,
     intake: null,
     approval: null,
+    approvalCollapsed: false,
     questions: null,
+    activity: null,
+    reword: null,
     confirmation: null,
     help: false,
     identity: null,
+    pendingLand: null,
   };
   // The list is newest first, so the first item is the run the list opens on.
   const view = viewOf(base, glyphs);
@@ -329,128 +417,6 @@ function gitExec(args: readonly string[], cwd: string): Promise<ExecResult> {
       resolve({ code: typeof error.code === "number" ? error.code : 1, stdout });
     });
   });
-}
-
-export interface ControlDeps {
-  readonly factory: Pick<Factory, "abort" | "retry">;
-  readonly launcher: Pick<Launcher, "launch">;
-}
-
-type ResumeAction = Extract<ControlAction, { readonly kind: "resume" }>;
-
-/**
- * The only in-process control effects: abort and retry return after writing run state, and
- * resume is a detached child. Nothing here waits for a pipeline phase; resume hands back the
- * child so the caller can watch its exit.
- */
-export function performControl(deps: ControlDeps, action: ResumeAction): Promise<LaunchResult>;
-export function performControl(
-  deps: ControlDeps,
-  action: ControlAction,
-): Promise<LaunchResult | null>;
-export async function performControl(
-  deps: ControlDeps,
-  action: ControlAction,
-): Promise<LaunchResult | null> {
-  switch (action.kind) {
-    case "abort":
-      await deps.factory.abort(action.id);
-      return null;
-    case "retry":
-      await deps.factory.retry(action.id, action.taskId);
-      return null;
-    case "resume":
-      return deps.launcher.launch({ kind: "resume", id: action.id });
-    default: {
-      const unhandled: never = action;
-      throw new Error(`unknown control action: ${String(unhandled)}`);
-    }
-  }
-}
-
-/** One detached resume per run at a time: `r` is easy to double-tap. */
-export interface ResumeGuard {
-  /** True when the id may launch; false while its child is still in flight. */
-  begin(id: string): boolean;
-  end(id: string): void;
-}
-
-export function createResumeGuard(): ResumeGuard {
-  const inFlight = new Set<string>();
-  return {
-    begin(id: string): boolean {
-      if (inFlight.has(id)) return false;
-      inFlight.add(id);
-      return true;
-    },
-    end(id: string): void {
-      inFlight.delete(id);
-    },
-  };
-}
-
-/** A non-zero resume exit: the approval overlay shows it when open, a notice otherwise. */
-export function resumeFailed(data: UiData, id: string, logPath: string, code: number): UiData {
-  const tail = tailLog(logPath, 10);
-  const failed = data.approval === null ? null : approvalExited(data.approval, code, tail);
-  if (failed !== null && failed !== data.approval) return { ...data, approval: failed };
-  return {
-    ...data,
-    notice: [`resume ${id} exited with code ${code}`, ...tail].join("\n"),
-  };
-}
-
-export interface ResumeRun extends ControlDeps {
-  readonly guard: ResumeGuard;
-  /** The UI's `setData`. */
-  readonly update: (change: (data: UiData) => UiData) => void;
-  readonly refresh: () => Promise<void>;
-}
-
-/**
- * Starts one detached `resume` and watches its exit: a repeat while the child runs is ignored,
- * and a non-zero exit is shown with the log tail instead of looking successful.
- */
-export function startResume(deps: ResumeRun, id: string): void {
-  if (!deps.guard.begin(id)) return;
-  void (async () => {
-    let result: LaunchResult;
-    try {
-      result = await performControl(deps, { kind: "resume", id });
-    } catch (err: unknown) {
-      deps.guard.end(id);
-      const message = err instanceof Error ? err.message : String(err);
-      deps.update((current) => ({ ...current, notice: message }));
-      return;
-    }
-    void result.exited.then(({ code }) => {
-      deps.guard.end(id);
-      if (code === null || code === 0) return;
-      deps.update((current) => resumeFailed(current, id, result.logPath, code));
-    });
-    try {
-      await deps.refresh();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      deps.update((current) => ({ ...current, notice: message }));
-    }
-  })();
-}
-
-/** `Factory.answer` writes the command inbox and returns; the run is not waited for. */
-export async function recordAnswer(
-  factory: Pick<Factory, "answer">,
-  changeId: string,
-  answer: string,
-  question: string,
-): Promise<void> {
-  await factory.answer(changeId, answer, question);
-}
-
-export interface SessionRun {
-  readonly session: TerminalSession;
-  /** Resolves when the UI quits and rejects when rendering throws. */
-  readonly render: () => Promise<void>;
 }
 
 /** The one place the alternate screen and raw mode are entered and restored. */
@@ -558,7 +524,10 @@ function Interactive({
         notice: null,
         intake: null,
         approval: null,
+        approvalCollapsed: false,
         questions: null,
+        activity: null,
+        reword: null,
         confirmation: null,
         help: false,
         identity: null,
@@ -700,9 +669,6 @@ function Interactive({
         case "approve-only":
           action = { kind, id };
           break;
-        case "reword":
-          action = { kind, id };
-          break;
         case "reapprove":
           action = { kind, id };
           break;
@@ -747,58 +713,81 @@ function Interactive({
     [launcher],
   );
 
-  const refreshStatus = useCallback(async (): Promise<void> => {
+  const refreshStatus = useCallback(async (): Promise<LandRefresh | null> => {
     try {
       const [status, runs] = await Promise.all([factory.status(), factory.listRuns()]);
+      const selected = dataRef.current.selectedRunId;
+      if (selected !== null && !status.runs.some((run) => run.id === selected)) stopTail();
       const pending = spawnBaseline.current;
       if (pending === null) {
-        setData((current) => syncApproval({ ...current, status, runs }));
-        return;
+        setData((current) => settleLanding(syncApproval({ ...current, status, runs })));
+        return { status, runs };
       }
       const watch = watchSpawn(pending.ids, status, pending.logPath, tailLog);
       if (watch.started !== null) {
         spawnBaseline.current = null;
-        setData((current) => syncApproval({ ...current, status, runs }));
+        setData((current) => settleLanding(syncApproval({ ...current, status, runs })));
         openRun(watch.started);
-        return;
+        return { status, runs };
       }
       setData((current) => {
         const intake = current.intake;
-        return syncApproval({
-          ...current,
-          status,
-          runs,
-          intake:
-            intake === null || intake.spawned === null
-              ? intake
-              : { ...intake, spawned: { ...intake.spawned, tail: watch.tail } },
-        });
+        return settleLanding(
+          syncApproval({
+            ...current,
+            status,
+            runs,
+            intake:
+              intake === null || intake.spawned === null
+                ? intake
+                : { ...intake, spawned: { ...intake.spawned, tail: watch.tail } },
+          }),
+        );
       });
+      return { status, runs };
     } catch {
       // A refresh failure keeps the last good status; the next poll retries.
+      return null;
     }
-  }, [factory, openRun]);
+  }, [factory, openRun, stopTail]);
+
+  // The poll asks for the open run only; the list, a pending spawn and every control keep the
+  // full refresh. Only the full refresh can settle a spawn started from a run view.
+  const statusSource = useMemo(
+    () =>
+      createStatusSource({
+        factory,
+        selectedRunId: () =>
+          dataRef.current.screen === "run" ? dataRef.current.selectedRunId : null,
+        pendingSpawn: () => spawnBaseline.current !== null,
+        update: setData,
+        refresh: refreshStatus,
+      }),
+    [factory, refreshStatus],
+  );
 
   const answering = useRef(false);
+  /** Answers already sent, per run, so a re-opened pane still reports them as recorded. */
+  const recordedAnswers = useRef(new Map<string, ReadonlySet<string>>());
 
   /** Records the answer, then waits only for the short command write, never for the run. */
   const submitAnswer = useCallback(
-    (id: string, question: string, answer: string): void => {
+    (id: string, rawQuestion: string, question: string, step: string, answer: string): void => {
       if (isReadOnly(viewRef.current) || answering.current) return;
       answering.current = true;
       void (async () => {
         try {
-          await recordAnswer(factory, id, answer, question);
+          await recordAnswer(factory, id, answer, rawQuestion);
+          recordedAnswers.current.set(
+            id,
+            withRecordedAnswer(recordedAnswers.current.get(id) ?? new Set(), step, question),
+          );
+          const run = viewRef.current.run;
           setData((current) => {
-            const questions = current.questions;
-            if (questions === null || questions.draft === null) return current;
+            if (current.questions === null || run === null) return current;
             return {
               ...current,
-              questions: {
-                ...questions,
-                draft: { ...questions.draft, recorded: true },
-                notice: null,
-              },
+              questions: recordAnswerInState(run, current.questions, step, question, current.rows),
             };
           });
           await refreshStatus();
@@ -819,6 +808,8 @@ function Interactive({
 
   /** Abort and retry return immediately; resume runs one guarded detached child per run. */
   const resumeGuard = useRef<ResumeGuard>(createResumeGuard());
+  const rewordGuard = useRef<ResumeGuard>(createResumeGuard());
+  const landGuard = useRef<LandGuard>(createLandGuard());
   const applyControl = useCallback(
     (action: ControlAction): void => {
       if (isReadOnly(viewRef.current)) return;
@@ -829,7 +820,23 @@ function Interactive({
             launcher,
             guard: resumeGuard.current,
             update: setData,
+            refresh: async () => {
+              await refreshStatus();
+            },
+          },
+          action.id,
+        );
+        return;
+      }
+      if (action.kind === "land") {
+        startLand(
+          {
+            factory,
+            launcher,
+            guard: landGuard.current,
+            update: setData,
             refresh: refreshStatus,
+            stopTail,
           },
           action.id,
         );
@@ -845,19 +852,23 @@ function Interactive({
         }
       })();
     },
-    [factory, launcher, refreshStatus],
+    [factory, launcher, refreshStatus, stopTail],
   );
 
   useEffect(() => {
     if (isReadOnly(viewRef.current)) return;
-    const poller = createStatusPoller({ poll: refreshStatus });
+    const poller = createStatusPoller({
+      poll: async () => {
+        await statusSource.poll();
+      },
+    });
     pollerRef.current = poller;
     poller.start();
     return () => {
       poller.stop();
       pollerRef.current = null;
     };
-  }, [refreshStatus]);
+  }, [statusSource]);
 
   useEffect(() => {
     const onResize = (): void => {
@@ -895,27 +906,42 @@ function Interactive({
   const keyHandler = useRef<(input: string, key: KeyInput) => void>(() => {});
   keyHandler.current = (input, key) => {
     const state = dataRef.current;
-    // `q` quits everywhere, including over the approval overlay the gate otherwise traps you in.
-    if ((key.ctrl && input === "c") || (state.approval !== null && !key.ctrl && input === "q")) {
+    if (quitsOnKey(state, input, key)) {
       exit();
       return;
     }
     if (state.approval !== null) {
-      const run = selectedRunState(state);
-      if (run !== undefined) {
-        const outcome = approvalKeys(
-          state.approval,
-          input,
-          key,
-          approvalAvailable(evidenceOf(state)),
-        );
-        if (outcome.state !== state.approval) {
-          setData((current) => ({ ...current, approval: outcome.state }));
-        }
-        if (outcome.launch !== undefined) launchApproval(run.id, outcome.launch);
-        if (outcome.resume === true) applyControl({ kind: "resume", id: run.id });
+      // A panel opened from the collapsed run view owns the keys; nothing would reopen there.
+      const route =
+        state.approvalCollapsed === true && panelOpen(state)
+          ? "run"
+          : approvalKeyRoute(state, key, input);
+      if (route === "collapse") {
+        setData((current) => ({ ...current, approvalCollapsed: true }));
+        return;
       }
-      return;
+      if (route === "reopen") {
+        setData((current) => ({ ...current, approvalCollapsed: false }));
+        return;
+      }
+      if (route === "overlay") {
+        const run = selectedRunState(state);
+        if (run !== undefined) {
+          const outcome = approvalKeys(
+            state.approval,
+            input,
+            key,
+            approvalAvailable(evidenceOf(state)),
+          );
+          if (outcome.state !== state.approval) {
+            setData((current) => ({ ...current, approval: outcome.state }));
+          }
+          if (outcome.launch !== undefined) launchApproval(run.id, outcome.launch);
+          if (outcome.resume === true) applyControl({ kind: "resume", id: run.id });
+        }
+        return;
+      }
+      // Collapsed and not an approval key: the run keys own it again.
     }
     if (state.intake !== null) {
       if (key.escape) {
@@ -935,16 +961,23 @@ function Interactive({
     if (state.questions !== null) {
       const run = viewRef.current.run;
       if (run !== null) {
-        if (key.escape && state.questions.draft === null) {
+        const outcome = questionsKeys(run, state.questions, input, key, state.rows);
+        if (outcome.close === true) {
           setData((current) => ({ ...current, questions: null }));
           return;
         }
-        const outcome = questionsKeys(run, state.questions, input, key);
         if (outcome.state !== state.questions) {
           setData((current) => ({ ...current, questions: outcome.state }));
         }
         if (outcome.answer !== undefined) {
-          submitAnswer(run.id, outcome.answer.question, outcome.answer.answer);
+          const record = run.questions[state.questions.selected];
+          submitAnswer(
+            run.id,
+            outcome.answer.rawQuestion,
+            outcome.answer.question,
+            record?.step ?? "",
+            outcome.answer.answer,
+          );
         }
       }
       return;
@@ -970,6 +1003,70 @@ function Interactive({
       }
       if (outcome === "quit") exit();
       return;
+    }
+    const activity = state.activity ?? null;
+    if (activity !== null) {
+      const run = viewRef.current.run;
+      if (run === null) {
+        setData((current) => ({ ...current, activity: null }));
+        return;
+      }
+      const outcome = activityPaneKeys(run, activity, input, key, activityPaneBodyRows(state.rows));
+      if (outcome.close === true) {
+        setData((current) => ({ ...current, activity: null }));
+        return;
+      }
+      if (outcome.state !== activity) {
+        setData((current) => ({ ...current, activity: outcome.state }));
+      }
+      return;
+    }
+    const reword = state.reword ?? null;
+    if (reword !== null) {
+      const run = viewRef.current.run;
+      if (run === null) {
+        setData((current) => ({ ...current, reword: null }));
+        return;
+      }
+      const outcome = rewordKeys(run, reword, input, key, state.rows, state.columns);
+      if (outcome.close === true) {
+        setData((current) => ({ ...current, reword: null }));
+        return;
+      }
+      if (outcome.state !== reword) {
+        setData((current) => ({ ...current, reword: outcome.state }));
+      }
+      if (outcome.launch !== undefined) {
+        startReword(
+          { launcher, guard: rewordGuard.current, update: setData },
+          run.id,
+          outcome.launch.prompt,
+        );
+      }
+      return;
+    }
+    // The panel owns its keys, so its intent lives here: `w` is inert or absent without
+    // `run.reword`, and the panel reads that predicate instead of re-deriving it.
+    if (!key.ctrl && input === "w" && !panelOpen(state) && state.screen === "run") {
+      const run = viewRef.current.run;
+      if (run !== null) {
+        switch (run.reword.state) {
+          case "available": {
+            const opened = openReword(run);
+            if (opened !== null) setData((current) => ({ ...current, reword: opened }));
+            return;
+          }
+          case "inert":
+            setData((current) => ({ ...current, notice: run.reword.reason }));
+            return;
+          case "absent":
+            return;
+          default: {
+            const unhandled: never = run.reword.state;
+            throw new Error(`unknown reword state: ${String(unhandled)}`);
+          }
+        }
+      }
     }
     if (!key.ctrl && input === "n") {
       submitting.current = false;
@@ -998,9 +1095,19 @@ function Interactive({
         return;
       case "open-questions": {
         const run = current.run;
-        const questions = run === null ? null : openQuestions(run);
+        const questions =
+          run === null
+            ? null
+            : openQuestions(run, recordedAnswers.current.get(run.id) ?? new Set());
         if (questions !== null) {
           setData((state) => ({ ...state, questions, confirmation: null }));
+        }
+        return;
+      }
+      case "open-activity": {
+        const run = current.run;
+        if (run !== null) {
+          setData((state) => ({ ...state, activity: openActivityPane(run) }));
         }
         return;
       }
@@ -1027,6 +1134,13 @@ function Interactive({
         }
         return;
       }
+      case "land": {
+        const action = landConfirmation(current, landGuard.current);
+        if (action !== null) {
+          setData((state) => ({ ...state, confirmation: action, questions: null }));
+        }
+        return;
+      }
       case "clear-task":
         setData((state) => ({ ...state, selectedTaskId: null }));
         return;
@@ -1036,13 +1150,16 @@ function Interactive({
         foldRef.current = null;
         setData((state) => ({
           ...state,
+          activity: null,
           screen: "list",
           selectedTaskId: null,
           snapshot: null,
           facts: collectFacts([]),
           notice: null,
           approval: null,
+          approvalCollapsed: false,
           questions: null,
+          reword: null,
           confirmation: null,
           help: false,
           identity: null,
@@ -1054,9 +1171,21 @@ function Interactive({
         const index = items.findIndex((item) => item.id === current.selectedRunId);
         const step = intent.kind === "next-run" ? 1 : -1;
         const probe = index === -1 ? 0 : index + step;
-        const next = items[Math.min(items.length - 1, Math.max(0, probe))];
+        const clamped = Math.min(items.length - 1, Math.max(0, probe));
+        const next = items[clamped];
         if (next !== undefined) {
-          setData((state) => ({ ...state, selectedRunId: next.id, selectedTaskId: null }));
+          const offset = nextOffset(
+            current.listWindow.offset,
+            clamped,
+            items.length,
+            current.listWindow.size,
+          );
+          setData((state) => ({
+            ...state,
+            selectedRunId: next.id,
+            selectedTaskId: null,
+            listOffset: offset,
+          }));
         }
         return;
       }
@@ -1067,12 +1196,95 @@ function Interactive({
         const index = tasks.findIndex((task) => task.selected);
         const step = intent.kind === "next-task" ? 1 : -1;
         const probe = index === -1 ? 0 : index + step;
-        const next = tasks[Math.min(tasks.length - 1, Math.max(0, probe))];
+        const clamped = Math.min(tasks.length - 1, Math.max(0, probe));
+        const next = tasks[clamped];
         if (next !== undefined) {
-          setData((state) => ({ ...state, selectedTaskId: next.id }));
+          const offset = nextOffset(
+            current.taskWindow.offset,
+            clamped,
+            tasks.length,
+            current.taskWindow.size,
+          );
+          setData((state) => ({ ...state, selectedTaskId: next.id, taskOffset: offset }));
         }
         return;
       }
+      case "page-up":
+      case "page-down":
+        if (current.screen === "list") {
+          const items = current.list;
+          if (items.length === 0) return;
+          const size = current.listWindow.size;
+          const step = pageSize(size) * (intent.kind === "page-down" ? 1 : -1);
+          const index = items.findIndex((item) => item.id === current.selectedRunId);
+          const clamped = Math.min(
+            items.length - 1,
+            Math.max(0, (index === -1 ? 0 : index) + step),
+          );
+          const next = items[clamped];
+          if (next !== undefined) {
+            const offset = moveBy(current.listWindow.offset, step, items.length, size);
+            setData((state) => ({
+              ...state,
+              selectedRunId: next.id,
+              selectedTaskId: null,
+              listOffset: offset,
+            }));
+          }
+          return;
+        }
+        {
+          const tasks = current.run?.tasks ?? [];
+          if (tasks.length === 0) return;
+          const size = current.taskWindow.size;
+          const step = pageSize(size) * (intent.kind === "page-down" ? 1 : -1);
+          const index = tasks.findIndex((task) => task.selected);
+          const clamped = Math.min(
+            tasks.length - 1,
+            Math.max(0, (index === -1 ? 0 : index) + step),
+          );
+          const next = tasks[clamped];
+          if (next !== undefined) {
+            const offset = moveBy(current.taskWindow.offset, step, tasks.length, size);
+            setData((state) => ({ ...state, selectedTaskId: next.id, taskOffset: offset }));
+          }
+          return;
+        }
+      case "first":
+      case "last":
+        if (current.screen === "list") {
+          const items = current.list;
+          if (items.length === 0) return;
+          const index = intent.kind === "first" ? 0 : items.length - 1;
+          const next = items[index];
+          if (next !== undefined) {
+            const offset =
+              intent.kind === "first"
+                ? firstOffset(items.length)
+                : lastOffset(items.length, current.listWindow.size);
+            setData((state) => ({
+              ...state,
+              selectedRunId: next.id,
+              selectedTaskId: null,
+              listOffset: offset,
+            }));
+          }
+          return;
+        }
+        {
+          const tasks = current.run?.tasks ?? [];
+          if (tasks.length === 0) return;
+          const index = intent.kind === "first" ? 0 : tasks.length - 1;
+          const next = tasks[index];
+          if (next !== undefined) {
+            const offset =
+              intent.kind === "first"
+                ? firstOffset(tasks.length)
+                : lastOffset(tasks.length, current.taskWindow.size);
+            setData((state) => ({ ...state, selectedTaskId: next.id, taskOffset: offset }));
+          }
+          return;
+        }
       default:
         return;
     }
@@ -1088,6 +1300,21 @@ export interface ReplayViewOptions {
   readonly columns: number;
   readonly rows: number;
   readonly env?: TerminalEnv;
+}
+
+/** The terminal size a replay renders at; a resize replaces it and rebuilds the view. */
+export interface ReplaySize {
+  readonly columns: number;
+  readonly rows: number;
+}
+
+/** The size after a resize: stdout's report where it has one, the last known value otherwise. */
+export function nextReplaySize(
+  current: ReplaySize,
+  columns: number | undefined,
+  rows: number | undefined,
+): ReplaySize {
+  return { columns: columns ?? current.columns, rows: rows ?? current.rows };
 }
 
 /** The same view-model the live entry builds, with the approval panel driven by the stream. */
@@ -1122,25 +1349,69 @@ export function replayView(load: ReplayLoad, options: ReplayViewOptions): ViewMo
 }
 
 interface ReplayProps {
-  readonly view: ViewModel;
+  readonly load: ReplayLoad;
+  readonly options: ReplayViewOptions;
   readonly glyphs: GlyphSet;
   readonly depth: ColorDepth;
 }
 
-function Replay({ view, glyphs, depth }: ReplayProps): ReactElement {
+function Replay({ load, options, glyphs, depth }: ReplayProps): ReactElement {
   const { exit } = useApp();
+  const [size, setSize] = useState<ReplaySize>({ columns: options.columns, rows: options.rows });
   const [notice, setNotice] = useState<string | null>(null);
-  const current = useMemo(() => (notice === null ? view : { ...view, notice }), [view, notice]);
+  const [help, setHelp] = useState(false);
+  const [activity, setActivity] = useState<ActivityPaneState | null>(null);
+  const view = useMemo(
+    () => replayView(load, { ...options, columns: size.columns, rows: size.rows }),
+    [load, options, size],
+  );
+  const base = useMemo(() => (notice === null ? view : { ...view, notice }), [view, notice]);
+  const withActivity = activity === null ? base : replayActivityView(base, activity, glyphs);
+  const current = help ? replayHelpView(withActivity) : withActivity;
   const currentRef = useRef(current);
   currentRef.current = current;
 
+  // Rebuild at the new size so the frame never keeps drawing past a shrunken terminal.
+  useEffect(() => {
+    const onResize = (): void => {
+      setSize((last) => nextReplaySize(last, process.stdout.columns, process.stdout.rows));
+    };
+    process.stdout.on("resize", onResize);
+    return () => {
+      process.stdout.off("resize", onResize);
+    };
+  }, []);
+
   useInput((input, key) => {
-    const outcome = replayKey(currentRef.current, input, key);
+    const running = currentRef.current;
+    if (activity === null && !help && !key.ctrl && input === "L" && running.run !== null) {
+      setActivity(openActivityPane(running.run));
+      return;
+    }
+    if (activity !== null && running.run !== null) {
+      const outcome = activityPaneKeys(
+        running.run,
+        activity,
+        input,
+        key,
+        activityPaneBodyRows(running.rows),
+      );
+      if (outcome.close === true) {
+        setActivity(null);
+        return;
+      }
+      if (outcome.state !== activity) {
+        setActivity(outcome.state);
+        return;
+      }
+    }
+    const outcome = replayKey(running, input, key);
     if (outcome.quit) {
       exit();
       return;
     }
     if (outcome.notice !== null) setNotice(outcome.notice);
+    if (outcome.help !== null) setHelp(outcome.help);
   });
 
   return <Frame viewModel={current} glyphs={glyphs} depth={depth} />;
@@ -1150,18 +1421,18 @@ async function runReplay(options: TerminalOptions, replay: string): Promise<numb
   const { glyphs, depth } = themeFor(options);
   const env = terminalEnv(options.env);
   const load = await readReplayFile(replay);
-  const view = replayView(load, {
+  const viewOptions: ReplayViewOptions = {
     now: Date.now(),
     ascii: options.ascii,
     columns: options.columns,
     rows: options.rows,
     env,
-  });
+  };
   if (options.once) {
     options.out(
       await renderFrame(
-        view,
-        { columns: options.columns, rows: options.rows },
+        replayView(load, viewOptions),
+        { columns: viewOptions.columns, rows: viewOptions.rows },
         { ascii: options.ascii, env },
       ),
     );
@@ -1177,12 +1448,16 @@ async function runReplay(options: TerminalOptions, replay: string): Promise<numb
     await runInSession({
       session,
       render: async () => {
-        const instance = render(<Replay view={view} glyphs={glyphs} depth={depth} />, {
-          stdout: process.stdout,
-          stdin: process.stdin,
-          patchConsole: false,
-          exitOnCtrlC: false,
-        });
+        const instance = render(
+          <Replay load={load} options={viewOptions} glyphs={glyphs} depth={depth} />,
+          {
+            stdout: process.stdout,
+            stdin: process.stdin,
+            patchConsole: false,
+            exitOnCtrlC: false,
+            debug: options.frames === true,
+          },
+        );
         await instance.waitUntilExit();
       },
     });
