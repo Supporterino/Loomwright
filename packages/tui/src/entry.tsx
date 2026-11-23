@@ -751,13 +751,15 @@ function Interactive({
     }
   }, [factory, openRun, stopTail]);
 
-  // The poll asks for the open run only; the list (and every control) keeps the full refresh.
+  // The poll asks for the open run only; the list, a pending spawn and every control keep the
+  // full refresh. Only the full refresh can settle a spawn started from a run view.
   const statusSource = useMemo(
     () =>
       createStatusSource({
         factory,
         selectedRunId: () =>
           dataRef.current.screen === "run" ? dataRef.current.selectedRunId : null,
+        pendingSpawn: () => spawnBaseline.current !== null,
         update: setData,
         refresh: refreshStatus,
       }),

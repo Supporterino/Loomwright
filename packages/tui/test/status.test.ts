@@ -186,6 +186,39 @@ describe("the status source polls the selected run only", () => {
     expect(current.status.workspaceUsage).toBe(WORKSPACE);
   });
 
+  test("a run started from the run view still finds the spawn through the full refresh", async () => {
+    const calls: (string | undefined)[] = [];
+    const factory: Pick<Factory, "status"> = {
+      async status(changeId?: string): Promise<StatusDocument> {
+        calls.push(changeId);
+        return fullStatus();
+      },
+    };
+    let current = uiData();
+    let refreshes = 0;
+    const source = createStatusSource({
+      factory,
+      selectedRunId: () => SELECTED,
+      // The spawn was started while SELECTED's run view was open; only the full refresh settles it.
+      pendingSpawn: () => true,
+      update: (change) => {
+        current = change(current);
+      },
+      refresh: async () => {
+        refreshes += 1;
+        const status = await factory.status();
+        current = { ...current, status, runs: status.runs };
+        return { status, runs: status.runs };
+      },
+    });
+
+    await source.poll();
+
+    expect(calls).toEqual([undefined]);
+    expect(refreshes).toBe(1);
+    expect(current.status.runs.map((run) => run.id)).toEqual([SELECTED, OTHER]);
+  });
+
   test("a removed run falls back to the full status", async () => {
     const calls: (string | undefined)[] = [];
     const factory: Pick<Factory, "status"> = {
