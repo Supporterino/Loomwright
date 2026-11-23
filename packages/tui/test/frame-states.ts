@@ -759,12 +759,24 @@ function logFrame(
   return buildViewModel({ ...input, panel });
 }
 
+function logRunScrolled(): ActivityPaneState {
+  return { scope: "run", taskId: null, offset: 10, follow: false };
+}
+
 function logTaskScrolled(): ActivityPaneState {
   return { scope: "task", taskId: "first", offset: 10, follow: false };
 }
 
 function logRepoScrolled(): ActivityPaneState {
   return { scope: "repo", taskId: "first", offset: 10, follow: false };
+}
+
+function logTaskFollow(): ActivityPaneState {
+  return { scope: "task", taskId: "first", offset: 0, follow: true };
+}
+
+function logRepoFollow(): ActivityPaneState {
+  return { scope: "repo", taskId: "first", offset: 0, follow: true };
 }
 
 /** Every snapshot state, built for the size it renders at. */
@@ -799,7 +811,10 @@ type StateName =
   | "approval-banner"
   | "approval-reopened"
   | "log-follow"
+  | "log-run-scrolled"
+  | "log-task-follow"
   | "log-task-scrolled"
+  | "log-repo-follow"
   | "log-repo-scrolled";
 
 export const STATES: Record<StateName, (size: FrameSize) => ViewModel> = {
@@ -836,7 +851,10 @@ export const STATES: Record<StateName, (size: FrameSize) => ViewModel> = {
   "approval-banner": approvalBanner,
   "approval-reopened": approvalReopened,
   "log-follow": (size) => logFrame(size, null, openActivityPane),
+  "log-run-scrolled": (size) => logFrame(size, null, logRunScrolled),
+  "log-task-follow": (size) => logFrame(size, "first", logTaskFollow),
   "log-task-scrolled": (size) => logFrame(size, "first", logTaskScrolled),
+  "log-repo-follow": (size) => logFrame(size, "first", logRepoFollow),
   "log-repo-scrolled": (size) => logFrame(size, "first", logRepoScrolled),
 };
 

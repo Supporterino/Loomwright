@@ -1,0 +1,40 @@
++----------------------------------------------------------------------------------------------------------------------+
+| Activity - first                                                                                                     |
+| first - agent - first line 14                                                                                        |
+| first - agent - first line 15                                                                                        |
+| first - agent - first line 16                                                                                        |
+| first - agent - first line 17                                                                                        |
+| first - agent - first line 18                                                                                        |
+| first - agent - first line 19                                                                                        |
+| first - agent - first line 20                                                                                        |
+| first - agent - first line 21                                                                                        |
+| first - agent - first line 22                                                                                        |
+| first - agent - first line 23                                                                                        |
+| first - agent - first line 24                                                                                        |
+| first - agent - first line 25                                                                                        |
+| first - agent - first line 26                                                                                        |
+| first - agent - first line 27                                                                                        |
+| first - agent - first line 28                                                                                        |
+| first - agent - first line 29                                                                                        |
+| first - agent - first line 30                                                                                        |
+| first - agent - first line 31                                                                                        |
+| first - agent - first line 32                                                                                        |
+| first - agent - first line 33                                                                                        |
+| first - agent - first line 34                                                                                        |
+| first - agent - first line 35                                                                                        |
+| first - agent - first line 36                                                                                        |
+| first - agent - first line 37                                                                                        |
+| first - agent - first line 38                                                                                        |
+| first - agent - first line 39                                                                                        |
+| first - agent - first line 40                                                                                        |
+| first - agent - first line 41                                                                                        |
+| first - agent - first line 42                                                                                        |
+| first - agent - first line 43                                                                                        |
+| first - agent - first line 44                                                                                        |
+| first - agent - first line 45                                                                                        |
+| first - agent - first line 46                                                                                        |
+| first - agent - first line 47                                                                                        |
+| first - agent - first line 48                                                                                        |
+| j/k scroll - PgUp/PgDn page - g/G ends - f follow on - Tab scope - Esc back                                          |
++----------------------------------------------------------------------------------------------------------------------+
+j/k scroll - PgUp/PgDn page - g/G ends - f follow on - Tab scope - Esc back
