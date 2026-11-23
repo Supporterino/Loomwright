@@ -386,6 +386,29 @@ describe("package scripts", () => {
       expect(checkShell(cmd, realCtx)).toEqual({ allowed: true });
   });
 
+  test("a version-tagged package spec does not hide publish or global installs", () => {
+    for (const cmd of [
+      "npx npm@latest publish",
+      "pnpx npm@10 publish",
+      "yarn@1.22.19 publish",
+      "bun@1.1.0 publish",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("publishing is not allowed");
+    for (const cmd of [
+      "npx npm@10 install -g left-pad",
+      "npx npm@latest install --global left-pad",
+      "bun@1.1.0 add -g left-pad",
+    ])
+      expect(reason(cmd, scriptsCtx)).toContain("global installs change the machine");
+    expect(reason("npx -c 'npm@latest publish'", scriptsCtx)).toContain(
+      "publishing is not allowed",
+    );
+    expect(reason("npx -c 'npm@10 install -g left-pad'", scriptsCtx)).toContain(
+      "global installs change the machine",
+    );
+    expect(checkShell("npx npm@latest run lint", scriptsCtx)).toEqual({ allowed: true });
+  });
+
   test("npm exec and its x alias inspect the wrapped command like npx", () => {
     for (const cmd of [
       "npm exec -- git push",

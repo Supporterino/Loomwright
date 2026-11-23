@@ -2804,8 +2804,10 @@ function checkSimple(state, cmd, stdin) {
     state.cwd = undefined;
     return;
   }
-  if (PACKAGE_MANAGERS.has(base))
-    checkPackageManager(state, base, args, { redirects: cmd.redirects, stdin });
+  const at = base.lastIndexOf("@");
+  const tool = at > 0 && PACKAGE_MANAGERS.has(base.slice(0, at)) ? base.slice(0, at) : base;
+  if (PACKAGE_MANAGERS.has(tool))
+    checkPackageManager(state, tool, args, { redirects: cmd.redirects, stdin });
   const interpreter = base.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     const operands = [];

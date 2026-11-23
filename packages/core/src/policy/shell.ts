@@ -1701,8 +1701,12 @@ function checkSimple(
     state.cwd = undefined;
     return;
   }
-  if (PACKAGE_MANAGERS.has(base))
-    checkPackageManager(state, base, args, { redirects: cmd.redirects, stdin });
+  // `npx npm@latest publish` runs the tagged package's bin: the version tag must not hide the
+  // package manager from the publish and global-install checks.
+  const at = base.lastIndexOf("@");
+  const tool = at > 0 && PACKAGE_MANAGERS.has(base.slice(0, at)) ? base.slice(0, at) : base;
+  if (PACKAGE_MANAGERS.has(tool))
+    checkPackageManager(state, tool, args, { redirects: cmd.redirects, stdin });
   const interpreter = base.replace(/\d+(\.\d+)*$/, "");
   if ((interpreter === "perl" || interpreter === "ruby") && args.some(isInPlaceFlag)) {
     // -i edits the operands in place: they are writes.
