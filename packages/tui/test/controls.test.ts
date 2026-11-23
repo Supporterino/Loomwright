@@ -23,6 +23,13 @@ import {
   recordKey,
 } from "../src/controls/questions.tsx";
 import { initialReword, openReword, type RewordState, rewordKeys } from "../src/controls/reword.ts";
+import { runInSession, viewOf } from "../src/entry.tsx";
+import {
+  actionArgs,
+  type ExitResult,
+  type LaunchAction,
+  type LaunchResult,
+} from "../src/launch/launcher.ts";
 import {
   createLandGuard,
   createResumeGuard,
@@ -34,22 +41,14 @@ import {
   resumeFailed,
   resumeStarted,
   rewordFailed,
-  runInSession,
   settleLanding,
   startLand,
   startResume,
   startReword,
-  type UiData,
-  viewOf,
-} from "../src/entry.tsx";
-import {
-  actionArgs,
-  type ExitResult,
-  type LaunchAction,
-  type LaunchResult,
-} from "../src/launch/launcher.ts";
+} from "../src/model/controls.ts";
 import { collectFacts } from "../src/model/facts.ts";
 import type { KeyInput } from "../src/model/keys.ts";
+import type { UiData } from "../src/model/ui-data.ts";
 import { buildViewModel, type RunDetail, type ViewModelInput } from "../src/model/view-model.ts";
 import { createTerminalSession, type TerminalSession } from "../src/session.ts";
 import { answerRecorded } from "../src/strings.ts";
