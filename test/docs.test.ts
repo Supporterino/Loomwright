@@ -311,13 +311,20 @@ describe("documentation", () => {
     expect(events).toContain("live driver");
     expect(events).toContain("persisted immediately");
     expect(events).toContain("drops the late duplicate");
+    // `answer` uses the inbox only for a live driver and is persisted immediately otherwise.
+    // The missing-run exception (an answer for a run id with no run file keeps the inbox
+    // write) is not named in docs/events.md yet; the behaviour is pinned by the
+    // "an answer for a missing run keeps the inbox file" factory test instead.
+    expect(events).toContain("uses the inbox only while a live driver");
     expect(read("docs/cli.md")).toContain("docs/events.md");
   });
 
   test("the architecture and README mention the event stream", () => {
     const architecture = read("ARCHITECTURE.md");
     expect(architecture).toContain(".factory/events/");
+    expect(architecture).toContain(".factory/events/<id>.jsonl");
     expect(architecture).toContain(".factory/commands/");
+    expect(architecture).toContain("live-driver");
     expect(architecture).toContain("packages/core/src/events/");
     expect(read("README.md")).toContain("loomwright events");
   });

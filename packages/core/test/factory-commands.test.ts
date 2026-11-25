@@ -435,6 +435,27 @@ describe("Factory commands", () => {
     expect(questionEvents()).toHaveLength(1);
   });
 
+  test("an answer for a missing run keeps the inbox file", async () => {
+    const factory = await open(fx.root);
+
+    await factory.answer(ID, "yes", "Ship it?");
+
+    // The run file does not exist, so the writer keeps the inbox write for a later process.
+    expect(loadRun(fx.root, ID)).toBeUndefined();
+    const files = readdirSync(inboxOf());
+    expect(files).toHaveLength(1);
+    const fileName = files[0];
+    if (fileName === undefined) throw new Error("the answer did not write an inbox file");
+    expect(JSON.parse(readFileSync(join(inboxOf(), fileName), "utf8"))).toMatchObject({
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "yes",
+    });
+    expect(existsSync(join(fx.root, ".factory", "clarifications", `${ID}.md`))).toBe(false);
+    expect(existsSync(join(fx.root, ".factory", "events", `${ID}.jsonl`))).toBe(false);
+  });
+
   test("a re-delivered answer is a no-op", async () => {
     seedQuestion();
     const factory = await open(fx.root);

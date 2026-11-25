@@ -509,6 +509,8 @@ describe("an idle answer is persisted and shown answered", () => {
     // A fresh TUI starts with an empty `recorded` set; only run state can settle the row.
     const state = openQuestions(answered);
     if (state === null) throw new Error("the pane did not open");
+    // No unanswered record remains, so opening selects the first record.
+    expect(state.selected).toBe(0);
     expect(state.recorded.size).toBe(0);
     expect(panelText(answered, state)).toContain("answered — public /health");
     expect(panelText(answered, state)).not.toContain(answerRecorded);
