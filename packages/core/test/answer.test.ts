@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readEvents } from "../src/events/reader.ts";
@@ -111,6 +111,41 @@ describe("applyAnswerCommand", () => {
       answer: "late",
     });
     expect(loadRun(root, ID)?.clarifications).toHaveLength(1);
+  });
+
+  test("an answer whose clarification rewrite fails still emits the durable answer once", async () => {
+    save([unanswered]);
+    // Block the local clarification write so the rewrite throws after the run is saved.
+    mkdirSync(join(root, ".factory"), { recursive: true });
+    writeFileSync(join(root, ".factory", "clarifications"), "");
+    const applied: string[] = [];
+
+    await expect(
+      applyAnswerCommand(
+        root,
+        ID,
+        { question: "Ship it?", answer: "yes" },
+        { onApplied: (record) => applied.push(record.question) },
+      ),
+    ).rejects.toThrow();
+
+    expect(applied).toEqual(["Ship it?"]);
+    expect(loadRun(root, ID)?.clarifications[0]).toMatchObject({
+      status: "answered",
+      answer: "yes",
+    });
+
+    rmSync(join(root, ".factory", "clarifications"));
+    const result = await applyAnswerCommand(
+      root,
+      ID,
+      { question: "Ship it?", answer: "yes" },
+      { onApplied: (record) => applied.push(record.question) },
+    );
+
+    expect(result).toBe("unchanged");
+    expect(applied).toEqual(["Ship it?"]);
+    expect(readFileSync(questionsFile(), "utf8")).toContain("**Answer:** yes");
   });
 
   test("an answer with no driver is persisted immediately and emits one event", async () => {

@@ -73,6 +73,8 @@ export async function applyAnswerCommand(
       answered = record;
     }
     saveRun(root, current);
+    // Emit before the rewrite: a failing rewrite must not swallow the durable answer's event.
+    options?.onApplied?.(answered);
     writeClarifications({
       root,
       id,
@@ -81,6 +83,5 @@ export async function applyAnswerCommand(
     });
     return { result: "applied", record: answered };
   });
-  if (locked.result === "applied") options?.onApplied?.(locked.record);
   return locked.result;
 }
