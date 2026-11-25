@@ -389,34 +389,30 @@ and the footer SHALL say why. `q` SHALL still quit from every state.
 
 ### Requirement: Questions are recorded and answered later
 
-The TUI SHALL list the `question.raised` records of the selected run from the snapshot. Opening the
-questions pane SHALL select the first unanswered record, or the first record when none is unanswered,
-and SHALL send an answer through `Factory.answer`, which drops a command file the driving process
-applies at its next safe point. Because a run started from the TUI has no TTY, the UI SHALL label the
-answer "recorded — applies at the next step" and MAY say "answered" only after `question.answered`
-arrives, and SHALL point at the run's `questions.md`. The UI MUST NOT wait for the answer to be
-applied and MUST NOT block the run.
+The TUI SHALL list the `question.raised` records of the selected run from the snapshot. Opening the questions pane SHALL select the first unanswered record, or the first record when none is unanswered, and SHALL send an answer through `Factory.answer`, which persists the answer immediately when no live driver owns the run and otherwise drops a command file the driving process applies at its next safe point. The UI SHALL read `answered — <answer>` from the refreshed run state once the answer is persisted, including after a restart; the label `recorded — applies at the next step` SHALL describe only the live-driver window and SHALL NOT be the settled state of an answer the core persisted. The UI MAY say "answered" after `question.answered` arrives, and SHALL point at the run's `questions.md`. The UI MUST NOT wait for the answer to be applied and MUST NOT block the run.
 
-`Enter` on a selected unanswered record SHALL open a composer. In the composer, printable keys
-(including `j` and `k`) SHALL append text, `Ctrl-J` SHALL insert a newline, backspace SHALL delete the
-last character, `Enter` SHALL record the answer, and `Esc` SHALL discard the composer and keep the
-pane open. `j`/`k` and the arrow keys SHALL navigate the records whenever no composer is open, and a
-second `Esc` SHALL close the pane. While a composer is open, navigation keys SHALL leave the composer
-alone and the footer SHALL say `Esc leaves the composer to navigate`, so no key is silently dead. An
-empty or whitespace-only answer SHALL be refused in place with the existing notice. Only one answer
-SHALL be in flight at a time.
+`Enter` on a selected unanswered record SHALL open a composer. In the composer, printable keys (including `j` and `k`) SHALL append text, `Ctrl-J` SHALL insert a newline, backspace SHALL delete the last character, `Enter` SHALL record the answer, and `Esc` SHALL discard the composer and keep the pane open. `j`/`k` and the arrow keys SHALL navigate the records whenever no composer is open, and a second `Esc` SHALL close the pane. While a composer is open, navigation keys SHALL leave the composer alone and the footer SHALL say `Esc leaves the composer to navigate`, so no key is silently dead. An empty or whitespace-only answer SHALL be refused in place with the existing notice. Only one answer SHALL be in flight at a time.
 
-After a successful record the pane SHALL stay open, SHALL keep the recorded row reading
-`recorded — applies at the next step` until `question.answered` arrives, and SHALL advance the
-selection to the next unanswered record. When no unanswered record remains the selection SHALL stay
-on the recorded record. Many records SHALL scroll inside the pane and the selected record SHALL
-always be visible.
+After a successful record the pane SHALL stay open, SHALL keep the row reading `recorded — applies at the next step` until the answer is persisted or `question.answered` arrives, and SHALL advance the selection to the next unanswered record. When no unanswered record remains the selection SHALL stay on the recorded record. Many records SHALL scroll inside the pane and the selected record SHALL always be visible.
 
 #### Scenario: an answer is recorded, then confirmed
 
 - **WHEN** the user answers an `unanswered` question
 - **THEN** `Factory.answer` is called with the answer and the question
 - **AND** the row says `recorded — applies at the next step` until `question.answered` arrives
+- **AND** the row then says `answered` with the recorded answer
+
+#### Scenario: an idle answer is persisted and shown answered
+
+- **WHEN** the user answers an `unanswered` question on a run with no live driver
+- **THEN** `Factory.answer` is called with the answer and the question
+- **AND** after the refresh the row reads `answered — <answer>` from the run state
+- **AND** reopening the pane in a fresh TUI reads the same row and offers no composer
+
+#### Scenario: a driven answer stays recorded until the driver applies it
+
+- **WHEN** a live driver owns the run and the user answers an `unanswered` question
+- **THEN** the row says `recorded — applies at the next step` until `question.answered` arrives
 - **AND** the row then says `answered` with the recorded answer
 
 #### Scenario: the run is not asked
@@ -432,10 +428,9 @@ always be visible.
 
 #### Scenario: answer then advance keeps the pane open
 
-- **WHEN** the pane holds three records and the first two are unanswered and the user answers the
-  first
+- **WHEN** the pane holds three records and the first two are unanswered and the user answers the first
 - **THEN** the second record is selected and the pane is still open
-- **AND** the first record still reads `recorded — applies at the next step`
+- **AND** the first record reads `recorded — applies at the next step` until the answer is persisted, then `answered`
 - **AND** the footer lists `j`/`k` navigate, `Enter` answer and `Esc` close
 
 #### Scenario: Ctrl-J inserts a newline
