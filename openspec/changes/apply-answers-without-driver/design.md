@@ -58,9 +58,12 @@ already-answered record.
 
 Residual race: a driver can claim the active lock and append its own event between the direct
 path's re-check and its append of `question.answered`. Both writers would allocate the same `seq`;
-the state remains correct and the answer is emitted once, but a tailer reports a sequence gap.
-Mitigation: the answer is idempotent, the direct path leaves no inbox file and the window is one
-event append wide. Accepted for this change; a future writer-side sequence lock would close it.
+the run state remains correct and the answer is emitted once. The documented reader contract
+(`docs/events.md`, ADR-0050) already covers this case: a stored read returns both lines and reports
+no gap, while a live follower (`events --follow`, `status --watch`) drops the late duplicate and
+emits no gap marker. No reader or tailer change belongs to this change. Mitigation: the answer is
+idempotent, the direct path leaves no inbox file and the window is one event append wide. Accepted
+for this change; a future writer-side sequence lock would prevent the duplicate line.
 
 After an `applied` or `unchanged` result the direct path removes every `answer` file in the
 inbox whose `question` matches the command, so an outdated answer cannot be applied by a driver
@@ -101,8 +104,8 @@ Rejected: adding a terminal sink. A control write from a TUI would corrupt the f
 
 Rejected: writing only run state and no event. The stream would no longer be the projection of the
 run, `status --watch` and replay would miss the answer, and the TUI would have to prefer
-`run.clarifications` over its snapshot for answered records. Emitting keeps the one-writer model
-and needs no TUI change.
+`run.clarifications` over its snapshot for answered records. Emitting keeps the stream the one
+projection of the run and needs no TUI change.
 
 Rejected: requiring the install marker to read `logs.redact`. It would make the fix fail exactly
 where the pane already opens.
@@ -141,7 +144,10 @@ fallback remains schema-valid.
 
 - **Sequence race.** A driver that claims the active lock between the direct path's re-check and
   its event append can allocate the same `seq`. The answer is written once and the state is
-  correct, but the tailer reports a gap until a future writer-side lock exists.
+  correct. The reader behaviour is the documented one: a stored read keeps both lines and reports
+  no gap, and a live follower drops the late duplicate and emits no gap marker, so this change
+  must not add a gap-marker expectation or change the tailer. The residual risk is the duplicate
+  line in the log, which a future writer-side lock would prevent.
 - **Clarification-file failure after the event.** The run and event are already durable when
   `writeClarifications` runs. A filesystem error surfaces to the caller and can leave the files
   stale; a re-delivered answer rewrites them (`unchanged`) without a second event.
