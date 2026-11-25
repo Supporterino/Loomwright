@@ -147,42 +147,42 @@
     },
     ".opencode/commands/opsx-apply.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "204af2b352d1f81bd065408645abdc4ca9ad03edc9b2a22dd18f3f25412d81db",
       "blob": "39ea6432c812a26fcbd335d63d1867de2dba8665"
     },
     ".opencode/commands/opsx-archive.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "abddc58eff5cbb50dba1479798d1ff54f6ad590af3ec698d96ae5e79880f4a71",
       "blob": "6d99f3aff5f9ce4e981822be2fc34d586088e3c7"
     },
     ".opencode/commands/opsx-explore.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "e00d5e5f7af7e1308af6524bc837eb5be680a82eb12f44121fdaaec732b466cd",
       "blob": "ae7ac2d38978abdd9bb9fe4c64e8cabc1e21f752"
     },
     ".opencode/commands/opsx-propose.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "b82c15c9a87fe3629699d72bf4a4c57cd7e859ddbfa9d1d4eab71e126f72173d",
       "blob": "50ecf93cf697ca3042d8a5025ceb1c9988788ae5"
     },
     ".opencode/commands/opsx-sync.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "78c7e600b3f1cc33ab8ccf1d7a98d810ca10ddfa4c733347dfb8a238f8b5812c",
       "blob": "b704224d28472db5f13350fad14dec9097a81379"
     },
     ".opencode/commands/opsx-update.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "c69f013b9c6561c1a5c0da0be61adb2f565e55a1b43d165b5058399b92573d92",
       "blob": "fcee934e2bf18f6b2704c93022516e6e484ab45e"
@@ -217,42 +217,42 @@
     },
     ".opencode/skills/openspec-apply-change/SKILL.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "2b28417eef02f708e56e10826d8c226d65ff92599e426d674fd3ca101a5bebbd",
       "blob": "ab3908239777284cb8475bca7c48536c6979513c"
     },
     ".opencode/skills/openspec-archive-change/SKILL.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "cf72122dbcd9ff538ff1dc0a9a48cab1631bf212f25ce04fb6cb05a7c703e768",
       "blob": "3d84bc3a180a03bf8cf8e348fdceb884f0cf278d"
     },
     ".opencode/skills/openspec-explore/SKILL.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "224a4dbf5c129ea1e61d2597fe2cb9d5bded2f92c9668d3597878d9cbb6506fd",
       "blob": "92e26c827c14233b98762eedda5df03184f6315b"
     },
     ".opencode/skills/openspec-propose/SKILL.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "3a0d052c10633f43eddf62cbbbd07397b0a0f5afbf8d10b335763a1399d2ef68",
       "blob": "866dfb700e03a1b295ea54dff38235a9f360027b"
     },
     ".opencode/skills/openspec-sync-specs/SKILL.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "881d5133d57e8bb3f5c884e9aa43884dbc501138261d17daa687d2a43b55b1ee",
       "blob": "e0ce74a85a4a4843377696edd08ba257ab3bfb01"
     },
     ".opencode/skills/openspec-update-change/SKILL.md": {
       "template": "openspec-tools",
-      "templateVersion": "0.12.0",
+      "templateVersion": "1.3.0",
       "mode": "file",
       "sha256": "f667c76f1a010db32cbfbbac793572eef8612cb9db9dd60ed2fbe2a0e81d6244",
       "blob": "40d0c1daf8ec7bfc1ad30e7f4bde63932c21c947"

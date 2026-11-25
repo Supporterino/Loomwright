@@ -2,6 +2,13 @@
 
 All notable changes per release. `loomwright update` applies them to an installed workspace (see [docs/cli.md](docs/cli.md#update)).
 
+## 1.3.1
+
+### Patch Changes
+
+- 0c92de1: Ignore a child's stdin write failure in `exec` so `loomwright doctor` prints its report (with a
+  credential `import` warning) instead of aborting with an `EPIPE` stack trace.
+
 ## 1.3.0
 
 ### Minor Changes

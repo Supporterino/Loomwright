@@ -1,0 +1,7 @@
+{
+  "changeId": "fix-exec-stdin-epipe",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "d7c108cda683fe3cb2a70ed0260496e2efdff263",
+  "hash": "eaac7c4eb97a392c3111bff7650c511413f2881eb4639e3b1109c453517ea9bb",
+  "approvedAt": "2026-11-25T08:47:37.405Z"
+}
