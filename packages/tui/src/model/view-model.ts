@@ -252,13 +252,48 @@ function taskRow(
   };
 }
 
+interface QuestionRecord {
+  readonly step: string;
+  readonly question: string;
+  readonly status: "answered" | "skipped" | "unanswered";
+  readonly answer?: string | undefined;
+}
+
+function questionKey(step: string, question: string): string {
+  return `${step}\u0000${question}`;
+}
+
+/**
+ * Unions the snapshot rows and the run-state records by step+question. The snapshot is fresher
+ * for `question.answered`, but a status poll can settle an idle answer before the event tail
+ * folds it: an answered run-state record then wins over a snapshot row still marked unanswered.
+ */
+function mergeQuestions(
+  snapshotRows: readonly QuestionRecord[],
+  runRows: readonly QuestionRecord[],
+): QuestionRecord[] {
+  const runByKey = new Map(runRows.map((row) => [questionKey(row.step, row.question), row]));
+  const merged = snapshotRows.map((row) => {
+    const key = questionKey(row.step, row.question);
+    const runRow = runByKey.get(key);
+    if (runRow === undefined) return row;
+    runByKey.delete(key);
+    return runRow.status === "answered" && row.status !== "answered" ? runRow : row;
+  });
+  // A record the event tail has not seen yet still comes from run state.
+  for (const row of runRows) {
+    if (runByKey.delete(questionKey(row.step, row.question))) merged.push(row);
+  }
+  return merged;
+}
+
 function questionRows(run: RunState, snapshot: RunSnapshot | null): QuestionRow[] {
   const questionsFile =
     run.draft === undefined
       ? `openspec/changes/${run.id}/questions.md`
       : `${run.draft}/openspec/changes/${run.id}/questions.md`;
   // The snapshot carries `question.answered`, so rows flip without waiting for the next status poll.
-  const records = snapshot?.questions ?? run.clarifications;
+  const records = mergeQuestions(snapshot?.questions ?? [], run.clarifications);
   return records.map((question) => ({
     step: flat(question.step),
     question: flat(question.question),
