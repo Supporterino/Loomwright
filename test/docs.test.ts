@@ -312,10 +312,10 @@ describe("documentation", () => {
     expect(events).toContain("persisted immediately");
     expect(events).toContain("drops the late duplicate");
     // `answer` uses the inbox only for a live driver and is persisted immediately otherwise.
-    // The missing-run exception (an answer for a run id with no run file keeps the inbox
-    // write) is not named in docs/events.md yet; the behaviour is pinned by the
-    // "an answer for a missing run keeps the inbox file" factory test instead.
     expect(events).toContain("uses the inbox only while a live driver");
+    // The missing-run exception: an answer for a run id with no run file keeps the inbox write.
+    expect(events).toContain("the one exception: that missing-run case keeps the inbox write");
+    expect(events).toContain("leaves the file");
     expect(read("docs/cli.md")).toContain("docs/events.md");
   });
 

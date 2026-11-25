@@ -262,7 +262,9 @@ re-checks liveness there, marks the matching clarification answered (or appends 
 unrecorded-question fallback at step `answer`), appends exactly one `question.answered`, and
 rewrites both `.factory/clarifications/<id>.md` and the change's `questions.md` (the draft's copy
 when the run has a `draft`). It leaves no `answer` file behind and removes a stale file for the
-same question, so a later driver cannot apply an outdated answer. When the log was empty, that
+same question, so a later driver cannot apply an outdated answer. A run id whose run file does
+not exist is the one exception: that missing-run case keeps the inbox write and leaves the file
+for a later process. When the log was empty, that
 first write also appends `run.started`. The state change, the fallback and the file rewrite are
 one shared function, so the driver and the direct path apply an answer the same way. The direct
 path does not load the install config or the install marker, and an already-answered record is a
