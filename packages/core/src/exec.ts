@@ -96,6 +96,11 @@ export function exec(command: readonly string[], options: ExecOptions): Promise<
     // A missing binary surfaces as an 'error' event (ENOENT) instead of an exit code.
     child.on("error", (err) => finish(127, err.message));
     child.on("close", (code) => finish(code));
+    // A child can exit or close fd 0 before the payload is written (e.g. `opencode auth
+    // import` rejecting its flags). The write then fails with EPIPE (Bun/Node) or
+    // ERR_STREAM_DESTROYED; an unhandled 'error' event would abort the CLI. The child's
+    // exit code and stderr are the failure signal, so every stdin error is ignored.
+    child.stdin.on("error", () => {});
     child.stdin.end(options.input ?? "");
   });
 }
