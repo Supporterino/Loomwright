@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { isChangeSpecPath, isSpecPath } from "@loomwright/core/approval/approval";
 import { ExitCode } from "@loomwright/core/exit-codes";
+import { open } from "@loomwright/core/factory";
 import type { Finding } from "@loomwright/core/handoff/schema";
 import { loadRun } from "@loomwright/core/state/run";
 import { factoryScript, type ScriptedTask } from "../../../test/fixtures/factory-script.ts";
@@ -157,6 +158,44 @@ describe("spec findings, reword and reapprove", () => {
     const done = await cliWith(runtime, fx.root, "resume", ID);
     expect(done.code).toBe(ExitCode.Ok);
     expect(loadRun(fx.root, ID)?.phase).toBe("done");
+  });
+
+  test("a paused run rewords after an answer rewrote its questions.md", async () => {
+    const script = factoryScript({
+      changeId: ID,
+      summary: "Math helpers",
+      repos: ["app"],
+      tasks: TASKS,
+      findings: { app: [specFinding] },
+      reword: (call) => ({ edits: rewritten(call.directory), handoff: { task: "reword" } }),
+    });
+    const runtime = new ScriptedRuntime(async (call) => {
+      const step = await script(call);
+      if (call.agent === "architect" && call.prompt.startsWith("Write the OpenSpec change")) {
+        return {
+          ...step,
+          handoff: { task: "design", openQuestions: ["What does the body carry?"] },
+        };
+      }
+      return step;
+    });
+
+    await cliWith(runtime, fx.root, "run", "--no-interactive", "Add math helpers");
+    expect((await cliWith(runtime, fx.root, "approve", ID)).code).toBe(ExitCode.Paused);
+    expect(loadRun(fx.root, ID)?.clarifications.some((c) => c.status === "unanswered")).toBe(true);
+
+    // The direct answer path rewrites questions.md, which is outside the approval hash.
+    const factory = await open(fx.root);
+    await factory.answer(ID, "a status field", "What does the body carry?");
+    const questions = `openspec/changes/${ID}/questions.md`;
+    expect(await gitOut(fx.root, "status", "--porcelain", "--", questions)).not.toBe("");
+    expect(readFileSync(join(fx.root, questions), "utf8")).toContain("a status field");
+
+    const reword = await cliWith(runtime, fx.root, "reword", ID);
+    expect(reword.err).toBe("");
+    expect(reword.code).toBe(ExitCode.Ok);
+    expect(reword.out).toContain(`reworded ${ID}`);
+    expect(readFileSync(join(fx.root, SPEC), "utf8")).toContain("carries `status`");
   });
 
   test("reword refuses a task-DAG change and restores the spec", async () => {
