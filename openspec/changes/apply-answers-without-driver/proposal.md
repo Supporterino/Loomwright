@@ -21,7 +21,8 @@ run accepted.
   emit exactly one `question.answered` from the writing process, rewrite both
   `.factory/clarifications/<id>.md` and the change's `questions.md` (the draft's copy when the run
   has a `draft`), and leave no inbox file behind. Stale `answer` files for the same question are
-  removed so a later driver cannot apply an outdated answer.
+  removed so a later driver cannot apply an outdated answer. A run id with no run file is the one
+  exception: it keeps today's inbox write.
 - The apply logic becomes one shared function used by the driver and the direct path, so the
   driver also refreshes `questions.md`.
 - A re-delivered or stale answer for a record that is already answered is a no-op: no second
@@ -40,9 +41,9 @@ None.
 
 ### Modified Capabilities
 
-- `typed-event-stream`: `answer` reaches the inbox only while a live driver owns the run and is
-  otherwise persisted immediately, idempotently, with the clarification files refreshed; the
-  library API and the documentation/ADR requirement follow.
+- `typed-event-stream`: `answer` reaches the inbox only while a live driver owns the run (or the
+  run id has no run file) and is otherwise persisted immediately, idempotently, with the
+  clarification files refreshed; the library API and the documentation/ADR requirement follow.
 - `factory-tui`: the questions pane reads an immediately persisted answer as `answered — <text>`
   and keeps `recorded — applies at the next step` for the live-driver window only.
 

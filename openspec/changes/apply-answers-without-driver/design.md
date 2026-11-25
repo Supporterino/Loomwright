@@ -47,7 +47,10 @@ treats a driver as live only when `active.changeId === runId && driverAlive(acti
 driver gets today's path: one inbox file, no state change. Otherwise the direct path calls the
 shared function with a `whenLocked` predicate that re-reads the active lock inside the run lock;
 if a driver appeared in between, the function returns `deferred` and `Factory.answer` writes the
-inbox file instead. A corrupt active lock is treated as "no driver", the way `status` reports it.
+inbox file instead. A `missing-run` result, meaning the run file does not exist, keeps today's
+behaviour: `Factory.answer` writes the inbox file and returns, so the spec names that case as the
+one inbox write that happens without a live driver. A corrupt active lock is treated as "no
+driver", the way `status` reports it.
 
 The double check is the "one writer per run" rule: while the run lock is held, a driver cannot
 also be applying this answer, and a driver that arrives afterwards finds no inbox file and an
@@ -145,9 +148,14 @@ fallback remains schema-valid.
 - **Cross-host lock.** `driverAlive` trusts a lock from another host, so an answer there stays in
   the inbox even if the driver is gone. That is the existing active-lock rule.
 - **Missing run file.** `Factory.answer` keeps today's inbox write rather than throwing when the
-  run file does not exist; a later run with that id can consume it. A corrupt run file, by
-  contrast, surfaces `CorruptStateError` from the direct path instead of leaving an inbox file
-  that could never be applied.
+  run file does not exist; the requirement names this as the one answer written to the inbox
+  without a live driver. `uniqueId` (`packages/core/src/pipeline/design.ts:66`) does not check
+  `.factory/commands/<id>/`, so a later run that takes the same id can consume and record that
+  stale answer. Closing the hole needs either a `PreconditionError` for a missing run, as
+  `retry`/`abort`/`approve` raise, or the inbox directory added to `uniqueId`'s taken set; both
+  are behaviour decisions outside this change, so the exception is documented instead. A corrupt
+  run file, by contrast, surfaces `CorruptStateError` from the direct path instead of leaving an
+  inbox file that could never be applied.
 - **Updated test expectation.** The "no listener is started" case in
   `packages/core/test/factory-commands.test.ts` currently expects two inbox files for `pause` and
   `answer`; after the fix only `pause` is left. The unrecorded-question fallback test also calls
@@ -158,5 +166,7 @@ fallback remains schema-valid.
   suite asserts the exact TUI phrases `recorded — applies at the next step` and
   `never claims the answer was applied` and the words `in-process` and `detached CLI children`,
   so the docs edit must keep them. A new ADR-0050 case is added to that suite.
+- **Docs wording.** `docs/events.md`'s live-driver paragraph says the direct path leaves no answer
+  file behind; task 1.4 adds the missing-run exception there so the doc matches this requirement.
 - **Out of scope.** The stale `port-agent-runtime` run, pasted text whose `Enter` is dropped, and
   slow-terminal frame stalls are untouched.
