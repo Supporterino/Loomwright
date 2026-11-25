@@ -16,6 +16,7 @@ import {
   type Ask,
   askQuestions,
   recordUnanswered,
+  specDirFor,
   unansweredQuestions,
   upsertClarifications,
   writeClarifications,
@@ -32,7 +33,7 @@ import {
 
 /** Directory holding the change's AI-repo checkout: a draft worktree or the workspace root. */
 export function specDir(p: Pipeline, draft: string | undefined): string {
-  return draft === undefined ? p.root : join(p.root, draft);
+  return specDirFor(p.root, draft);
 }
 
 /** The ask function, when clarification is enabled and somebody can answer. */

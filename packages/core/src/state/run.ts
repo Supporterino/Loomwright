@@ -199,14 +199,25 @@ export function saveRun(root: string, state: RunState): RunState {
   return next;
 }
 
+/**
+ * Runs `fn` with the run file loaded under the run's lock. The state may be missing; `fn`
+ * decides whether that is an error. Saves only what it calls; a deferred decision writes nothing.
+ */
+export function withRunLock<T>(
+  root: string,
+  id: string,
+  fn: (current: RunState | undefined) => T | Promise<T>,
+): Promise<T> {
+  return withFileLock(lockFile(root, id), () => fn(loadRun(root, id)));
+}
+
 /** Read-modify-write under the run's lock. `mutate` may change the draft in place. */
 export function updateRun(
   root: string,
   id: string,
   mutate: (draft: RunState) => void,
 ): Promise<RunState> {
-  return withFileLock(lockFile(root, id), () => {
-    const current = loadRun(root, id);
+  return withRunLock(root, id, (current) => {
     if (current === undefined) throw new Error(`no run state for ${id}`);
     const draft = structuredClone(current);
     mutate(draft);

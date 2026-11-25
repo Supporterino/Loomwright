@@ -119,6 +119,11 @@ export function mergeQuestionsBlock(existing: string, block: string): string {
   return `${parts.join("\n\n")}\n`;
 }
 
+/** The checkout holding the change: its draft worktree, or the workspace root. */
+export function specDirFor(root: string, draft: string | undefined): string {
+  return draft === undefined ? root : join(root, draft);
+}
+
 /**
  * Writes the Q&A twice: under `.factory/clarifications/` (gitignored, for resume and reports)
  * and, once the change folder exists, into `openspec/changes/<id>/questions.md`.

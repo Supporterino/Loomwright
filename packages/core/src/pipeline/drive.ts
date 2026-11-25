@@ -1,14 +1,10 @@
 import { PreconditionError, TransientError } from "../errors.ts";
-import {
-  type InboxCommand,
-  readCommands,
-  removeCommand,
-  reportCommandProblem,
-} from "../events/inbox.ts";
+import { readCommands, removeCommand, reportCommandProblem } from "../events/inbox.ts";
 import { checkDesign } from "../openspec/cli.ts";
 import { claimActive, dequeue, readActive, releaseActive, releaseDriver } from "../state/active.ts";
 import { readOrCorrupt } from "../state/files.ts";
-import { loadRun, now, type Phase } from "../state/run.ts";
+import { loadRun, type Phase } from "../state/run.ts";
+import { applyAnswerCommand } from "./answer.ts";
 import { verifyApproval } from "./approve.ts";
 import { ChangeAborted, type Pipeline } from "./context.ts";
 import { contractPhase } from "./contracts.ts";
@@ -83,37 +79,6 @@ const WAITING: ReadonlySet<Phase> = new Set(["queued", "awaiting-approval", "pau
 
 const PAUSE_REASON = "pause requested";
 
-type AnswerCommand = InboxCommand & { readonly command: "answer" };
-
-/** Records an inbox answer on the run's clarification list; the caller turns a failure into a diagnostic. */
-async function applyAnswer(p: Pipeline, id: string, command: AnswerCommand): Promise<void> {
-  let step = "answer";
-  let question = command.question ?? "answer";
-  await p.update(id, (draft) => {
-    const record =
-      command.question === undefined
-        ? draft.clarifications.find((c) => c.status === "unanswered")
-        : draft.clarifications.find((c) => c.question === command.question);
-    if (record === undefined) {
-      // A TUI can answer before an ask loop recorded the question: keep the answer anyway.
-      draft.clarifications.push({
-        step: "answer",
-        question,
-        status: "answered",
-        answer: command.answer,
-        at: now(),
-      });
-      return;
-    }
-    record.status = "answered";
-    record.answer = command.answer;
-    record.at = now();
-    step = record.step;
-    question = record.question;
-  });
-  p.emit("question.answered", { step, question, status: "answered", answer: command.answer });
-}
-
 /** Applies pending `.factory/commands/<id>/` files. Returns true when the run paused. */
 async function consumeCommands(p: Pipeline, id: string): Promise<boolean> {
   for (const entry of readCommands(p.root, id)) {
@@ -147,7 +112,29 @@ async function consumeCommands(p: Pipeline, id: string): Promise<boolean> {
       }
       case "answer": {
         try {
-          await applyAnswer(p, id, command);
+          const result = await applyAnswerCommand(
+            p.root,
+            id,
+            {
+              answer: command.answer,
+              ...(command.question === undefined ? {} : { question: command.question }),
+            },
+            {
+              onApplied: (record) =>
+                p.emit("question.answered", {
+                  step: record.step,
+                  question: record.question,
+                  status: "answered",
+                  answer: record.answer ?? command.answer,
+                }),
+            },
+          );
+          if (result === "missing-run") {
+            reportCommandProblem(p, `${entry.file}: no run state for ${id}`);
+            continue;
+          }
+          // A live driver never defers; leaving the file would only re-deliver it.
+          if (result === "deferred") continue;
           removeCommand(entry.file);
         } catch (err: unknown) {
           reportCommandProblem(
