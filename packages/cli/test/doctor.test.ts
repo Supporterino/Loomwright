@@ -99,6 +99,65 @@ esac
     }
   }
 
+  /**
+   * Point opencode at a stub that exports one anthropic credential and fails `auth import`
+   * without reading stdin.
+   */
+  async function asOpencodeFailingImport(run: () => Promise<void>): Promise<void> {
+    const credential = join(fx.base, "credentials.json");
+    writeFileSync(
+      credential,
+      JSON.stringify([
+        {
+          id: "cred-1",
+          integrationID: "anthropic",
+          label: "anthropic",
+          active: true,
+          value: { type: "key", key: "sk-ant-test" },
+        },
+      ]),
+    );
+    const script = join(fx.base, "opencode-failing-import");
+    writeFileSync(
+      script,
+      `#!/bin/sh
+case "$1" in
+  auth)
+    case "$2" in
+      export) cat '${credential}' ;;
+      import) exit 2 ;;
+    esac
+    ;;
+  models) printf '%s\\n' anthropic/claude-haiku-5-5 anthropic/claude-opus-5-5 anthropic/claude-sonnet-5-5 ;;
+  *) echo "opencode v2.2.0" ;;
+esac
+`,
+    );
+    chmodSync(script, 0o755);
+    const saved = process.env.AI_FACTORY_OPENCODE_BIN;
+    process.env.AI_FACTORY_OPENCODE_BIN = script;
+    try {
+      await run();
+    } finally {
+      if (saved === undefined) delete process.env.AI_FACTORY_OPENCODE_BIN;
+      else process.env.AI_FACTORY_OPENCODE_BIN = saved;
+    }
+  }
+
+  test("reports an import that exits before reading stdin as a warning", async () => {
+    const root = await installed(createSingleRepoFixture, { app: passAll });
+    await asOpencodeFailingImport(async () => {
+      const res = await cli(root, "doctor", "--json");
+      expect(res.code).toBe(ExitCode.Ok);
+      const json = JSON.parse(res.out) as DoctorReport;
+      const check = find(json, "import");
+      expect(check).toMatchObject({ status: "warn" });
+      expect(check?.detail).toContain("could not import");
+      expect(res.err).not.toContain("EPIPE");
+      expect(find(json, "stored")).toMatchObject({ status: "ok" });
+    });
+  });
+
   test("reports corrupt run files and a corrupt active lock (audit P15)", async () => {
     const root = await installed(createSingleRepoFixture, { app: passAll });
     mkdirSync(join(root, ".factory/runs"), { recursive: true });
