@@ -425,6 +425,9 @@ function createFactory(
       if (command.command !== "answer")
         throw new Error(`not an answer command: ${command.command}`);
       const runId = command.runId;
+      // Sweep before the liveness check: a driver that starts during the lock wait or a later
+      // run consuming the inbox must never see an outdated answer for this question.
+      removeStaleAnswers(root, runId, command.question);
       const live = (): boolean => {
         const active = readOrCorrupt(() => readActive(root)).value;
         return active !== undefined && active.changeId === runId && driverAlive(active);

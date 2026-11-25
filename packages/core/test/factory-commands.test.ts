@@ -518,6 +518,34 @@ describe("Factory commands", () => {
     expect(existsSync(join(fx.root, ".factory", "events", `${ID}.jsonl`))).toBe(false);
   });
 
+  test("a missing-run answer removes a stale answer file", async () => {
+    writeStaleAnswer("stale");
+    const missing = await open(fx.root);
+
+    await missing.answer(ID, "fresh", "Ship it?");
+
+    // Only the fresh file remains, so a later driver cannot apply the older one first.
+    const files = readdirSync(inboxOf()).sort();
+    const fileName = files[0];
+    if (fileName === undefined) throw new Error("the answer did not write an inbox file");
+    expect(files).not.toContain("answer-0.json");
+    expect(JSON.parse(readFileSync(join(inboxOf(), fileName), "utf8"))).toMatchObject({
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "fresh",
+    });
+
+    // A later driver that now owns the run applies the fresh answer, not the stale one.
+    seedQuestion();
+    const h = await harness(script());
+    const outcome = await h.factory.resume(ID);
+    expect(outcome.phase).toBe("awaiting-approval");
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?")?.answer,
+    ).toBe("fresh");
+  });
+
   test("a re-delivered answer is a no-op", async () => {
     seedQuestion();
     const factory = await open(fx.root);
