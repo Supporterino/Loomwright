@@ -151,6 +151,9 @@ function seedQuestion(options: { draft?: string } = {}): void {
     { step: "design", question: "Ship it?", status: "unanswered", at: "2026-01-01T00:00:00.000Z" },
   ];
   if (options.draft !== undefined) run.draft = options.draft;
+  // The change folder exists before an answer; the writer only adds questions.md to it.
+  const specDir = options.draft === undefined ? fx.root : join(fx.root, options.draft);
+  mkdirSync(join(specDir, "openspec", "changes", ID), { recursive: true });
   saveRun(fx.root, run);
 }
 

@@ -21,6 +21,10 @@ function save(records: RunState["clarifications"], options: { draft?: string } =
   const run = newRun(ID, "Add math helpers", "awaiting-approval");
   run.clarifications = records;
   if (options.draft !== undefined) run.draft = options.draft;
+  // A real designed run has a change folder; the writer only adds questions.md to it.
+  mkdirSync(changeDir(options.draft === undefined ? root : join(root, options.draft)), {
+    recursive: true,
+  });
   return saveRun(root, run);
 }
 
@@ -31,7 +35,9 @@ const unanswered = {
   at: "2026-01-01T00:00:00.000Z",
 } as const;
 
-const questionsFile = (dir = root): string => join(dir, "openspec", "changes", ID, "questions.md");
+const changeDir = (dir = root): string => join(dir, "openspec", "changes", ID);
+
+const questionsFile = (dir = root): string => join(changeDir(dir), "questions.md");
 
 const localFile = (): string => join(root, ".factory", "clarifications", `${ID}.md`);
 
@@ -220,6 +226,18 @@ describe("applyAnswerCommand", () => {
 
     expect(readFileSync(questionsFile(join(root, draft)), "utf8")).toContain("**Answer:** yes");
     expect(existsSync(questionsFile())).toBe(false);
+  });
+
+  test("an answer after the spec is archived does not recreate the change folder", async () => {
+    save([unanswered]);
+    rmSync(changeDir(), { recursive: true, force: true });
+
+    const result = await applyAnswerCommand(root, ID, { question: "Ship it?", answer: "yes" });
+
+    expect(result).toBe("applied");
+    expect(existsSync(changeDir())).toBe(false);
+    // The local copy still carries the answer for resume and reports.
+    expect(readFileSync(localFile(), "utf8")).toContain("**Answer:** yes");
   });
 
   test("a deferred answer writes nothing", async () => {

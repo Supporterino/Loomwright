@@ -140,8 +140,10 @@ export function writeClarifications(input: {
   mkdirSync(dirname(local), { recursive: true });
   writeFileSync(local, `# Clarifications: ${input.id}\n\n${block}`);
   if (input.specDir === undefined) return;
-  const file = join(input.specDir, "openspec", "changes", input.id, "questions.md");
-  mkdirSync(dirname(file), { recursive: true });
+  const change = join(input.specDir, "openspec", "changes", input.id);
+  // A done run's spec is archived; answering it must not recreate the change folder.
+  if (!existsSync(change)) return;
+  const file = join(change, "questions.md");
   const existing = existsSync(file) ? readFileSync(file, "utf8") : "";
   writeFileSync(file, mergeQuestionsBlock(existing, block));
 }
