@@ -143,6 +143,33 @@ describe("applyAnswerCommand", () => {
     expect(readFileSync(questionsFile(), "utf8")).toContain("**Answer:** first");
   });
 
+  test("a re-delivered answer is a no-op for a questionless answer beside a real record", async () => {
+    save([unanswered, { ...unanswered, question: "And this?" }]);
+    const applied: string[] = [];
+    const options = {
+      onApplied: (record: RunState["clarifications"][number]) => applied.push(record.question),
+    };
+
+    const first = await applyAnswerCommand(root, ID, { answer: "first" }, options);
+    const second = await applyAnswerCommand(root, ID, { answer: "second" }, options);
+
+    expect(first).toBe("applied");
+    expect(second).toBe("unchanged");
+    // Only the fallback is recorded and emitted; no real record is answered by mistake.
+    expect(applied).toEqual(["answer"]);
+    const records = loadRun(root, ID)?.clarifications;
+    expect(records).toHaveLength(3);
+    expect(records?.[0]).toMatchObject({ question: "Ship it?", status: "unanswered" });
+    expect(records?.[1]).toMatchObject({ question: "And this?", status: "unanswered" });
+    expect(records?.filter((record) => record.step === "answer")).toHaveLength(1);
+    expect(records?.[2]).toMatchObject({
+      step: "answer",
+      question: "answer",
+      status: "answered",
+      answer: "first",
+    });
+  });
+
   test("an answer whose clarification rewrite fails still emits the durable answer once", async () => {
     save([unanswered]);
     // Block the local clarification write so the rewrite throws after the run is saved.
