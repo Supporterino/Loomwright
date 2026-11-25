@@ -25,8 +25,13 @@ function findRecord(
   records: readonly Clarification[],
   command: { readonly answer: string; readonly question?: string },
 ): Clarification | undefined {
-  if (command.question === undefined)
-    return records.find((record) => record.status === "unanswered");
+  if (command.question === undefined) {
+    return (
+      records.find((record) => record.status === "unanswered") ??
+      // A re-delivered no-question answer matches the fallback it appended, not a new one.
+      records.find((record) => record.step === "answer" && record.question === "answer")
+    );
+  }
   return records.find((record) => record.question === command.question);
 }
 

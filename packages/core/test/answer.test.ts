@@ -113,6 +113,30 @@ describe("applyAnswerCommand", () => {
     expect(loadRun(root, ID)?.clarifications).toHaveLength(1);
   });
 
+  test("a re-delivered no-question answer is a no-op (re-delivered answer is a no-op)", async () => {
+    save([]);
+    const applied: string[] = [];
+    const options = {
+      onApplied: (record: RunState["clarifications"][number]) => applied.push(record.question),
+    };
+
+    const first = await applyAnswerCommand(root, ID, { answer: "first" }, options);
+    const second = await applyAnswerCommand(root, ID, { answer: "second" }, options);
+
+    expect(first).toBe("applied");
+    expect(second).toBe("unchanged");
+    expect(applied).toEqual(["answer"]);
+    const records = loadRun(root, ID)?.clarifications;
+    expect(records).toHaveLength(1);
+    expect(records?.[0]).toMatchObject({
+      step: "answer",
+      question: "answer",
+      status: "answered",
+      answer: "first",
+    });
+    expect(readFileSync(questionsFile(), "utf8")).toContain("**Answer:** first");
+  });
+
   test("an answer whose clarification rewrite fails still emits the durable answer once", async () => {
     save([unanswered]);
     // Block the local clarification write so the rewrite throws after the run is saved.
