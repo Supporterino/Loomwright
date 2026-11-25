@@ -150,6 +150,25 @@ describe("events reader", () => {
     expect(result.missing).toEqual([3]);
   });
 
+  test("two writers allocating the same seq are both kept by a stored read, not a gap", () => {
+    const root = makeRoot();
+    writeLog(root, [
+      line(1, "run.started", { phase: "design" }),
+      line(2, "question.answered", {
+        step: "design",
+        question: "which health path?",
+        status: "answered",
+      }),
+      // The late writer seeded from the line above and allocated seq 2 again.
+      line(2, "phase.changed", { from: "design", to: "awaiting-approval" }),
+    ]);
+
+    const result = readEvents(root, RUN);
+
+    expect(result.events.map((entry) => entry.seq)).toEqual([1, 2, 2]);
+    expect(result.missing).toEqual([]);
+  });
+
   test("an unknown event type is skipped, not fatal", () => {
     const root = makeRoot();
     const first = line(1, "heartbeat", { text: "one" });
@@ -269,6 +288,40 @@ describe("events tailer", () => {
       expect(seqsOf(items)).toEqual([1, 2, 4]);
       const gap = items[2];
       expect(gap).toEqual({ kind: "gap", missing: [3] });
+    } finally {
+      controller.abort();
+      await close();
+    }
+  });
+
+  test("two writers allocating the same seq: a follower drops the late duplicate and emits no gap", async () => {
+    const root = makeRoot();
+    const path = writeLog(root, [
+      line(1, "run.started", { phase: "design" }),
+      line(2, "question.answered", {
+        step: "design",
+        question: "which health path?",
+        status: "answered",
+      }),
+      // The late writer seeded from the line above and allocated seq 2 again.
+      line(2, "phase.changed", { from: "design", to: "awaiting-approval" }),
+    ]);
+    const controller = new AbortController();
+    const { cursor, close } = startTail(root, {
+      signal: controller.signal,
+      useWatch: false,
+      pollMs: 10,
+    });
+
+    try {
+      expect(seqOf(await cursor.next())).toBe(1);
+      expect(seqOf(await cursor.next())).toBe(2);
+
+      // A gap or the duplicate would arrive before seq 3.
+      appendLine(path, line(3, "heartbeat", { text: "three" }));
+      const next = await cursor.next();
+      expect(next.kind).toBe("event");
+      expect(seqOf(next)).toBe(3);
     } finally {
       controller.abort();
       await close();

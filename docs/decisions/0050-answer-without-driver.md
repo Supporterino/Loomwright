@@ -39,7 +39,8 @@ source of truth); leaving the answer unapplied until the next command starts a d
   at the next step`, which now describes only the live-driver window.
 - A driver can claim the run lock between the direct path's liveness re-check and its event
   append. The answer stays correct in the run file and the clarification files, but the two
-  writers can reuse a `seq`: the state remains correct and a tailer reports a gap. This residual
-  is accepted rather than adding a cross-process sequence lock.
+  writers can allocate the same `seq`: the state remains correct, a stored read keeps both lines
+  and reports no gap, and a live follower drops the late duplicate without reporting a gap. This
+  residual is accepted rather than adding a cross-process sequence lock.
 - Answering needs no install marker or config, so a workspace mid-install or with a broken config
   can still record an answer.

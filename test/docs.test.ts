@@ -270,6 +270,7 @@ describe("documentation", () => {
     expect(adr).toContain("## Decision");
     expect(adr).toContain("## Consequences");
     expect(adr).toContain("ADR-0046");
+    expect(adr).toContain("a live follower drops the late duplicate");
     expect(adr).not.toContain("Loomwright");
     expect(read("docs/decisions/README.md")).toContain("| [0050](0050-answer-without-driver.md)");
   });
@@ -309,6 +310,7 @@ describe("documentation", () => {
     expect(events).toContain("additive");
     expect(events).toContain("live driver");
     expect(events).toContain("persisted immediately");
+    expect(events).toContain("drops the late duplicate");
     expect(read("docs/cli.md")).toContain("docs/events.md");
   });
 

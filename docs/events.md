@@ -26,7 +26,8 @@ Every line is one JSON object with the same six-field envelope:
 
 - `v` is `PROTOCOL_VERSION`, currently `1`.
 - `runId` is the change id, e.g. `add-health`.
-- `seq` starts at `1` for each run and increases by exactly one per event.
+- `seq` starts at `1` for each run and increases by exactly one per event, except in the
+  two-writer race described under [the sequence rule](#the-sequence-rule).
 - `ts` is an ISO-8601 UTC timestamp ending in `Z` (`Date.prototype.toISOString`).
 - `type` names the event; `data` is that type's payload.
 
@@ -42,10 +43,12 @@ optional field without breaking an older reader.
 
 ## The sequence rule
 
-`seq` is allocated in the driving process, by the single event emitter. The stream is
-append-only, so per run there is no duplicate and no gap: a resume seeds the counter from the
-last complete line (`lastCompleteSeq`) and continues at the next number. It never restarts at
-`1`, and a resumed run does not emit a second `run.started`.
+`seq` is allocated per writer: the emitter counts and seeds itself from the last complete line
+(`lastCompleteSeq`), then continues at the next number. It never restarts at `1`, and a resumed
+run does not emit a second `run.started`. While one writer owns the run the stream is
+append-only, so per run there is no duplicate and no gap. Two writers can allocate the same
+`seq` in the direct-answer race described below: a stored read keeps both lines and reports no
+gap, while a live follower drops the late duplicate and emits no gap marker.
 
 A crash can leave at most one partial last line, because every write is one flushed
 `appendFileSync` of a complete line. The next `bind` truncates that tail before appending, and
@@ -275,9 +278,11 @@ parse, or names another run, is reported and left unapplied.
 
 The direct path re-checks liveness under the run lock, but a driver can still claim the lock
 between that re-check and the event append. The answer stays correct in the run file and the
-clarification files. The driver seeds its counter from the last complete line, so in the worst
-case the two writers reuse a `seq`: the state is still correct and a tailer reports a `gap`
-instead of failing. That residual is the price of writing without a daemon.
+clarification files. Each writer seeds its counter from the last complete line, so in the worst
+case the two writers allocate the same `seq`: the state is still correct, a stored read keeps
+both lines and reports no gap, and a live follower (`events --follow`, `status --watch`) drops
+the late duplicate instead of emitting a gap marker. That residual is the price of writing
+without a daemon.
 
 ## The two consumers
 
