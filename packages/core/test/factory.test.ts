@@ -16,6 +16,7 @@ import { cli } from "../../../test/helpers.ts";
 import { ConfigError, PreconditionError } from "../src/errors.ts";
 import { eventLogPath } from "../src/events/jsonl.ts";
 import { type EventType, RunEvent } from "../src/events/protocol.ts";
+import { readEvents } from "../src/events/reader.ts";
 import { ExitCode } from "../src/exit-codes.ts";
 import {
   type EventLogLine,
@@ -25,7 +26,7 @@ import {
   type StatusDocument,
 } from "../src/factory.ts";
 import { claimActive, enqueue } from "../src/state/active.ts";
-import { newRun, saveRun, TaskState } from "../src/state/run.ts";
+import { loadRun, newRun, saveRun, TaskState } from "../src/state/run.ts";
 
 const RUN = "add-health";
 const ISO = "2026-11-17T10:00:00.000Z";
@@ -421,6 +422,37 @@ describe("Factory read API", () => {
     expect((await configured.status()).queue).toEqual([]);
 
     await expect(configured.run("a change")).rejects.toBeInstanceOf(ConfigError);
+  });
+
+  test("an answer needs no install marker", async () => {
+    const id = "answer-me";
+    const run = newRun(id, "Answer me", "awaiting-approval");
+    run.clarifications = [{ step: "design", question: "Why?", status: "unanswered", at: ISO }];
+    saveRun(fx.root, run);
+    expect(existsSync(join(fx.root, "factory.lock.json"))).toBe(false);
+
+    const factory = await openReadOnly(fx.root);
+    await factory.answer(id, "because", "Why?");
+
+    expect(loadRun(fx.root, id)?.clarifications).toEqual([
+      {
+        step: "design",
+        question: "Why?",
+        status: "answered",
+        answer: "because",
+        at: expect.any(String),
+      },
+    ]);
+    const answered = readEvents(fx.root, id).events.filter(
+      (event) => event.type === "question.answered",
+    );
+    expect(answered).toHaveLength(1);
+    expect(answered[0]?.data).toMatchObject({
+      step: "design",
+      question: "Why?",
+      status: "answered",
+      answer: "because",
+    });
   });
 
   test("the API surface is complete", async () => {

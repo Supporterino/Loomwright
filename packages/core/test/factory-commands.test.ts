@@ -19,6 +19,7 @@ import {
 import { cli } from "../../../test/helpers.ts";
 import { readApproval, specHash } from "../src/approval/approval.ts";
 import { PreconditionError, UsageError } from "../src/errors.ts";
+import { writeCommand } from "../src/events/inbox.ts";
 import { reduce } from "../src/events/protocol.ts";
 import { readEvents } from "../src/events/reader.ts";
 import { git } from "../src/exec.ts";
@@ -131,6 +132,30 @@ async function designed(team: Script): Promise<Harness> {
   await h.factory.approve(ID, { continue: false });
   return h;
 }
+
+/** A designed run paused on the design question a reader would answer. */
+async function pausedOnQuestion(team: Script): Promise<Harness> {
+  const h = await harness(team);
+  await h.factory.run(RUN_REQUEST);
+  await updateRun(fx.root, ID, (draft) => {
+    draft.phase = "paused";
+    draft.pausedReason = "needs an answer";
+  });
+  return h;
+}
+
+/** A run awaiting approval with one unanswered question and no event log yet. */
+function seedQuestion(options: { draft?: string } = {}): void {
+  const run = newRun(ID, RUN_REQUEST, "awaiting-approval");
+  run.clarifications = [
+    { step: "design", question: "Ship it?", status: "unanswered", at: "2026-01-01T00:00:00.000Z" },
+  ];
+  if (options.draft !== undefined) run.draft = options.draft;
+  saveRun(fx.root, run);
+}
+
+const questionEvents = () =>
+  readEvents(fx.root, ID).events.filter((event) => event.type === "question.answered");
 
 /** Starts `resume` and pauses while the first implementer turn is in flight. */
 async function pauseDuringImplement(h: Harness): Promise<RunOutcome> {
@@ -283,16 +308,16 @@ describe("Factory commands", () => {
   });
 
   test("an answer is delivered and consumed", async () => {
-    const h = await harness(script({ questions: ["Ship it?"] }));
-    await h.factory.run(RUN_REQUEST);
+    const h = await pausedOnQuestion(script({ questions: ["Ship it?"] }));
     const designedRun = loadRun(fx.root, ID);
     expect(designedRun?.clarifications.some((c) => c.status === "unanswered")).toBe(true);
-    await updateRun(fx.root, ID, (draft) => {
-      draft.phase = "paused";
-      draft.pausedReason = "needs an answer";
-    });
 
-    await h.factory.answer(ID, "yes", "Ship it?");
+    writeCommand(fx.root, {
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "yes",
+    });
     expect(readdirSync(inboxOf())).toHaveLength(1);
     const outcome = await h.factory.resume(ID);
     expect(outcome.phase).toBe("awaiting-approval");
@@ -303,9 +328,7 @@ describe("Factory commands", () => {
     expect(record?.answer).toBe("yes");
     expect(readdirSync(inboxOf())).toHaveLength(0);
 
-    const answered = readEvents(fx.root, ID).events.filter(
-      (event) => event.type === "question.answered",
-    );
+    const answered = questionEvents();
     expect(answered).toHaveLength(1);
     expect(answered[0]?.data).toMatchObject({
       question: "Ship it?",
@@ -314,20 +337,153 @@ describe("Factory commands", () => {
     });
   });
 
-  test("an answer with no recorded question is appended", async () => {
+  test("a live driver owns the answer", async () => {
+    const h = await pausedOnQuestion(script({ questions: ["Ship it?"] }));
+    // A live pid makes `driverAlive` accept this process as the driver.
+    await claimActive(fx.root, ID);
+    const before = loadRun(fx.root, ID);
+
+    await h.factory.answer(ID, "yes", "Ship it?");
+
+    expect(readdirSync(inboxOf())).toHaveLength(1);
+    expect(loadRun(fx.root, ID)).toEqual(before);
+    expect(questionEvents()).toHaveLength(0);
+
+    const outcome = await h.factory.resume(ID);
+    expect(outcome.phase).toBe("awaiting-approval");
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?"),
+    ).toMatchObject({ status: "answered", answer: "yes" });
+    expect(readdirSync(inboxOf())).toHaveLength(0);
+    expect(questionEvents()).toHaveLength(1);
+    expect(readFileSync(join(fx.root, ".factory", "clarifications", `${ID}.md`), "utf8")).toContain(
+      "**Answer:** yes",
+    );
+    expect(
+      readFileSync(join(fx.root, "openspec", "changes", ID, "questions.md"), "utf8"),
+    ).toContain("**Answer:** yes");
+  });
+
+  test("an answer with no driver is persisted immediately", async () => {
+    seedQuestion();
+    const before = loadRun(fx.root, ID);
+    const factory = await open(fx.root);
+
+    await factory.answer(ID, "yes", "Ship it?");
+
+    const after = loadRun(fx.root, ID);
+    expect(after?.clarifications).toEqual([
+      {
+        step: "design",
+        question: "Ship it?",
+        status: "answered",
+        answer: "yes",
+        at: expect.any(String),
+      },
+    ]);
+    expect(after?.phase).toBe(before?.phase);
+    expect(after?.tasks).toEqual(before?.tasks);
+    expect(existsSync(join(fx.root, ".factory", "approvals", `${ID}.json`))).toBe(false);
+
+    const answered = questionEvents();
+    expect(answered).toHaveLength(1);
+    expect(answered[0]?.data).toMatchObject({
+      step: "design",
+      question: "Ship it?",
+      status: "answered",
+      answer: "yes",
+    });
+
+    expect(readFileSync(join(fx.root, ".factory", "clarifications", `${ID}.md`), "utf8")).toContain(
+      "**Answer:** yes",
+    );
+    expect(
+      readFileSync(join(fx.root, "openspec", "changes", ID, "questions.md"), "utf8"),
+    ).toContain("**Answer:** yes");
+    expect(existsSync(inboxOf())).toBe(false);
+  });
+
+  test("the draft's questions file is the one rewritten", async () => {
+    const draft = join(".factory", "worktrees", ID, "app", "draft");
+    seedQuestion({ draft });
+    const factory = await open(fx.root);
+
+    await factory.answer(ID, "yes", "Ship it?");
+
+    expect(
+      readFileSync(join(fx.root, draft, "openspec", "changes", ID, "questions.md"), "utf8"),
+    ).toContain("**Answer:** yes");
+    expect(existsSync(join(fx.root, "openspec", "changes", ID, "questions.md"))).toBe(false);
+  });
+
+  test("a direct apply removes a stale answer file", async () => {
+    seedQuestion();
+    writeCommand(fx.root, {
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "stale",
+    });
+    const factory = await open(fx.root);
+
+    await factory.answer(ID, "fresh", "Ship it?");
+
+    expect(readdirSync(inboxOf())).toHaveLength(0);
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?")?.answer,
+    ).toBe("fresh");
+    expect(questionEvents()).toHaveLength(1);
+  });
+
+  test("a re-delivered answer is a no-op", async () => {
+    seedQuestion();
+    const factory = await open(fx.root);
+    await factory.answer(ID, "first", "Ship it?");
+    expect(questionEvents()).toHaveLength(1);
+    writeCommand(fx.root, {
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "stale",
+    });
+
+    await factory.answer(ID, "second", "Ship it?");
+
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?")?.answer,
+    ).toBe("first");
+    expect(questionEvents()).toHaveLength(1);
+    expect(readdirSync(inboxOf())).toHaveLength(0);
+    // Idempotency still repairs the clarification files.
+    expect(readFileSync(join(fx.root, ".factory", "clarifications", `${ID}.md`), "utf8")).toContain(
+      "**Answer:** first",
+    );
+    expect(
+      readFileSync(join(fx.root, "openspec", "changes", ID, "questions.md"), "utf8"),
+    ).toContain("**Answer:** first");
+  });
+
+  test("an unrecorded question keeps the fallback", async () => {
     saveRun(fx.root, newRun(ID, RUN_REQUEST, "awaiting-approval"));
     const h = await harness(script());
 
     await h.factory.answer(ID, "late answer", "Unrecorded?");
-    const outcome = await h.factory.resume(ID);
-    expect(outcome.phase).toBe("awaiting-approval");
+
     const record = loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Unrecorded?");
     expect(record).toMatchObject({
       step: "answer",
       status: "answered",
       answer: "late answer",
     });
-    expect(readdirSync(inboxOf())).toHaveLength(0);
+    const answered = questionEvents();
+    expect(answered).toHaveLength(1);
+    expect(answered[0]?.data).toMatchObject({
+      step: "answer",
+      question: "Unrecorded?",
+      status: "answered",
+      answer: "late answer",
+    });
+    expect(existsSync(inboxOf())).toBe(false);
   });
 
   test("a pause is requested and consumed", async () => {
@@ -479,7 +635,8 @@ describe("Factory commands", () => {
     await factory.pause(ID);
     await factory.answer(ID, "yes");
     expect(opens).toBe(0);
-    expect(readdirSync(inboxOf()).sort()).toHaveLength(2);
+    // The direct answer left no inbox file; only the pause request remains.
+    expect(readdirSync(inboxOf())).toEqual([expect.stringContaining("pause")]);
   });
 
   test("retry keeps its usage errors", async () => {
