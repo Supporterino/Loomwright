@@ -263,6 +263,17 @@ describe("documentation", () => {
     expect(read("docs/decisions/README.md")).toContain("| [0046](0046-typed-event-stream.md)");
   });
 
+  test("ADR-0050 records the immediate answer path", () => {
+    const adr = read("docs/decisions/0050-answer-without-driver.md");
+    expect(adr.startsWith("# 0050 — ")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).toContain("ADR-0046");
+    expect(adr).not.toContain("Loomwright");
+    expect(read("docs/decisions/README.md")).toContain("| [0050](0050-answer-without-driver.md)");
+  });
+
   test("the ADR exists and is indexed (ADR-0049)", () => {
     const adr = read("docs/decisions/0049-package-runner-aliases.md");
     expect(adr.startsWith("# 0049 — ")).toBe(true);
@@ -296,6 +307,8 @@ describe("documentation", () => {
     expect(events).toContain("status --watch");
     expect(events).toContain("8 KiB");
     expect(events).toContain("additive");
+    expect(events).toContain("live driver");
+    expect(events).toContain("persisted immediately");
     expect(read("docs/cli.md")).toContain("docs/events.md");
   });
 

@@ -6,8 +6,9 @@ what they say; it never reimplements pipeline rules. The long actions — intake
 only, reword, reapprove, resume and land — are launched as detached CLI children with their output
 in a log under `.factory/logs/`. Reword is started from the run view, not the approval overlay, and
 its prompt travels as one argv element. The short writes are made in-process: answer, abort and retry
-return after recording into the run's state, so an answer goes into the run's command inbox and
-applies at the run's next safe point, and abort and retry never wait for a pipeline phase. Quitting
+return after recording into the run's state; an answer is persisted immediately when no driver owns
+the run, and otherwise goes into the run's command inbox and applies at the driver's next safe
+point. Abort and retry never wait for a pipeline phase. Quitting
 the UI, closing the terminal or crashing it leaves the run exactly as it would be without the UI,
 and reopening finds it again.
 
@@ -192,11 +193,17 @@ the draft and returns to the records without closing the pane; a second `Esc` cl
 keeps the pane open and advances to the next unanswered record. An empty answer is refused with
 `the answer is empty` and records nothing.
 
-The UI is honest about what that means. After recording, the record reads exactly
-`recorded — applies at the next step` until the run emits its `question.answered` event; only then
-does it read `answered` (with the answer). The UI never claims the answer was applied, because the
-run consumes it at its next safe point. The run is not asked on the TUI's stdin, so answers typed
-here are the ones that get recorded.
+The UI is honest about what that means. While a live driver owns the run, an answer waits for the
+driver's next safe point: after recording, the record reads exactly
+`recorded — applies at the next step` until the run emits its `question.answered` event. When no
+driver owns the run the answer is persisted immediately, so the record reads `answered — <answer>`
+straight away, and it still reads that way after a restart because the TUI reads it from refreshed
+run state rather than from its own memory. The UI never claims the answer was applied before the
+run emits the event, and the live-driver wording promises only the next safe point. The run is not
+asked on the TUI's stdin, so answers typed here are the ones that get recorded.
+
+Answering at `awaiting-approval` or `paused` changes only the Q&A: no phase change, no approval, no
+task and no redesign. An approved spec stays approved until `reword` or `reapprove`.
 
 ## Flags
 
