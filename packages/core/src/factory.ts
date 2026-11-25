@@ -430,6 +430,7 @@ function createFactory(
         return active !== undefined && active.changeId === runId && driverAlive(active);
       };
       if (live()) {
+        removeStaleAnswers(root, runId, command.question);
         writeCommand(root, command);
         return;
       }
@@ -468,9 +469,13 @@ function createFactory(
           removeStaleAnswers(root, runId, command.question);
           return;
         case "deferred":
+          // A driver appeared while we waited for the lock: drop an older answer for the same
+          // question so the driver cannot apply it before the fresh one.
+          removeStaleAnswers(root, runId, command.question);
+          writeCommand(root, command);
+          return;
         case "missing-run":
-          // A driver appeared while we waited for the lock, or the run does not exist: keep the
-          // inbox write so the driver (or a later `run`) can consume it.
+          // The run does not exist: keep the inbox write so a later `run` can consume it.
           writeCommand(root, command);
           return;
         default: {

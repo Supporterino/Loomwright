@@ -26,7 +26,7 @@ import { git } from "../src/exec.ts";
 import { type Factory, open, type RunOutcome } from "../src/factory.ts";
 import type { AgentRuntime } from "../src/runtime/types.ts";
 import { claimActive, readActive, readQueue } from "../src/state/active.ts";
-import { factoryDir } from "../src/state/files.ts";
+import { factoryDir, withFileLock } from "../src/state/files.ts";
 import { loadRun, newRun, saveRun, TaskState, updateRun } from "../src/state/run.ts";
 
 const ID = "add-health";
@@ -155,6 +155,15 @@ function seedQuestion(options: { draft?: string } = {}): void {
   const specDir = options.draft === undefined ? fx.root : join(fx.root, options.draft);
   mkdirSync(join(specDir, "openspec", "changes", ID), { recursive: true });
   saveRun(fx.root, run);
+}
+
+/** A stale answer with a fixed name that sorts before the `Date.now()` names `writeCommand` makes. */
+function writeStaleAnswer(answer: string): void {
+  mkdirSync(inboxOf(), { recursive: true });
+  writeFileSync(
+    join(inboxOf(), "answer-0.json"),
+    JSON.stringify({ command: "answer", runId: ID, question: "Ship it?", answer }),
+  );
 }
 
 const questionEvents = () =>
@@ -436,6 +445,56 @@ describe("Factory commands", () => {
       loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?")?.answer,
     ).toBe("fresh");
     expect(questionEvents()).toHaveLength(1);
+  });
+
+  test("a deferred answer removes a stale answer file", async () => {
+    seedQuestion();
+    writeStaleAnswer("stale");
+    const factory = await open(fx.root);
+    const lock = join(factoryDir(fx.root, "runs"), `${ID}.json.lock`);
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const locked = withFileLock(lock, () => held);
+
+    const answering = factory.answer(ID, "fresh", "Ship it?");
+    // A driver claims the run while the answer waits for the lock, so it is deferred to the inbox.
+    await claimActive(fx.root, ID);
+    release();
+    await locked;
+    await answering;
+
+    const files = readdirSync(inboxOf());
+    expect(files).toHaveLength(1);
+    const fileName = files[0];
+    if (fileName === undefined) throw new Error("the deferred answer did not write an inbox file");
+    expect(JSON.parse(readFileSync(join(inboxOf(), fileName), "utf8"))).toMatchObject({
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "fresh",
+    });
+  });
+
+  test("a live driver answer replaces a stale answer file", async () => {
+    const h = await pausedOnQuestion(script({ questions: ["Ship it?"] }));
+    await claimActive(fx.root, ID);
+    writeStaleAnswer("stale");
+
+    await h.factory.answer(ID, "fresh", "Ship it?");
+
+    const files = readdirSync(inboxOf());
+    expect(files).toHaveLength(1);
+    const fileName = files[0];
+    if (fileName === undefined) throw new Error("the live answer did not write an inbox file");
+    expect(JSON.parse(readFileSync(join(inboxOf(), fileName), "utf8"))).toMatchObject({
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "fresh",
+    });
+    expect(questionEvents()).toHaveLength(0);
   });
 
   test("an answer for a missing run keeps the inbox file", async () => {
