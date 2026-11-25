@@ -467,6 +467,90 @@ describe("an answer is recorded, then confirmed", () => {
   });
 });
 
+describe("an idle answer is persisted and shown answered", () => {
+  test("after the refresh the row reads answered — <answer> from run state, not recorded", async () => {
+    const question = "Which endpoints should be public?";
+    const before = askRun([{ step: "design", question, status: "unanswered" }]);
+    const opened = openQuestions(before);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(before, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(before, composing, "public /health");
+    const outcome = questionsKeys(before, typed, "Enter", key({ return: true }));
+    if (outcome.answer === undefined) throw new Error("the typed answer did not emit");
+
+    const fake = fakeFactory();
+    await recordAnswer(fake.factory, before.id, outcome.answer.answer, outcome.answer.question);
+    expect(fake.answers).toEqual([{ id: RUN, answer: "public /health", question }]);
+
+    const after = askRun([
+      { step: "design", question, status: "answered", answer: "public /health" },
+    ]);
+    const reopened = openQuestions(after);
+    if (reopened === null) throw new Error("the pane did not reopen");
+    const panel = panelText(after, reopened);
+    expect(panel).toContain("answered — public /health");
+    expect(panel).not.toContain(answerRecorded);
+    expect(
+      questionsPanel({ run: after, state: reopened, glyphs: UNICODE_GLYPHS }).keys.map(
+        (hint) => `${hint.key} ${hint.label}`,
+      ),
+    ).toEqual(["j/k navigate", "Esc close"]);
+  });
+
+  test("reopening in a fresh TUI reads the same row and offers no composer", () => {
+    const answered = askRun([
+      {
+        step: "design",
+        question: "Which endpoints should be public?",
+        status: "answered",
+        answer: "public /health",
+      },
+    ]);
+    // A fresh TUI starts with an empty `recorded` set; only run state can settle the row.
+    const state = openQuestions(answered);
+    if (state === null) throw new Error("the pane did not open");
+    expect(state.recorded.size).toBe(0);
+    expect(panelText(answered, state)).toContain("answered — public /health");
+    expect(panelText(answered, state)).not.toContain(answerRecorded);
+    const hints = questionsPanel({ run: answered, state, glyphs: UNICODE_GLYPHS }).keys.map(
+      (hint) => `${hint.key} ${hint.label}`,
+    );
+    expect(hints).not.toContain("Enter answer");
+
+    const enter = questionsKeys(answered, state, "Enter", key({ return: true }));
+    expect(enter.answer).toBeUndefined();
+    expect(enter.state).toEqual(state);
+    expect(enter.state.focus).toBe("record");
+  });
+});
+
+describe("a driven answer stays recorded until the driver applies it", () => {
+  test("the row reads recorded until question.answered arrives, then answered", () => {
+    const question = "Which endpoints should be public?";
+    const driven = askRun([{ step: "design", question, status: "unanswered" }]);
+    const opened = openQuestions(driven);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(driven, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(driven, composing, "public /health");
+    const emitted = questionsKeys(driven, typed, "Enter", key({ return: true }));
+    if (emitted.answer === undefined) throw new Error("the typed answer did not emit");
+
+    const recorded = recordAnswerInState(driven, emitted.state, "design", emitted.answer.question);
+    const pending = panelText(driven, recorded);
+    expect(pending).toContain(answerRecorded);
+    expect(pending).not.toContain("answered —");
+
+    const applied = askRun([
+      { step: "design", question, status: "answered", answer: "public /health" },
+    ]);
+    const settled = openQuestions(applied);
+    if (settled === null) throw new Error("the pane did not open");
+    const text = panelText(applied, settled);
+    expect(text).toContain("answered — public /health");
+    expect(text).not.toContain(answerRecorded);
+  });
+});
+
 describe("answer then advance keeps the pane open", () => {
   test("answering the first of three records selects the second and keeps the pane open", () => {
     const run = askRun([
