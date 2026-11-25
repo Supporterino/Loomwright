@@ -546,6 +546,32 @@ describe("Factory commands", () => {
     ).toContain("**Answer:** first");
   });
 
+  test("a re-delivered answer is a no-op when the driver consumes the inbox", async () => {
+    seedQuestion();
+    const h = await harness(script());
+    await h.factory.answer(ID, "first", "Ship it?");
+    expect(questionEvents()).toHaveLength(1);
+    writeCommand(fx.root, {
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "stale",
+    });
+
+    const outcome = await h.factory.resume(ID);
+
+    expect(outcome.phase).toBe("awaiting-approval");
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?")?.answer,
+    ).toBe("first");
+    // The driver's unchanged branch emits nothing and still removes the stale file.
+    expect(questionEvents()).toHaveLength(1);
+    expect(readdirSync(inboxOf())).toHaveLength(0);
+    expect(readFileSync(join(fx.root, ".factory", "clarifications", `${ID}.md`), "utf8")).toContain(
+      "**Answer:** first",
+    );
+  });
+
   test("an unrecorded question keeps the fallback", async () => {
     saveRun(fx.root, newRun(ID, RUN_REQUEST, "awaiting-approval"));
     const h = await harness(script());
