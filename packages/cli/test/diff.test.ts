@@ -148,4 +148,19 @@ describe("diff with submodules", () => {
     expect(run.out).toContain("backend:");
     expect(run.out).not.toContain("frontend");
   });
+
+  test("--repo does not resolve the other repos' base branches", async () => {
+    await submoduleChange(fx);
+    // Break the frontend's base: an unfiltered diff now fails the precondition.
+    const frontend = join(fx.root, "repos/frontend");
+    await fixtureGit(frontend, "switch", "-q", "--detach");
+    await fixtureGit(frontend, "branch", "-D", "main");
+    await fixtureGit(frontend, "update-ref", "-d", "refs/remotes/origin/main");
+    expect((await cli(fx.root, "diff", ID)).code).toBe(ExitCode.Precondition);
+
+    const run = await cli(fx.root, "diff", ID, "--repo", "backend");
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(run.out).toContain("backend:");
+    expect(run.out).not.toContain("frontend");
+  });
 });

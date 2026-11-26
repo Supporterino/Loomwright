@@ -29,6 +29,14 @@ export interface ChangeDiff {
   readonly repos: readonly DiffRepoResult[];
 }
 
+/** How much of each repo to read. */
+export interface ChangeDiffOptions {
+  /** Only this repo; a repo the change did not touch yields no row. */
+  readonly repo?: string;
+  /** Read only the per-file counts and skip the patch. */
+  readonly stat?: boolean;
+}
+
 const refs = {
   local: (branch: string): string => `refs/heads/${branch}`,
 };
@@ -51,12 +59,14 @@ function parseNumstat(out: string): DiffFile[] {
 /**
  * Read a change's committed diff per touched repo, from each repo's land base. Read-only: only
  * `git diff`/`rev-parse` reads, so the checkout's branch and refs are unchanged. Works while the
- * change is still in progress; only `land` needs the `done` phase.
+ * change is still in progress; only `land` needs the `done` phase. `options.repo` skips every
+ * other repo (its base is never resolved); `options.stat` skips the patch read.
  */
 export async function changeDiff(
   root: string,
   config: FactoryConfig,
   id: string,
+  options: ChangeDiffOptions = {},
 ): Promise<ChangeDiff> {
   const run = loadRun(root, id);
   if (run === undefined) throw new PreconditionError(`no change ${id} in this workspace`);
@@ -64,6 +74,7 @@ export async function changeDiff(
   const branch = changeBranch(id);
   const repos: DiffRepoResult[] = [];
   for (const repo of reposFor(config, run)) {
+    if (options.repo !== undefined && repo.name !== options.repo) continue;
     const dir = join(root, repo.path);
     const target = await baseBranch(root, repo);
     const base = await targetRef(dir, target);
@@ -79,9 +90,10 @@ export async function changeDiff(
     // Three dots: against the merge base, so commits that landed on the base after branching
     // do not show up as part of the change.
     const range = `${base}...${branch}`;
-    const patch = await gitOk(["diff", "--no-ext-diff", "--no-color", "--unified=3", range], {
-      cwd: dir,
-    });
+    const patch =
+      options.stat === true
+        ? ""
+        : await gitOk(["diff", "--no-ext-diff", "--no-color", "--unified=3", range], { cwd: dir });
     const files = parseNumstat(await gitOk(["diff", "--numstat", range], { cwd: dir }));
     repos.push({
       ...result,

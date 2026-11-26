@@ -51,19 +51,19 @@ export const diffCommand: Command = {
         `choose one of: ${names.join(", ")}`,
       ]);
 
-    const diff = await changeDiff(root, config, id);
-    const repos =
-      values.repo === undefined
-        ? diff.repos
-        : diff.repos.filter((repo) => repo.repo === values.repo);
+    const diff = await changeDiff(root, config, id, {
+      ...(values.repo === undefined ? {} : { repo: values.repo }),
+      // `--json` reports the whole result, so only a text `--stat` skips the patch read.
+      stat: values.stat && !values.json,
+    });
 
     if (values.json) {
-      io.out(JSON.stringify({ ...diff, repos }, null, 2));
+      io.out(JSON.stringify(diff, null, 2));
       return ExitCode.Ok;
     }
 
     io.out(`diff ${id}`);
-    for (const repo of repos) {
+    for (const repo of diff.repos) {
       io.out(`  ${repo.repo}: ${repo.target} <- ${repo.branch} (${repo.status})`);
       if (repo.status === "missing") {
         io.out("  no change branch");

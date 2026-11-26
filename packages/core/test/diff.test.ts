@@ -152,6 +152,24 @@ describe("change diff", () => {
     expect(app.patch).not.toContain("src/unrelated.ts");
     expect(app.files.map((file) => file.path)).not.toContain("src/unrelated.ts");
   });
+
+  test("stat mode skips the patch and keeps the file counts", async () => {
+    const base = await gitOut(fx.root, "rev-parse", "HEAD");
+    await commitOnChange(
+      fx.root,
+      { "src/health.ts": "export const health = true;\n" },
+      "feat: add health",
+    );
+    saveDoneRun(fx.root, { app: { branch: changeBranch(ID), base } });
+
+    const app = result(
+      await changeDiff(fx.root, loadConfig(fx.root).config, ID, { stat: true }),
+      "app",
+    );
+    expect(app.status).toBe("diff");
+    expect(app.files.map((file) => file.path)).toContain("src/health.ts");
+    expect(app.patch).toBe("");
+  });
 });
 
 describe("change diff with submodules", () => {
@@ -179,6 +197,26 @@ describe("change diff with submodules", () => {
     expect(frontend.status).toBe("missing");
     expect(frontend.files).toHaveLength(0);
     expect(frontend.patch).toBe("");
+  });
+
+  test("the repo filter reads only the requested repo", async () => {
+    const backend = join(fx.root, "repos/backend");
+    const backendBase = await gitOut(backend, "rev-parse", "HEAD");
+    await commitOnChange(backend, { "landed.go": "package main\n" }, "feat: backend change");
+    const run = newRun(ID, "Add health", "done");
+    run.tasks = [task("1.1", "backend"), task("1.2", "frontend")];
+    run.branches = { backend: { branch: changeBranch(ID), base: backendBase } };
+    saveRun(fx.root, run);
+
+    // An unread repo may have no base at all; the filtered read must not resolve it.
+    const frontend = join(fx.root, "repos/frontend");
+    await fixtureGit(frontend, "switch", "-q", "--detach");
+    await fixtureGit(frontend, "branch", "-D", "main");
+    await fixtureGit(frontend, "update-ref", "-d", "refs/remotes/origin/main");
+
+    const diff = await changeDiff(fx.root, loadConfig(fx.root).config, ID, { repo: "backend" });
+    expect(diff.repos.map((repo) => repo.repo)).toEqual(["backend"]);
+    expect(result(diff, "backend").status).toBe("diff");
   });
 
   test("a submodule layout diffs every touched repo", async () => {
