@@ -97,6 +97,28 @@ describe("the diff pane", () => {
     ]);
   });
 
+  test("diffLines strips terminal controls from patch lines", () => {
+    const diff: ChangeDiff = {
+      id: "add-health",
+      repos: [
+        {
+          repo: "app",
+          path: "app",
+          target: "main",
+          branch: "change/add-health",
+          status: "diff",
+          files: [],
+          patch: "+clear \u001b[2J\n+clip \u001b]52;c;YWJj\u0007",
+        },
+      ],
+    };
+    expect(diffLines(diff)).toEqual([
+      "app: main <- change/add-health (diff)",
+      "+clear [2J",
+      "+clip ]52;c;YWJj",
+    ]);
+  });
+
   test("openDiffPane keeps the id, flattens the lines and starts at the top", () => {
     const state = openDiffPane(DIFF);
     expect(state.id).toBe("add-health");

@@ -3,6 +3,7 @@
  * handed, so replay and live share every path and nothing here reads git or the workspace.
  */
 import type { ChangeDiff, DiffRepoResult } from "@loomwright/core/pipeline/diff";
+import { stripControls } from "../model/format.ts";
 import type { KeyInput } from "../model/keys.ts";
 import type { PanelView } from "../model/view-model.ts";
 import {
@@ -34,12 +35,16 @@ function header(repo: DiffRepoResult): string {
   return `${repo.repo}: ${repo.target} <- ${repo.branch} (${repo.status})`;
 }
 
-/** git ends a patch with a newline; the trailing empty row belongs to no line. */
+/**
+ * git ends a patch with a newline; the trailing empty row belongs to no line. The patch text is
+ * untrusted, so each line drops the terminal controls that would clear the screen or set the
+ * clipboard in a live frame.
+ */
 function patchLines(patch: string): string[] {
   if (patch === "") return [];
   const lines = patch.split("\n");
   if (lines[lines.length - 1] === "") lines.pop();
-  return lines;
+  return lines.map(stripControls);
 }
 
 /** Flatten one header line per repo plus its patch, or `no change branch` for a missing one. */
