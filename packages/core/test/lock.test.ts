@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildLock, LOCK_VERSION, type LockEntry } from "../src/lock/lock.ts";
 import { opencodeRequirement } from "../src/opencode-features.ts";
-import { OPENCODE, OPENSPEC } from "../src/versions.ts";
+import { OPENCODE } from "../src/versions.ts";
 
 function entry(template: string): LockEntry {
   return {
@@ -60,9 +60,9 @@ describe("buildLock opencode pin", () => {
     const lock = buildLock({}, {}, "2.2.0");
     expect(lock.tools.git).toEqual({ min: "2.31.0", tested: "2.54.0" });
     expect(lock.tools.openspec).toEqual({
-      min: OPENSPEC.min,
-      maxExclusive: OPENSPEC.maxExclusive,
-      tested: OPENSPEC.tested,
+      min: "1.10.0",
+      maxExclusive: "3.0.0",
+      tested: "2.2.0",
     });
     expect(lock.tools.graphify).toEqual({
       min: "0.9.93",
