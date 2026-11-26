@@ -269,7 +269,7 @@ describe("the .agents tree is installed, managed and protected", () => {
     }
   });
 
-  test("a plain update carries the .agents lock entry and keeps an edited skill", async () => {
+  test("a carried tools entry survives a plain update: an edited skill is kept", async () => {
     const fx = await createSingleRepoFixture();
     try {
       const skill = ".agents/skills/openspec/SKILL.md";

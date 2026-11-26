@@ -666,6 +666,47 @@ describe("run view layout", () => {
     expect(drilled).toContain("first - Health endpoint");
   });
 
+  test("the unfocused tail carries everything: every task, review and run line, then a task narrows it", async () => {
+    const run = runState({
+      tasks: [
+        taskState({ id: "first", title: "Health endpoint", repo: "app" }),
+        taskState({ id: "second", title: "Client", repo: "api" }),
+      ],
+    });
+    resetSeq();
+    const events = [
+      event("progress.line", { level: "normal", text: "run-level line" }),
+      event("task.started", { task: { id: "first", repo: "app" }, attempt: 1 }),
+      event("agent.activity", { step: "first", detail: "first tool line", kind: "tool" }),
+      event("agent.activity", { step: "review:app", detail: "review app line", kind: "tool" }),
+      event("task.started", { task: { id: "second", repo: "api" }, attempt: 1 }),
+      event("agent.activity", { step: "second", detail: "second tool line", kind: "tool" }),
+    ];
+
+    const unfocused = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: null })),
+      120,
+      40,
+      true,
+    );
+    expect(unfocused).toContain("Activity");
+    expect(unfocused).toContain("run-level line");
+    expect(unfocused).toContain("first tool line");
+    expect(unfocused).toContain("review app line");
+    expect(unfocused).toContain("second tool line");
+
+    const focused = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: "first" })),
+      120,
+      40,
+      true,
+    );
+    expect(focused).toContain("first tool line");
+    expect(focused).not.toContain("run-level line");
+    expect(focused).not.toContain("review app line");
+    expect(focused).not.toContain("second tool line");
+  });
+
   test("a long narrow run keeps its run-level tail instead of claiming no activity", async () => {
     const tasks = Array.from({ length: 18 }, (_, index) =>
       taskState({ id: `task-${index}`, title: `Task ${index}` }),
