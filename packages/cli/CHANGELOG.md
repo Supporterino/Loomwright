@@ -2,6 +2,44 @@
 
 All notable changes per release. `loomwright update` applies them to an installed workspace (see [docs/cli.md](docs/cli.md#update)).
 
+## 1.4.0
+
+### Minor Changes
+
+- 0df0f3c: OpenSpec 1.x and 2.x are both supported now: the accepted range is `>= 1.10.0, < 3.0.0` with
+  2.2.0 as the tested and recommended version, 2.1+ `init` runs with `--scope project` so it cannot
+  install globally, and the generated skills are read from both `.opencode` and `.agents`. The
+  `.agents` tree is managed by install and update, and `.agents/skills` is protected from agent
+  edits in the path rules, the rendered rules and the worktree sandbox.
+
+  `loomwright diff <change-id>` shows the patch `land` would merge, per touched repo and submodule,
+  read against the same merge base. It is read-only, works in any phase, and takes `--stat`,
+  `--repo <name>` and `--json`; a done run now prints the diff hint before the land hint. The
+  terminal UI opens the same view with `d` on a done run as a full-height read-only pane, and a
+  focused task's activity scope is now its own lines only — the repo scope still shows reviewer,
+  explorer, install and full-suite work.
+
+### Patch Changes
+
+- cefa562: The full-suite phase now installs the repo's dependencies in the checkout it is about to gate,
+  once per repo on every pass, through the same installer and shared caches the task worktrees
+  use. A task that merged a `package.json` or lockfile change no longer leaves the checkout with
+  stale `node_modules`, so the suite no longer fails on code that is fine and no longer burns its
+  two fix rounds on it. An install failure is treated as infrastructure: that repo's gates do not
+  run, no suite-fix task and no suite round are spent, and the change pauses with the repo and the
+  installer detail in the reason.
+
+  A pause in the full-suite phase now writes `.factory/reports/<id>-paused.md` and names it in the
+  stop detail. The report adds a `## Full suite: <repo>` section with the captured failing output
+  of every repo whose last result failed, and it no longer offers `loomwright retry <id> --task`
+  when no task failed.
+
+  `loomwright gate` is unchanged: it never installs dependencies.
+- 4124b53: Answers recorded in the TUI now persist even when no driver owns the run: the answer is applied
+  under the run lock, one `question.answered` event is emitted, `.factory/clarifications/<id>.md`
+  and the change's `questions.md` are refreshed, and a re-delivered answer is a no-op. A live
+  driver keeps consuming the inbox and now refreshes `questions.md` as well.
+
 ## 1.3.1
 
 ### Patch Changes
