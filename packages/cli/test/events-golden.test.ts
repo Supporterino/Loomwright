@@ -512,8 +512,8 @@ describe("baseline parity", () => {
       const rendered = replayGolden(kind);
       const start = rendered.findIndex((line) => line.startsWith("▶ context packs"));
       expect({ kind, start: start >= 0 }).toEqual({ kind, start: true });
-      // `resume` ends with two CLI report lines, the only output that never was an event.
-      const resume = baselineSection(kind, "resume").slice(0, -2);
+      // `resume` ends with three CLI report lines, the only output that never was an event.
+      const resume = baselineSection(kind, "resume").slice(0, -3);
       expect(rendered.slice(start), kind).toEqual(resume);
       expect(rendered, kind).toContain(
         "  ⚙ [1.1] gates after rebase: format, lint, types, testAffected",

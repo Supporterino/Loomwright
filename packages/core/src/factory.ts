@@ -138,10 +138,12 @@ function requireRun(root: string, id: string): RunState {
 
 function report(out: (line: string) => void, outcome: RunOutcome): void {
   out(`${outcome.id}: ${outcome.phase}${outcome.detail ? ` — ${outcome.detail}` : ""}`);
-  if (outcome.phase === "done")
+  if (outcome.phase === "done") {
+    out(`review the diff first: \`loomwright diff ${outcome.id}\``);
     out(
       `next: \`loomwright land ${outcome.id}\` merges the finished change into its base branches`,
     );
+  }
 }
 
 /** Worktrees a change kept (`status`/`abort` show them; the CLI owns the same list). */

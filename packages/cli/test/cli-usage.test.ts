@@ -132,6 +132,7 @@ describe("CLI usage", () => {
       "gate",
       "graph",
       "repoint",
+      "diff",
       "land",
       "artifacts",
       "bench",

@@ -128,6 +128,7 @@ implement: 4/4 merged in <duration>
   ⚙ archiving the spec
 ✓ add-health done — report: <root>/.factory/reports/add-health.md
 add-health: done
+review the diff first: `loomwright diff add-health`
 next: `loomwright land add-health` merges the finished change into its base branches
 ===== status <id> --json (exit 0) =====
 {

@@ -264,6 +264,7 @@ kept worktrees, finished ones stay; a queued change starts when the workspace is
     if (run === undefined) throw new PreconditionError(`no change ${id}`);
     if (run.phase === "done") {
       io.out(`${id} is already done`);
+      io.out(`review the diff first: \`loomwright diff ${id}\``);
       io.out(`next: \`loomwright land ${id}\` merges the finished change into its base branches`);
       return ExitCode.Ok;
     }

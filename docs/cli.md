@@ -194,6 +194,19 @@ Run this after the submodule MRs of a change have merged upstream.
 
 Pointers whose MR has not merged stay provisional, and the command exits with 4. Run it again later. Nothing is ever pushed.
 
+## diff
+
+```
+loomwright diff <change-id> [--stat] [--repo <name>] [--json]
+```
+
+Shows a change's committed patch against the base branch `land` would merge it into, per touched repo. It reads `change/<id>` against the merge base (a three-dot diff), so unrelated commits that landed on the base after the change branched do not show up. The command is read-only: it never fetches, merges, switches branches, writes state or pushes. It works for a change in any phase; `done` is when the CLI advertises it as the step before `land`.
+- `--stat` prints one row per file with its added and deleted counts instead of the patch.
+- `--repo <name>` restricts the output to one configured repo.
+- `--json` prints the `ChangeDiff` result: the change id and, per repo, `repo`, `path`, `target`, `branch`, `status` (`diff`, `empty` or `missing`), `files` and `patch`.
+
+Exit codes: 0 ok, including a repo that has no `change/<id>` branch (it prints `no change branch`); 2 for an unknown `--repo`; 4 for an unknown change id.
+
 ## land
 
 ```

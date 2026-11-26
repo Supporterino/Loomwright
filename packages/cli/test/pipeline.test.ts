@@ -16,7 +16,7 @@ import { ExitCode } from "@loomwright/core/exit-codes";
 import { approve } from "@loomwright/core/pipeline/approve";
 import { Pipeline } from "@loomwright/core/pipeline/context";
 import { readActive, readQueue } from "@loomwright/core/state/active";
-import { loadRun, updateRun } from "@loomwright/core/state/run";
+import { loadRun, newRun, saveRun, updateRun } from "@loomwright/core/state/run";
 import {
   factoryScript,
   type ScriptedTask,
@@ -308,6 +308,7 @@ describe("pipeline: AI repo with submodules", () => {
     expect(run.err).toBe("");
     expect(run.code).toBe(ExitCode.Ok);
     expect(run.out).toContain(`${ID}: awaiting approval`);
+    expect(run.out).not.toContain("loomwright diff");
     // §7 step 1: the AI repo branched before design.
     expect(aiBranchAtDesign).toBe(`change/${ID}`);
     expect(loadRun(fx.root, ID)?.phase).toBe("awaiting-approval");
@@ -321,6 +322,10 @@ describe("pipeline: AI repo with submodules", () => {
     expect(approve.err).toBe("");
     expect(approve.out).toContain(`${ID}: done`);
     expect(approve.out).toContain(`next: \`loomwright land ${ID}\``);
+    expect(approve.out.indexOf(`loomwright diff ${ID}`)).toBeGreaterThanOrEqual(0);
+    expect(approve.out.indexOf(`loomwright diff ${ID}`)).toBeLessThan(
+      approve.out.indexOf(`next: \`loomwright land ${ID}\``),
+    );
     expect(approve.code).toBe(ExitCode.Ok);
 
     // 1.2, 1.3 (backend) and 2.1 (frontend) ran at the same time, within maxAgents (4).
@@ -400,6 +405,10 @@ describe("pipeline: AI repo with submodules", () => {
     expect(again.code).toBe(ExitCode.Ok);
     expect(again.out).toContain(`${ID} is already done`);
     expect(again.out).toContain(`next: \`loomwright land ${ID}\``);
+    expect(again.out.indexOf(`loomwright diff ${ID}`)).toBeGreaterThanOrEqual(0);
+    expect(again.out.indexOf(`loomwright diff ${ID}`)).toBeLessThan(
+      again.out.indexOf(`next: \`loomwright land ${ID}\``),
+    );
   });
 });
 
@@ -540,6 +549,7 @@ describe("pipeline: single repo", () => {
     expect(approve.out).toContain("failed: 1.1");
     expect(approve.out).toContain(`${ID}-paused.md`);
     expect(approve.out).not.toContain("loomwright land");
+    expect(approve.out).not.toContain("loomwright diff");
     const state = loadRun(fx.root, ID);
     expect(state?.tasks.map((t) => [t.id, t.status, t.failures])).toEqual([
       ["1.1", "failed", 4],
@@ -563,6 +573,10 @@ describe("pipeline: single repo", () => {
     const resume = await cliWith(runtime, fx.root, "resume", ID);
     expect(resume.out).toContain(`${ID}: done`);
     expect(resume.out).toContain(`next: \`loomwright land ${ID}\``);
+    expect(resume.out.indexOf(`loomwright diff ${ID}`)).toBeGreaterThanOrEqual(0);
+    expect(resume.out.indexOf(`loomwright diff ${ID}`)).toBeLessThan(
+      resume.out.indexOf(`next: \`loomwright land ${ID}\``),
+    );
     expect(resume.code).toBe(ExitCode.Ok);
     expect(await gitOut(fx.root, "log", "-1", "--format=%s")).toBe(`chore(spec): archive ${ID}`);
     expect(await gitOut(fx.root, "show", `change/${ID}:src/mul.ts`)).toContain("mul");
@@ -1135,4 +1149,23 @@ describe("pipeline: single repo", () => {
     expect(await gitOut(fx.root, "branch", "--show-current")).toBe(`change/${second}`);
     expect(existsSync(join(fx.root, ".factory/drafts", second))).toBe(false);
   }, 60_000);
+});
+
+describe("next-step hint", () => {
+  let fx: Fixture;
+  beforeEach(async () => {
+    fx = await createSingleRepoFixture();
+    expect((await cli(fx.root, "init", "--no-graph")).code).toBe(ExitCode.Ok);
+  });
+  afterEach(() => fx.cleanup());
+
+  test("the done hint names the diff first", async () => {
+    saveRun(fx.root, newRun(ID, "Finished", "done"));
+    const run = await cli(fx.root, "resume", ID);
+    expect(run.code).toBe(ExitCode.Ok);
+    const diffAt = run.out.indexOf(`loomwright diff ${ID}`);
+    const landAt = run.out.indexOf(`next: \`loomwright land ${ID}\``);
+    expect(diffAt).toBeGreaterThanOrEqual(0);
+    expect(landAt).toBeGreaterThan(diffAt);
+  });
 });
