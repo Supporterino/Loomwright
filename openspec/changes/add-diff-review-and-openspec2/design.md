@@ -116,15 +116,22 @@ requester asked for a separate optional step.
 
 The TUI entry gets an optional `readDiff(id)` seam, defaulting to `changeDiff(workspace,
 loadConfig(workspace).config, id)`. This keeps `Factory` (run-state reads) unchanged and lets tests
-inject a result without a git fixture. `d` maps to an `open-diff` intent; the entry checks
-`canLand(phase)` before reading, shows a notice while the read is in flight, and opens
+inject a result without a git fixture. That default is the one deliberate exception to the TUI's
+read boundary: `entry.tsx` value-imports the read-only `changeDiff`, which performs only git reads
+but resolves the touched repos from the selected run's `.factory/runs/<id>.json`. The modified
+read-only requirement carves out exactly that call, the no-engine scan allows exactly that import,
+and no other pipeline, gate, lock or state module or `.factory/` read is allowed. `d` maps to an
+`open-diff` intent; the entry checks `canLand(phase)` before reading, shows a notice while the read
+is in flight, and opens
 `UiData.diff` only if the run is still selected. `controls/diff-pane.ts` is a pure state machine and
 panel builder using the existing viewport helpers. The footer puts `d diff` before `l land`, and
 `help.ts` documents it. Replay does not read a diff; `d` joins the replay read-only keys so the
 press is explained consistently.
 
 Rejected: a detached child or a pager. The diff is a short-lived read, and a child would lose the
-TUI's panel, scroll and error handling.
+TUI's panel, scroll and error handling. Rejected: resolving the patch in the TUI from the run it
+already holds. That would re-implement `reposFor`/base resolution and read the workspace config in
+the TUI; the read seam keeps one implementation and one git path shared with `land`.
 
 ## Contract changes
 
@@ -146,5 +153,9 @@ changes is `factory.lock.json`'s `tools.openspec` (wider range), driven from the
   generated skills; unrelated skills there would be swept into the install commit.
 - The activity-scope change touches a long-standing contract and its golden tests. Any consumer that
   relied on the union must now use the repo scope.
+- The no-engine scan now permits exactly one pipeline import (`changeDiff` in `entry.tsx`) and the
+  run-state read it performs. `packages/tui/test/view-model.test.ts` enforces that boundary, but task
+  1.7's approved `touches` list does not name that file; the existing edit is in place, and any
+  re-run must keep the exception to that one import and that one read.
 - The intake questions about splitting the change, the 1.x floor, the diff trigger/base and the
   focus semantics are still unanswered; D1, D2, D5 and D4 record the narrowest readings used here.

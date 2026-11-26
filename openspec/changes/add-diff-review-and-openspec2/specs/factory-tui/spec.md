@@ -1,5 +1,30 @@
 ## MODIFIED Requirements
 
+### Requirement: The TUI reads the stream and the read API only
+
+The TUI SHALL build a run's state from `reduce` over `readEvents` followed by `tailEvents` from the last complete sequence number, and SHALL take run existence, phase, summary, draft, active lock, driver liveness, queue position and usage from `Factory.status()` and `Factory.listRuns()`. It MUST NOT read run-state or event files under `.factory/` (the event log, run state, the lock and the driver files), MUST NOT import `@loomwright/cli`, and MUST NOT value-import a pipeline, scheduler, gate, lock or state module; type-only imports from `@loomwright/core` are allowed. The one exception is the pre-land diff: `entry.tsx` MAY value-import the read-only `changeDiff` from `@loomwright/core/pipeline/diff`, which runs only git reads (`git diff`, `git rev-parse` and `.gitmodules` lookups) and starts no engine, but resolves the touched repos by reading the selected change's `.factory/runs/<id>.json`. The TUI MUST call that reader only from the `d` intent on a `done` run in a live session, and MUST NOT read a diff on open, for any other phase, or in replay. The reads it MAY make under `.factory/` are limited to three: its own spawn log, `.factory/logs/tui-spawn-<timestamp>.log`, which the launcher tails so a failed child's last lines can be shown; for the intake dialog only, the `.factory/requests/*.md` files it ranks, validates and previews, including the chosen request file; and, for that diff only, the selected run's `.factory/runs/<id>.json`. It MUST NOT infer that a run exists because an event log exists. A run without an event log SHALL still appear in the list from run state. Gate results, agent roles, retries and the activity tail SHALL come from events; token and cost totals SHALL come from the status document.
+
+#### Scenario: no engine imports
+
+- **WHEN** every file under `packages/tui/src` is scanned for imports
+- **THEN** none imports `@loomwright/cli` or a relative path outside the package
+- **AND** none value-imports a pipeline, scheduler, gate, lock or state module, except the one `changeDiff` import from `@loomwright/core/pipeline/diff` in `entry.tsx`
+- **AND** no file under `packages/tui/src` reads a run-state or event file under `.factory/`, the only permitted exceptions being the launcher's own `.factory/logs/tui-spawn-<timestamp>.log`, the intake dialog's `.factory/requests/*.md` listing and preview (including the chosen request file), and the selected run's `.factory/runs/<id>.json` read by the one `changeDiff` call
+- **AND** that diff reader is reached only from the `d` intent on a `done` run, never on open, for another phase or in replay
+
+#### Scenario: a run exists because run state says so
+
+- **WHEN** the TUI opens a workspace whose newest change has no `.factory/events/<id>.jsonl`
+- **THEN** the run is listed with its phase and usage from `status()`
+- **AND** its run view shows tasks from run state with an empty activity tail
+- **AND** no run is invented for an event log without run state
+
+#### Scenario: live detail arrives from the tail
+
+- **WHEN** a run in the run view appends `task.merged` and `gate.finished`
+- **THEN** the task row and the gate column update from those events
+- **AND** the header totals do not change until the next `status()` poll
+
 ### Requirement: The run list and run view show the whole run
 
 The TUI SHALL show a run list ordered newest first with each run's id, summary, phase, role (active, queued at its position, or idle), token and cost totals, elapsed time and the number of recorded spec findings when there are any. Opening a run SHALL show a header with the run id, phase, elapsed time, token and cost totals and lock status; a task list in the order the run state carries (the `tasks.md` plan order, not re-sorted by `deps`) with each task's status, repo, attempt and title; a task detail pane with the agent role, model, retries, gate results per step, duration and the activity scoped to that task; and a footer listing the keys that are valid in the current state. The rendered frame SHALL never be taller than the terminal's rows.
@@ -127,6 +152,48 @@ One pure function SHALL map an activity line to the scopes it belongs to, using 
 
 - **WHEN** the log pane is in the run scope
 - **THEN** it lists every retained line, including the ones a task or repo scope includes
+
+### Requirement: Tests pin the behaviour
+
+The suite SHALL contain unit tests for the pure view-model layer with no Ink import, folding tests that feed one event of every protocol type through the facts and assert the resulting activity lines, scope tests for the task/repo/run derivation, viewport tests for every offset at 80×24 and 120×40 (clamp at both ends, resize, selection after a data change, follow on and off), frame snapshots at 80×24 and 120×40 for no runs, running graph, failing task, awaiting approval, question open, finished, new run (text), new run (file), approve-and-run confirm, approve-only confirm and queued after approval plus a design-phase activity state, a land confirmation state, a long run list at the top, middle and bottom, a paused run with three findings, the findings panel, the reword panel with findings and a typed prompt, the reword confirm naming `--prompt`, a 12-task run with a non-zero tail, a task detail with 20 gates and a scrolling tail, questions with 8 records and a composer open (single and multiline), the approval overlay collapsed to the banner and reopened, and the log pane following and scrolled in all three scopes. Launcher tests SHALL assert argv, flags, `detached`, `stdio`, `cwd`, `-C`, the reword prompt as one argv element and the absence of a signal on quit, SIGINT and crash; dialog tests, keybinding tests (approve confirm, abort confirm, land confirm, quit restores the terminal, `Esc` collapsing only at `idle`/`failed`, answers advancing, `Ctrl-J` inserting a newline, `w` from a paused run, `L` scrolling in replay) and `approval.pending` reduction stay. A regression test SHALL assert that no rendered frame exceeds `rows` for a 60-run list and a 12-task run, and the existing accessibility and colour tests SHALL keep passing with updated fixtures.
+
+#### Scenario: the view-model is tested without Ink
+
+- **WHEN** the view-model suite runs
+- **THEN** it imports no Ink or React module
+- **AND** it covers the header, task order (as stored), gates, questions, approval, the findings,
+  the reword availability rule, the all-event activity tail, the derived task scope and the land
+  footer hint
+
+#### Scenario: every screen has both sizes
+
+- **WHEN** the frame snapshots run
+- **THEN** every state in `test/frame-states.ts`, including the new findings, reword, log, questions
+  and long-list states, has an 80×24 and a 120×40 file
+- **AND** a diff fails the suite with the state name
+
+#### Scenario: the launcher matrix is complete
+
+- **WHEN** the launcher tests run
+- **THEN** they cover text intake, file intake, approve, approve-only, reword with and without a
+  prompt, reapprove, resume and land
+- **AND** they assert that quitting, SIGINT and a crash send no signal to a child
+
+#### Scenario: every event type is exercised
+
+- **WHEN** the fold tests run
+- **THEN** one event of every `EVENT_TYPES` member produces its activity line (or the coalesced
+  heartbeat line)
+- **AND** a task detail derives its lines from the task's id only, and the repo scope still carries
+  the repo's other task, reviewer, explorer and full-suite lines
+
+#### Scenario: the frame budget is pinned
+
+- **WHEN** the budget regression runs
+- **THEN** a 60-run list and a 12-task run at 80×24 each render at most 24 lines
+- **AND** each frame's last line is the footer
+
+The replay fixture SHALL stay valid without a re-record unless the new layout genuinely changes what it asserts; where it does, the change SHALL re-record it and say why in the final report.
 
 ## ADDED Requirements
 

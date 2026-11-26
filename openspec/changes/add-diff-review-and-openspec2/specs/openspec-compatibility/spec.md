@@ -69,7 +69,7 @@
 - **WHEN** `isProtectedPath(".agents/skills/openspec-propose/SKILL.md")` is called and an implementer's rules are applied to an edit there
 - **THEN** the path is protected
 - **AND** the edit effect is `deny`
-- **AND** `protectedInWorktree(root)` includes `<root>/.agents`
+- **AND** `protectedInWorktree(root)` includes `<root>/.agents/skills`
 
 #### Scenario: a carried tools entry survives a plain update
 
