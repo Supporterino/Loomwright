@@ -29,6 +29,7 @@ export const INSTALL_PATHS = [
   ".gitignore",
   ".graphifyignore",
   ".opencode",
+  ".agents",
   "openspec/config.yaml",
   "openspec/specs/.gitkeep",
   "openspec/changes/archive/.gitkeep",
