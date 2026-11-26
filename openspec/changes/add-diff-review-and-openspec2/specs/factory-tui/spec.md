@@ -199,7 +199,7 @@ The replay fixture SHALL stay valid without a re-record unless the new layout ge
 
 ### Requirement: A done run offers a pre-land diff
 
-A `done` run SHALL offer `d` in its footer, before `l land`, and `d` SHALL open a full-height, read-only diff pane titled `Diff — <change-id>`. The pane SHALL show the change's patch against each touched repo's land base with one header per repo, and SHALL scroll with `j`/`k`, `PgUp`/`PgDn` and `g`/`G`; `Esc` SHALL close it and return to the run view. The footer MUST NOT offer `d` for any other phase or in replay, and pressing `d` there MUST do nothing. The pane MUST NOT write, merge, fetch or read a log file. A read failure SHALL show its message as a notice and leave the run view open. The rendered frame, including the pane, SHALL never be taller than the terminal's rows.
+A `done` run SHALL offer `d` in its footer, before `l land`, and `d` SHALL open a full-height, read-only diff pane titled `Diff — <change-id>`. The pane SHALL show the change's patch against each touched repo's land base with one header per repo, and SHALL scroll with `j`/`k`, `PgUp`/`PgDn` and `g`/`G`; `Esc` SHALL close it and return to the run view. The footer MUST NOT offer `d` for any other phase or in replay: in any other phase pressing `d` MUST do nothing, while in replay it SHALL show the read-only notice and open no pane. The pane MUST NOT write, merge, fetch or read a log file. A read failure SHALL show its message as a notice and leave the run view open. The rendered frame, including the pane, SHALL never be taller than the terminal's rows.
 
 #### Scenario: a done run opens the diff
 
@@ -225,6 +225,7 @@ A `done` run SHALL offer `d` in its footer, before `l land`, and `d` SHALL open 
 
 - **WHEN** `tui --replay` shows a done run and the user presses `d`
 - **THEN** the footer does not advertise `d diff`
+- **AND** the read-only notice is shown
 - **AND** no pane opens and no diff is read
 
 #### Scenario: a diff read failure is shown as a notice
