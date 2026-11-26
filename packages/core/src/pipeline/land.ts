@@ -4,7 +4,7 @@ import { maybeExport } from "../artifacts/export.ts";
 import type { FactoryConfig, RepoConfig } from "../config/schema.ts";
 import { PreconditionError } from "../errors.ts";
 import { git, gitOk } from "../exec.ts";
-import { trackedBranch } from "../git/branching.ts";
+import { baseBranch, reposFor, targetRef } from "../git/change-repos.ts";
 import { commitPaths } from "../git/commit.ts";
 import {
   changeBranch,
@@ -16,7 +16,7 @@ import {
 } from "../git/repo.ts";
 import { driverAlive, readActive, releaseActive } from "../state/active.ts";
 import { factoryDir } from "../state/files.ts";
-import { loadRun, type RunState } from "../state/run.ts";
+import { loadRun } from "../state/run.ts";
 import { dropAgentSnapshot } from "../update/snapshot.ts";
 
 export type LandMergeStatus = "already-merged" | "fast-forward" | "merge" | "missing";
@@ -60,12 +60,6 @@ const isAncestor = async (dir: string, ancestor: string, descendant: string): Pr
 const branchTip = async (dir: string, branch: string): Promise<string | undefined> => {
   if (!(await refExists(dir, refs.local(branch)))) return undefined;
   return revParse(dir, refs.local(branch));
-};
-
-const targetRef = async (dir: string, branch: string): Promise<string | undefined> => {
-  if (await refExists(dir, refs.local(branch))) return refs.local(branch);
-  if (await refExists(dir, refs.remote(branch))) return refs.remote(branch);
-  return undefined;
 };
 
 /** Switch a checkout to its base branch, creating the local branch from origin if needed. */
@@ -132,18 +126,6 @@ async function dryRunMerge(
   if (tip === targetTip || (await isAncestor(dir, tip, targetTip)))
     return { status: "already-merged" };
   return { status: (await isAncestor(dir, targetTip, tip)) ? "fast-forward" : "merge" };
-}
-
-function reposFor(config: FactoryConfig, run: RunState): RepoConfig[] {
-  const names = new Set([...run.tasks.map((task) => task.repo), ...Object.keys(run.branches)]);
-  const touched = config.repos.filter((repo) => repo.path !== "." && names.has(repo.name));
-  const ai = config.repos.find((repo) => repo.path === ".");
-  return [...touched, ...(ai === undefined ? [] : [ai])];
-}
-
-async function baseBranch(root: string, repo: RepoConfig): Promise<string> {
-  const tracked = repo.path === "." ? undefined : await trackedBranch(root, repo.path);
-  return tracked ?? repo.defaultBranch ?? "main";
 }
 
 interface WorktreeEntry {
