@@ -174,6 +174,7 @@ function appendLog(root, changeId, entry, options = {}) {
 var PROTECTED = [
   /^openspec\/specs(\/|$)/i,
   /^\.opencode(\/|$)/i,
+  /^\.agents\/skills(\/|$)/i,
   /^\.factory(\/|$)/i,
   /^factory-records(\/|$)/i,
   /^factory\.config\.jsonc$/i,
@@ -404,6 +405,7 @@ function protectedInWorktree(worktree) {
   return [
     ".git",
     ".opencode",
+    ".agents/skills",
     ".factory",
     "factory-records",
     "AGENTS.md",
