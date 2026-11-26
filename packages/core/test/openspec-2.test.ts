@@ -161,6 +161,13 @@ esac
     expectScope(stub, true);
   });
 
+  test("a readable 3.0.0 still gets --scope project", async () => {
+    const stub = use(writeStub("3.0.0", AGENTS_SKILLS));
+    const files = await renderOpenspecTools(root);
+    expect(files.map((f) => f.path)).toContain(".agents/skills/openspec/SKILL.md");
+    expectScope(stub, true);
+  });
+
   test("2.0.0 gets no --scope but still returns .agents paths", async () => {
     const stub = use(writeStub("2.0.0", AGENTS_SKILLS));
     const files = await renderOpenspecTools(root);

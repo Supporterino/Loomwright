@@ -138,7 +138,9 @@ export async function renderOpenspecTools(root: string): Promise<ManagedFile[]> 
     // reject the flag. If the version cannot be read, use the 1.x invocation so the real
     // `init` failure surfaces instead of a version error.
     const status = await checkTool("openspec", root);
-    const scoped = status.ok && compareVersions(status.version, "2.1.0") >= 0;
+    // Base the flag on the readable version, not `ok`: an installed 3.x is rejected by
+    // `checkTool` but still needs project scoping so `update --tools` cannot install globally.
+    const scoped = status.version !== undefined && compareVersions(status.version, "2.1.0") >= 0;
     const res = await exec(
       [
         toolBin("openspec"),
