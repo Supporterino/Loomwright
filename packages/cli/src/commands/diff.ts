@@ -3,6 +3,7 @@ import { PreconditionError, UsageError } from "@loomwright/core/errors";
 import { ExitCode } from "@loomwright/core/exit-codes";
 import { CHANGE_ID } from "@loomwright/core/git/repo";
 import { changeDiff } from "@loomwright/core/pipeline/diff";
+import { stripControls } from "@loomwright/core/util/controls";
 import { type Command, type CommandOptions, parseCommandArgs } from "../command.ts";
 
 const OPTIONS = {
@@ -77,7 +78,8 @@ export const diffCommand: Command = {
         for (const file of repo.files) io.out(`  ${file.path} +${file.added} -${file.deleted}`);
         continue;
       }
-      io.out(repo.patch);
+      // Patch text is untrusted file content: drop terminal controls before it reaches a reviewer.
+      io.out(stripControls(repo.patch));
     }
     return ExitCode.Ok;
   },

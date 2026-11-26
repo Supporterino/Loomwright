@@ -14,6 +14,10 @@ import { cli, gitOut } from "../../../test/helpers.ts";
 
 const ID = "add-health";
 
+/** File content that would clear the screen and write the clipboard if printed raw. */
+const HOSTILE =
+  'export const clear = "\u001b[2J";\nexport const clip = "\u001b]52;c;SGVsbG8=\u0007";\n';
+
 function task(id: string, repo: string): TaskState {
   return TaskState.parse({
     id,
@@ -25,11 +29,14 @@ function task(id: string, repo: string): TaskState {
   });
 }
 
-async function singleRepoChange(fx: Fixture): Promise<string> {
+async function singleRepoChange(
+  fx: Fixture,
+  content = "export const landed = true;\n",
+): Promise<string> {
   expect((await cli(fx.root, "init", "--no-graph")).code).toBe(ExitCode.Ok);
   const base = await gitOut(fx.root, "rev-parse", "HEAD");
   await fixtureGit(fx.root, "switch", "-q", "-c", changeBranch(ID));
-  writeFileSync(join(fx.root, "src/landed.ts"), "export const landed = true;\n");
+  writeFileSync(join(fx.root, "src/landed.ts"), content);
   await fixtureGit(fx.root, "add", "-A");
   await fixtureGit(fx.root, "commit", "-q", "-m", "feat: land the change");
   await fixtureGit(fx.root, "switch", "-q", "main");
@@ -71,6 +78,26 @@ describe("diff", () => {
     expect(run.out).toContain("main");
     expect(run.out).toContain(changeBranch(ID));
     expect(run.out).toContain("+++ b/src/landed.ts");
+  });
+
+  test("text mode strips terminal controls from the patch", async () => {
+    await singleRepoChange(fx, HOSTILE);
+    const run = await cli(fx.root, "diff", ID);
+    expect(run.code).toBe(ExitCode.Ok);
+    expect(run.out).not.toContain("\u001b");
+    expect(run.out).not.toContain("\u0007");
+    expect(run.out).toContain("[2J");
+    expect(run.out).toContain("]52;c;SGVsbG8=");
+  });
+
+  test("--json keeps the patch raw for machines", async () => {
+    await singleRepoChange(fx, HOSTILE);
+    const run = await cli(fx.root, "diff", ID, "--json");
+    expect(run.code).toBe(ExitCode.Ok);
+    const result = JSON.parse(run.out) as { repos: { patch: string }[] };
+    const patch = result.repos[0]?.patch ?? "";
+    expect(patch).toContain("\u001b[2J");
+    expect(patch).toContain("\u001b]52;c;SGVsbG8=");
   });
 
   test("--stat prints counts", async () => {
