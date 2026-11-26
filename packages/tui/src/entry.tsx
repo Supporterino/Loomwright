@@ -1542,9 +1542,11 @@ export async function runTui(options: TuiOptions): Promise<number> {
   if (options.once) throw new Error("tui: --once needs --replay");
   if (options.workspace === null) throw new Error("tui: a workspace or --replay is required");
   const workspace = options.workspace;
-  // Resolved once; the config is loaded only when a diff is actually read.
+  // Resolved once; the config is loaded only when a diff is actually read. Async so a
+  // ConfigError becomes a rejected promise the key handler's `.catch` renders as a notice.
   const readDiff =
-    options.readDiff ?? ((id: string) => changeDiff(workspace, loadConfig(workspace).config, id));
+    options.readDiff ??
+    (async (id: string) => changeDiff(workspace, loadConfig(workspace).config, id));
 
   // Read-only: the run list must open without the install marker (`open` is for intake, 1.5).
   const factory = options.factory ?? (await openReadOnly(workspace));

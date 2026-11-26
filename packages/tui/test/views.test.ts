@@ -1601,6 +1601,7 @@ async function driveTui(
   frames = false,
   replay?: string,
   readDiff?: (id: string) => Promise<ChangeDiff>,
+  workspace = "/workspace",
 ): Promise<DrivenRun> {
   const input = new FakeInput();
   const output = new FakeOutput();
@@ -1623,7 +1624,7 @@ async function driveTui(
     Object.defineProperty(process, "stdin", { value: input, configurable: true });
     Object.defineProperty(process, "stdout", { value: output, configurable: true });
     const code = runTui({
-      workspace: replay === undefined ? "/workspace" : null,
+      workspace: replay === undefined ? workspace : null,
       ...(replay === undefined ? {} : { replay }),
       once: false,
       ascii: true,
@@ -2346,6 +2347,40 @@ describe("the done run's diff", () => {
 
     expect(result.code).toBe(0);
     expect(result.writes.join("")).toContain(message);
+  });
+
+  test("a broken config is shown as a notice when d is pressed", async () => {
+    const run = runState({ phase: "done" });
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-config-"));
+    writeFileSync(join(dir, "factory.config.jsonc"), "{ not jsonc\n");
+    try {
+      const result = await driveTui(
+        listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+        async (input, output) => {
+          await until(() => output.text().includes(run.id), "the run row");
+          await pressUntil(input, "\r", "the done run view", () =>
+            output.text().includes("d diff"),
+          );
+          await pressUntil(input, "d", "the config notice", () =>
+            output.text().includes("is not valid JSONC"),
+          );
+          // The run view stays open: no diff pane, and the footer is still there.
+          expect(output.writes.at(-1) ?? "").toContain("d diff");
+          expect(output.text()).not.toContain(`Diff - ${run.id}`);
+          input.press("q");
+        },
+        undefined,
+        true,
+        undefined,
+        undefined,
+        dir,
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.writes.join("")).toContain("is not valid JSONC");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("a diff read that resolves after the selection moved opens no pane", async () => {
