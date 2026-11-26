@@ -35,6 +35,8 @@ permissions:
   - { action: websearch, resource: "*", effect: allow }
   - { action: edit, resource: openspec/specs/*, effect: deny }
   - { action: edit, resource: .opencode/*, effect: deny }
+  - { action: edit, resource: .agents/skills, effect: deny }
+  - { action: edit, resource: .agents/skills/*, effect: deny }
   - { action: edit, resource: .factory/*, effect: deny }
   - { action: edit, resource: factory-records, effect: deny }
   - { action: edit, resource: factory-records/*, effect: deny }
