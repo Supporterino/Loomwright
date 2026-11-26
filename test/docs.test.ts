@@ -645,6 +645,7 @@ describe("terminal UI documentation", () => {
       ["r", "resume"],
       ["x", "abort"],
       ["t", "retry task"],
+      ["d", "diff"],
       ["l", "land"],
       ["Q", "questions"],
       ["PgUp/PgDn", "page"],
@@ -679,6 +680,16 @@ describe("terminal UI documentation", () => {
     // The honest answer wording is shared with the questions pane.
     expect(read("packages/tui/src/strings.ts")).toContain("recorded — applies at the next step");
     expect(tui).toContain("never claims the answer was applied");
+  });
+
+  test("the docs describe the task-scoped log and the done diff", () => {
+    const tui = read("docs/tui.md");
+    expect(tui).toContain("A task's scope is its own step lines only");
+    expect(tui).toContain("`Tab` moves to the repo scope");
+    expect(tui).toContain("`d diff`");
+    expect(tui).toContain("before `l land`");
+    expect(tui).toContain("Diff — <id>");
+    expect(tui).toContain("answer, diff\nand land are disabled");
   });
 
   test("the report lists the follow-ups", () => {

@@ -45,6 +45,10 @@ role and model, retries, the gates that fit with their step, status and duration
 activity. When more gates exist than the terminal has rows, the list ends with an `N more gates` row
 so the activity tail and footer keep their rows.
 
+A `done` run offers `d diff` in the footer, before `l land`: `d` opens a full-height, read-only pane
+titled `Diff — <id>` with one header per touched repo followed by its patch against the land base.
+`j`/`k`, `PgUp`/`PgDn` and `g`/`G` scroll it and `Esc` returns to the run view.
+
 The activity tail is folded from every run event, not just an agent's tool lines: design, approval,
 installs, merges, closing, progress and heartbeats all land there. Each line reads
 `source • kind • text`; a line whose event names a `.factory/logs/` file shows that reference
@@ -83,10 +87,10 @@ pressing `w` shows the full reason as a notice.
 `PgUp`/`PgDn` page, `g`/`G` jump to the ends and `f` toggles follow (on by default). `Esc` returns to
 the view. The pane works the same in replay and writes nothing.
 
-A task's scope is the union of its own lines and its repo's: reviewer, tester and full-suite lines
-stay visible because they belong to the repo, and `review:<repo>` and `explore:<repo>` map to that
-repo, as does a full-suite gate named after it. Each line keeps its own step label. The contract
-review is cross-repo and stays run-scoped.
+A task's scope is its own step lines only: reviewer, explorer, install and full-suite lines stay
+out of it even when they belong to the same repo. `Tab` moves to the repo scope for those lines;
+`review:<repo>` and `explore:<repo>` map to that repo, as does a full-suite gate named after it.
+Each line keeps its own step label. The contract review is cross-repo and stays run-scoped.
 
 ## Layout
 
@@ -119,6 +123,7 @@ detail; `Esc` backs out of the detail to the graph, then out of the run to the l
 | `r`             | Resume a paused, aborted or queued run                                                  | Paused/aborted/queued run, and the approve-only wait   |
 | `x`             | Abort, after a confirmation                                                             | Any run not done or aborted                            |
 | `t`             | Retry the selected failed task                                                          | Only when the selected task is failed                  |
+| `d`             | Show the change diff against each touched repo's land base                              | A `done` run                                           |
 | `l`             | Land: merge the change branches into their base branches locally                        | A `done` run                                           |
 | `L`             | Open the activity log in the current scope                                              | Run view                                               |
 | `Q`             | Open the questions pane                                                                 | Only when the run has questions                        |
@@ -128,9 +133,9 @@ detail; `Esc` backs out of the detail to the graph, then out of the run to the l
 
 The approval keys are conditional: `a`, `A` and `R` act on the overlay or its collapsed banner, and
 `R` only appears after an approval was recorded. `w` appears only when the CLI accepts a reword, `t`
-only for a failed task, `Q` only when questions exist, and `l` only for a `done` run. The footer
-lists the keys valid in the current state with the same labels; both the footer and this table name
-the keys above.
+only for a failed task, `Q` only when questions exist, and `d` and `l` only for a `done` run. The
+footer lists the keys valid in the current state with the same labels; both the footer and this
+table name the keys above.
 
 ## Starting a change
 
@@ -234,12 +239,13 @@ handling is added.
 ## Replay
 
 `--replay` renders a recorded stream through the same tree and view-model as a live run, without a
-workspace. It is read-only: intake, approve, reword, reapprove, resume, abort, retry, answer and land
-are disabled, no status poll starts and no child is spawned; pressing a write key says the stream is
-replayed and read-only. The activity log opens and scrolls in replay too — `L`, `Tab`, `f`, `j`/`k`
-and `g`/`G` move through the recorded lines — and nothing is launched or written. `--once` renders
-that one frame into stdout with no cursor-control sequences and exits 0, which is what CI runs. A
-replay is not a workspace: it reads the file, writes nothing and changes nothing in `.factory/`.
+workspace. It is read-only: intake, approve, reword, reapprove, resume, abort, retry, answer, diff
+and land are disabled, no status poll starts and no child is spawned; pressing a write key says the
+stream is replayed and read-only. The activity log opens and scrolls in replay too — `L`, `Tab`, `f`,
+`j`/`k` and `g`/`G` move through the recorded lines — and nothing is launched or written. `--once`
+renders that one frame into stdout with no cursor-control sequences and exits 0, which is what CI
+runs. A replay is not a workspace: it reads the file, writes nothing and changes nothing in
+`.factory/`.
 
 ## Not in this release
 
