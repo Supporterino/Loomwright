@@ -1235,7 +1235,10 @@ describe("no engine imports", () => {
         const typeOnly = /^\s*type\b/.test(clause);
         if (specifier === "@loomwright/cli" || specifier.startsWith("@loomwright/cli/"))
           violations.push(`${name}: imports the CLI`);
-        if (!typeOnly && engine.test(specifier))
+        // 1.7: the diff pane's read seam is the one pipeline read the entry may call; `changeDiff`
+        // only shells out to `git diff`/`rev-parse` and starts no engine.
+        const readOnlyDiff = name === "entry.tsx" && specifier === "@loomwright/core/pipeline/diff";
+        if (!typeOnly && engine.test(specifier) && !readOnlyDiff)
           violations.push(`${name}: value-imports ${specifier}`);
         if (specifier.startsWith(".")) {
           const target = resolve(dirname(file), specifier);

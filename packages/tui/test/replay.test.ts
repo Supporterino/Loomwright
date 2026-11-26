@@ -388,7 +388,7 @@ describe("replay is read-only", () => {
 
   test("every write key produces the read-only notice and quits only on q or Ctrl-C", async () => {
     const view = viewOf(await readReplayFile(FIXTURE));
-    for (const input of ["n", "a", "A", "w", "R", "r", "x", "t", "l", "Q"]) {
+    for (const input of ["n", "a", "A", "w", "R", "r", "x", "t", "d", "l", "Q"]) {
       const outcome = replayKey(view, input, key());
       expect(outcome.quit).toBe(false);
       expect(outcome.notice).toBe(REPLAY_READ_ONLY);
@@ -396,6 +396,46 @@ describe("replay is read-only", () => {
     expect(replayKey(view, "l", key()).notice).toBe(REPLAY_READ_ONLY);
     expect(replayKey(view, "q", key()).quit).toBe(true);
     expect(replayKey(view, "c", key({ ctrl: true })).quit).toBe(true);
+  });
+
+  test("replay does not read a diff", async () => {
+    const path = tempFile(
+      "done.jsonl",
+      [
+        '{"v":1,"runId":"add-health","seq":1,"ts":"2026-11-18T10:00:00.000Z","type":"run.started","data":{"phase":"design"}}',
+        '{"v":1,"runId":"add-health","seq":2,"ts":"2026-11-18T10:00:00.000Z","type":"phase.changed","data":{"from":"design","to":"done"}}',
+        "",
+      ].join("\n"),
+    );
+    let reads = 0;
+    const frames: string[] = [];
+    const code = await runTui({
+      workspace: null,
+      replay: path,
+      once: true,
+      ascii: true,
+      columns: SIZE.columns,
+      rows: SIZE.rows,
+      out: (text) => frames.push(text),
+      factory: unusedFactory(),
+      launcher: unusedLauncher(),
+      readDiff: async () => {
+        reads += 1;
+        throw new Error("replay must not read a diff");
+      },
+    });
+
+    expect(code).toBe(0);
+    expect(reads).toBe(0);
+    expect(frames[0]).not.toContain("d diff");
+
+    const view = viewOf(await readReplayFile(path));
+    expect(view.run?.phase).toBe("done");
+    expect(view.footer.map((hint) => hint.key)).not.toContain("d");
+    const pressed = replayKey(view, "d", key());
+    expect(pressed.notice).toBe(REPLAY_READ_ONLY);
+    expect(pressed.quit).toBe(false);
+    expect(pressed.help).toBeNull();
   });
 
   test("replay scrolls the pane but launches nothing", async () => {

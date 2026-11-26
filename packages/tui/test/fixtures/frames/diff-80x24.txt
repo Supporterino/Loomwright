@@ -1,0 +1,24 @@
++------------------------------------------------------------------------------+
+| Diff - add-health                                                            |
+| app: main <- change/add-health (diff)                                        |
+| diff --git a/src/health.ts b/src/health.ts                                   |
+| index 1111111..2222222 100644                                                |
+| --- a/src/health.ts                                                          |
+| +++ b/src/health.ts                                                          |
+| @@ -1 +1,2 @@                                                                |
+| +ok                                                                          |
+| api: no change branch                                                        |
+|                                                                              |
+|                                                                              |
+|                                                                              |
+|                                                                              |
+|                                                                              |
+|                                                                              |
+|                                                                              |
+|                                                                              |
+|                                                                              |
+|                                                                              |
+|                                                                              |
+| j/k scroll - PgUp/PgDn page - g/G ends - Esc back                            |
++------------------------------------------------------------------------------+
+j/k scroll - PgUp/PgDn page - g/G ends - Esc back

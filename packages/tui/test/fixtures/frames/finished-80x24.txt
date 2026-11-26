@@ -21,4 +21,4 @@
 
 
 
-l land - L log - ? help - q quit
+d diff - l land - L log - ? help - q quit

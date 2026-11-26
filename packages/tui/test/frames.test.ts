@@ -3,8 +3,10 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { StatusDocument } from "@loomwright/core/factory";
+import type { ChangeDiff } from "@loomwright/core/pipeline/diff";
 import { RunState, TaskState } from "@loomwright/core/state/run";
 import { activityPanePanel, openActivityPane } from "../src/controls/activity-pane.ts";
+import { diffPanePanel, openDiffPane } from "../src/controls/diff-pane.ts";
 import { initialIntake, intakePanel } from "../src/intake/dialog.tsx";
 import { collectFacts, type EventFacts } from "../src/model/facts.ts";
 import {
@@ -331,6 +333,76 @@ describe("the activity pane fills the frame", () => {
       }
       const expected = readFileSync(file, "utf8").replace(/\n$/u, "");
       expect(actual, `activity-run ${size.columns}x${size.rows}`).toBe(expected);
+    });
+  }
+});
+
+const DIFF: ChangeDiff = {
+  id: "add-health",
+  repos: [
+    {
+      repo: "app",
+      path: "app",
+      target: "main",
+      branch: "change/add-health",
+      status: "diff",
+      files: [{ path: "src/health.ts", added: 10, deleted: 1 }],
+      patch: [
+        "diff --git a/src/health.ts b/src/health.ts",
+        "index 1111111..2222222 100644",
+        "--- a/src/health.ts",
+        "+++ b/src/health.ts",
+        "@@ -1 +1,2 @@",
+        "+ok",
+        "",
+      ].join("\n"),
+    },
+    {
+      repo: "api",
+      path: "api",
+      target: "main",
+      branch: "change/add-health",
+      status: "missing",
+      files: [],
+      patch: "",
+    },
+  ],
+};
+
+function diffPaneView(columns: number, rows: number): ViewModel {
+  const run = runState({ phase: "done" });
+  return buildViewModel(
+    vmInput({
+      screen: "run",
+      columns,
+      rows,
+      status: statusDoc([run]),
+      runs: [run],
+      selectedRunId: run.id,
+      panel: diffPanePanel({ state: openDiffPane(DIFF), glyphs: ASCII_GLYPHS, rows }),
+    }),
+  );
+}
+
+describe("the diff pane fills the frame", () => {
+  for (const size of SIZES) {
+    const file = join(framesDir, `diff-${size.columns}x${size.rows}.txt`);
+    test(`diff at ${size.columns}x${size.rows}`, async () => {
+      const actual = await renderFrame(diffPaneView(size.columns, size.rows), size, {
+        ascii: true,
+      });
+      expect(actual.includes("\u001b[")).toBe(false);
+      expect(actual).toMatch(/^[\t\n -~]*$/u);
+      const lines = actual.split("\n");
+      expect(lines).toHaveLength(size.rows);
+      expect(actual).toContain("Diff - add-health");
+      if (process.env.UPDATE_FRAMES === "1") {
+        mkdirSync(framesDir, { recursive: true });
+        writeFileSync(file, `${actual}\n`);
+        return;
+      }
+      const expected = readFileSync(file, "utf8").replace(/\n$/u, "");
+      expect(actual, `diff ${size.columns}x${size.rows}`).toBe(expected);
     });
   }
 });

@@ -5,8 +5,10 @@
  */
 import { execFile } from "node:child_process";
 import process from "node:process";
+import { loadConfig } from "@loomwright/core/config/load";
 import { type Factory, open, openReadOnly, type StatusDocument } from "@loomwright/core/factory";
 import type { Io } from "@loomwright/core/io";
+import { type ChangeDiff, changeDiff } from "@loomwright/core/pipeline/diff";
 import type { RunState } from "@loomwright/core/state/run";
 import type { RunEvent } from "@loomwright/protocol";
 import { render, useApp, useInput } from "ink";
@@ -35,6 +37,12 @@ import {
   activityPanePanel,
   openActivityPane,
 } from "./controls/activity-pane.ts";
+import {
+  diffPaneBodyRows,
+  diffPaneKeys,
+  diffPanePanel,
+  openDiffPane,
+} from "./controls/diff-pane.ts";
 import {
   openQuestions,
   questionsKeys,
@@ -76,7 +84,12 @@ import { createFrameScheduler, type FrameScheduler } from "./model/render-loop.t
 import { createStatusSource } from "./model/status.ts";
 import type { UiData } from "./model/ui-data.ts";
 import { evidenceOf, panelOpen, selectedRunState, syncApproval } from "./model/ui-data.ts";
-import { buildViewModel, type ViewModel, type ViewModelInput } from "./model/view-model.ts";
+import {
+  buildViewModel,
+  canLand,
+  type ViewModel,
+  type ViewModelInput,
+} from "./model/view-model.ts";
 import { firstOffset, lastOffset, moveBy, nextOffset, pageSize } from "./model/viewport.ts";
 import { type ReplayLoad, readReplayFile, replayModel } from "./replay/replay.ts";
 import { createTerminalSession, type TerminalSession } from "./session.ts";
@@ -141,6 +154,8 @@ export interface TuiOptions {
   readonly session?: TerminalSession;
   /** Tests inject the intake `Factory.open` so its rejection can be driven. */
   readonly open?: typeof open;
+  /** Tests inject the diff reader so a done run's `d` can be driven without a workspace. */
+  readonly readDiff?: (id: string) => Promise<ChangeDiff>;
   /**
    * Print every frame instead of rewriting the previous one. Ink only writes the last frame
    * when CI is set (the gates and GitHub Actions do), so tests that read a live screen need it.
@@ -206,6 +221,7 @@ const REPLAY_WRITE_KEYS: ReadonlySet<string> = new Set([
   "r",
   "x",
   "t",
+  "d",
   "l",
   "Q",
 ]);
@@ -322,6 +338,13 @@ export function viewOf(data: UiData, glyphs: GlyphSet): ViewModel {
   if (data.help) {
     return buildViewModel({ ...baseInput, panel: helpPanel() });
   }
+  const diff = data.diff ?? null;
+  if (diff !== null) {
+    return buildViewModel({
+      ...baseInput,
+      panel: diffPanePanel({ state: diff, glyphs, rows: data.rows }),
+    });
+  }
   if (activity !== null && base.run !== null) {
     return buildViewModel({
       ...baseInput,
@@ -395,6 +418,7 @@ function initialData(
     approvalCollapsed: false,
     questions: null,
     activity: null,
+    diff: null,
     reword: null,
     confirmation: null,
     help: false,
@@ -434,6 +458,7 @@ interface InteractiveProps {
   readonly factory: Factory;
   readonly launcher: Launcher;
   readonly open: typeof open;
+  readonly readDiff: (id: string) => Promise<ChangeDiff>;
   readonly initial: UiData;
   readonly glyphs: GlyphSet;
   readonly depth: ColorDepth;
@@ -444,6 +469,7 @@ function Interactive({
   factory,
   launcher,
   open,
+  readDiff,
   initial,
   glyphs,
   depth,
@@ -466,6 +492,8 @@ function Interactive({
   } | null>(null);
   const schedulerRef = useRef<FrameScheduler | null>(null);
   const pollerRef = useRef<StatusPoller | null>(null);
+  /** A monotonic token so a diff read that lands after the selection moved is dropped. */
+  const diffRead = useRef(0);
 
   const stopTail = useCallback((): void => {
     abortRef.current?.abort();
@@ -527,6 +555,7 @@ function Interactive({
         approvalCollapsed: false,
         questions: null,
         activity: null,
+        diff: null,
         reword: null,
         confirmation: null,
         help: false,
@@ -1004,6 +1033,18 @@ function Interactive({
       if (outcome === "quit") exit();
       return;
     }
+    const diff = state.diff ?? null;
+    if (diff !== null) {
+      const outcome = diffPaneKeys(diff, input, key, diffPaneBodyRows(state.rows));
+      if (outcome.close === true) {
+        setData((current) => ({ ...current, diff: null }));
+        return;
+      }
+      if (outcome.state !== diff) {
+        setData((current) => ({ ...current, diff: outcome.state }));
+      }
+      return;
+    }
     const activity = state.activity ?? null;
     if (activity !== null) {
       const run = viewRef.current.run;
@@ -1111,6 +1152,29 @@ function Interactive({
         }
         return;
       }
+      case "open-diff": {
+        const run = current.run;
+        if (run === null || !canLand(run.phase)) return;
+        const id = run.id;
+        const token = ++diffRead.current;
+        const message = `reading the diff of ${id} …`;
+        setData((state) => ({ ...state, notice: message }));
+        void readDiff(id)
+          .then((result) => {
+            if (token !== diffRead.current) return;
+            setData((state) =>
+              state.selectedRunId === id && state.screen === "run"
+                ? { ...state, diff: openDiffPane(result), notice: null }
+                : state,
+            );
+          })
+          .catch((err: unknown) => {
+            if (token !== diffRead.current) return;
+            const notice = err instanceof Error ? err.message : String(err);
+            setData((state) => ({ ...state, notice }));
+          });
+        return;
+      }
       case "abort": {
         const action = confirmFor(current);
         if (action !== null) {
@@ -1151,6 +1215,7 @@ function Interactive({
         setData((state) => ({
           ...state,
           activity: null,
+          diff: null,
           screen: "list",
           selectedTaskId: null,
           snapshot: null,
@@ -1478,6 +1543,9 @@ export async function runTui(options: TuiOptions): Promise<number> {
   if (options.once) throw new Error("tui: --once needs --replay");
   if (options.workspace === null) throw new Error("tui: a workspace or --replay is required");
   const workspace = options.workspace;
+  // Resolved once; the config is loaded only when a diff is actually read.
+  const readDiff =
+    options.readDiff ?? ((id: string) => changeDiff(workspace, loadConfig(workspace).config, id));
 
   // Read-only: the run list must open without the install marker (`open` is for intake, 1.5).
   const factory = options.factory ?? (await openReadOnly(workspace));
@@ -1505,6 +1573,7 @@ export async function runTui(options: TuiOptions): Promise<number> {
             factory={factory}
             launcher={options.launcher ?? createLauncher({ workspace })}
             open={options.open ?? open}
+            readDiff={readDiff}
             initial={initial}
             glyphs={glyphs}
             depth={depth}

@@ -44,6 +44,11 @@ export function pausedFindings(dash: string, count: number): string {
   return `paused ${dash} ${count} spec findings need reword`;
 }
 
+/** The diff pane's title; `dash` is the glyph set's dash (`—` or ASCII `-`). */
+export function diffTitle(dash: string, id: string): string {
+  return `Diff ${dash} ${id}`;
+}
+
 export function keyHint(key: string, label: string): KeyHint {
   return { key, label, enabled: true };
 }

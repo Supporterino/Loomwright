@@ -50,6 +50,7 @@ export type Intent =
   | { kind: "abort" }
   | { kind: "retry" }
   | { kind: "land" }
+  | { kind: "open-diff" }
   | { kind: "open-questions" }
   | { kind: "open-activity" };
 
@@ -105,6 +106,8 @@ function runIntent(viewModel: ViewModel, key: string): Intent {
       return { kind: "abort" };
     case "t":
       return { kind: "retry" };
+    case "d":
+      return { kind: "open-diff" };
     case "l":
       return { kind: "land" };
     case "Q":

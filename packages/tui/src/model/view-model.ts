@@ -143,7 +143,15 @@ export interface RunDetail {
 
 /** A panel is built by its owning module (intake, approval, questions, confirm, help, activity, reword). */
 export interface PanelView {
-  readonly kind: "intake" | "approval" | "questions" | "confirm" | "help" | "activity" | "reword";
+  readonly kind:
+    | "intake"
+    | "approval"
+    | "questions"
+    | "confirm"
+    | "help"
+    | "activity"
+    | "reword"
+    | "diff";
   readonly title: string;
   readonly lines: readonly string[];
   readonly keys: readonly KeyHint[];
@@ -430,6 +438,7 @@ function runFooter(input: ViewModelInput, run: RunDetail | null): KeyHint[] {
     return [keyHint("L", "log"), keyHint("?", "help"), keyHint("q", "quit")];
   const hints: KeyHint[] = [];
   if (canResume(run.phase)) hints.push(keyHint("r", "resume"));
+  if (canLand(run.phase)) hints.push(keyHint("d", "diff"));
   if (canLand(run.phase)) hints.push(keyHint("l", "land"));
   hints.push(...rewordHints(run.reword));
   if (run.phase !== "done" && run.phase !== "aborted") hints.push(keyHint("x", "abort"));

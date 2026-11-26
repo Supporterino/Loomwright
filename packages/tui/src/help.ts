@@ -5,8 +5,7 @@ import { keyHint } from "./strings.ts";
 
 const HELP_LINES: readonly string[] = [
   "n start a new change",
-  "Tab intake text/file mode",
-  "Tab cycle the log scope",
+  "Tab intake text/file mode; cycle the log scope",
   "Enter open the selected run or task; confirm",
   "Esc back out of a panel; cancel",
   "j / k move the selection",
@@ -19,6 +18,7 @@ const HELP_LINES: readonly string[] = [
   "r resume",
   "x abort",
   "t retry the selected failed task",
+  "d diff a done run",
   "l land a done run",
   "Q questions",
   "? help",
