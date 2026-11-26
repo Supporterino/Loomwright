@@ -160,7 +160,6 @@ describe("the scoped activity pane", () => {
     expect(taskPanel.title).toBe("Activity - first");
     expect(taskPanel.lines.filter((row) => row.trim() !== "")).toEqual([
       "first - agent - first line",
-      "review:app - agent - app review",
     ]);
 
     const repo = cycleScope(detail, opened);
@@ -319,7 +318,6 @@ describe("the scoped activity pane", () => {
     });
     expect(taskPanel.lines.filter((row) => row.trim() !== "")).toEqual([
       "first - agent - > .factory/logs/first.log first tool",
-      "review:app - agent - app review",
     ]);
 
     const repoPanel = activityPanePanel({

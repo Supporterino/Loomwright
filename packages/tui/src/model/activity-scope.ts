@@ -29,14 +29,22 @@ function scopeKey(scope: ActivityScope): string {
   }
 }
 
-/** Every scope a line belongs to; a task line belongs to its task and to its repo. */
+/**
+ * Every scope a line belongs to: a task id to its task and its repo, `review:`/`explore:` and a
+ * repo-named step to that repo, every other step to the run.
+ */
 export function scopesOfLine(
   tasks: readonly ScopeTask[],
   line: ActivityLine,
 ): readonly ActivityScope[] {
   const step = line.step;
   const task = tasks.find((candidate) => candidate.id === step);
-  if (task !== undefined) return taskScopeFor(task);
+  if (task !== undefined) {
+    const scopes: ActivityScope[] = [{ kind: "task", taskId: task.id }];
+    // A task whose repo is empty has only its own scope, never a shared empty one.
+    if (task.repo !== "") scopes.push({ kind: "repo", repo: task.repo });
+    return scopes;
+  }
   for (const prefix of [REVIEW_PREFIX, EXPLORE_PREFIX]) {
     if (!step.startsWith(prefix)) continue;
     const repo = step.slice(prefix.length);
@@ -47,12 +55,9 @@ export function scopesOfLine(
   return [{ kind: "run" }];
 }
 
-/** The task's union: its own id scope plus its repo scope. */
+/** The task's own scope: its id, and nothing its repo also owns. */
 export function taskScopeFor(task: ScopeTask): readonly ActivityScope[] {
-  const scopes: ActivityScope[] = [{ kind: "task", taskId: task.id }];
-  // A task whose repo is empty has only its own scope, never a shared empty one.
-  if (task.repo !== "") scopes.push({ kind: "repo", repo: task.repo });
-  return scopes;
+  return [{ kind: "task", taskId: task.id }];
 }
 
 /** The lines of one scope, oldest first, keeping every line's own `step` label. */

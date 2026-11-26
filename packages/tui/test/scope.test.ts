@@ -67,68 +67,96 @@ describe("activity scope", () => {
     ]);
   });
 
-  test("the tester task's activity joins its repo: a line appears in both app details", () => {
+  test("the tester task's activity joins its repo: each detail keeps only its own lines", () => {
     const lines = [
       activity(1, "first", "agent", "first tool line"),
       activity(2, "test-first", "agent", "tester tool line"),
     ];
-    expect(texts(detailFor(APP_TASKS, lines, "first"))).toEqual([
+    expect(texts(detailFor(APP_TASKS, lines, "first"))).toEqual(["first tool line"]);
+    expect(steps(detailFor(APP_TASKS, lines, "first"))).toEqual(["first"]);
+    expect(texts(detailFor(APP_TASKS, lines, "test-first"))).toEqual(["tester tool line"]);
+    expect(steps(detailFor(APP_TASKS, lines, "test-first"))).toEqual(["test-first"]);
+    expect(texts(linesInScope(APP_TASKS, lines, { kind: "repo", repo: "app" }))).toEqual([
       "first tool line",
       "tester tool line",
     ]);
-    expect(steps(detailFor(APP_TASKS, lines, "first"))).toEqual(["first", "test-first"]);
-    expect(texts(detailFor(APP_TASKS, lines, "test-first"))).toEqual([
-      "first tool line",
-      "tester tool line",
-    ]);
-    expect(steps(detailFor(APP_TASKS, lines, "test-first"))).toEqual(["first", "test-first"]);
   });
 
-  test("reviewer and full-suite lines join the task and keep their step label", () => {
+  test("reviewer and full-suite lines join the task: the detail keeps only the task's own lines", () => {
     const lines = [
-      activity(1, "review:app", "agent", "review found a bug"),
-      activity(2, "explore:app", "agent", "explored app"),
-      activity(3, "app", "gate", "full suite passed"),
+      activity(1, "first", "task", "started"),
+      activity(2, "first", "agent", "edited src/health.ts"),
+      activity(3, "first", "gate", "lint pass"),
+      activity(4, "review:app", "agent", "review found a bug"),
+      activity(5, "app", "gate", "full suite passed"),
     ];
-    for (const taskId of ["first", "test-first"]) {
-      const detail = detailFor(APP_TASKS, lines, taskId);
-      expect(steps(detail), taskId).toEqual(["review:app", "explore:app", "app"]);
-      expect(texts(detail), taskId).toEqual([
-        "review found a bug",
-        "explored app",
-        "full suite passed",
-      ]);
-    }
-    expect(scopesOfLine(APP_TASKS, lines[0] ?? activity(1, "review:app"))).toEqual([
+    expect(texts(detailFor(APP_TASKS, lines, "first"))).toEqual([
+      "started",
+      "edited src/health.ts",
+      "lint pass",
+    ]);
+    expect(steps(detailFor(APP_TASKS, lines, "first"))).toEqual(["first", "first", "first"]);
+    expect(texts(linesInScope(APP_TASKS, lines, { kind: "repo", repo: "app" }))).toEqual([
+      "started",
+      "edited src/health.ts",
+      "lint pass",
+      "review found a bug",
+      "full suite passed",
+    ]);
+  });
+
+  test("the repo scope keeps the reviewer and full-suite lines, each with its step label", () => {
+    const lines = [
+      activity(1, "first", "agent", "first tool line"),
+      activity(2, "review:app", "agent", "review found a bug"),
+      activity(3, "explore:app", "agent", "explored app"),
+      activity(4, "app", "gate", "full suite passed"),
+    ];
+    expect(texts(detailFor(APP_TASKS, lines, "first"))).toEqual(["first tool line"]);
+    expect(detailFor(APP_TASKS, lines, "test-first")).toEqual([]);
+    expect(scopesOfLine(APP_TASKS, lines[1] ?? activity(1, "review:app"))).toEqual([
       { kind: "repo", repo: "app" },
     ]);
+    const repo = linesInScope(APP_TASKS, lines, { kind: "repo", repo: "app" });
+    expect(steps(repo)).toEqual(["first", "review:app", "explore:app", "app"]);
+    expect(texts(repo)).toEqual([
+      "first tool line",
+      "review found a bug",
+      "explored app",
+      "full suite passed",
+    ]);
   });
 
-  test("install work for the repo joins both app tasks", () => {
+  test("install lines stay in the repo scope and out of both app task details", () => {
     const lines = [
       activity(1, "app", "install", "install started"),
       activity(2, "app", "install", "install finished"),
     ];
     for (const taskId of ["first", "test-first"]) {
-      expect(texts(detailFor(APP_TASKS, lines, taskId)), taskId).toEqual([
-        "install started",
-        "install finished",
-      ]);
+      expect(detailFor(APP_TASKS, lines, taskId), taskId).toEqual([]);
     }
+    expect(texts(linesInScope(APP_TASKS, lines, { kind: "repo", repo: "app" }))).toEqual([
+      "install started",
+      "install finished",
+    ]);
   });
 
-  test("another repo's lines stay out of the app detail and join the api detail", () => {
+  test("another repo's lines stay out of the app detail and join the api repo scope", () => {
     const lines = [
       activity(1, "second", "agent", "api task line"),
       activity(2, "review:api", "agent", "api review"),
     ];
     expect(detailFor(APP_TASKS, lines, "first")).toEqual([]);
     expect(detailFor(APP_TASKS, lines, "test-first")).toEqual([]);
-    expect(texts(detailFor(APP_TASKS, lines, "second"))).toEqual(["api task line", "api review"]);
-    expect(steps(detailFor(APP_TASKS, lines, "second"))).toEqual(["second", "review:api"]);
+    expect(texts(detailFor(APP_TASKS, lines, "second"))).toEqual(["api task line"]);
+    expect(steps(detailFor(APP_TASKS, lines, "second"))).toEqual(["second"]);
+    expect(texts(linesInScope(APP_TASKS, lines, { kind: "repo", repo: "api" }))).toEqual([
+      "api task line",
+      "api review",
+    ]);
   });
 
-  test("the contract review stays run-scoped while the contract-fix task joins its repo", () => {
+  test("the contract review stays run-scoped while the contract-fix task keeps its own lines", () => {
     const tasks: readonly ScopeTask[] = [...APP_TASKS, { id: "fix-contracts", repo: "app" }];
     const lines = [
       activity(1, "contract-review", "agent", "contract review"),
@@ -141,9 +169,11 @@ describe("activity scope", () => {
       "contract review",
       "contract fix",
     ]);
-    expect(texts(detailFor(tasks, lines, "first"))).toEqual(["contract fix"]);
-    expect(steps(detailFor(tasks, lines, "first"))).toEqual(["fix-contracts"]);
+    expect(detailFor(tasks, lines, "first")).toEqual([]);
     expect(texts(detailFor(tasks, lines, "fix-contracts"))).toEqual(["contract fix"]);
+    expect(texts(linesInScope(tasks, lines, { kind: "repo", repo: "app" }))).toEqual([
+      "contract fix",
+    ]);
   });
 
   test("the run scope carries everything in the ring's oldest-first order", () => {
@@ -164,7 +194,7 @@ describe("activity scope", () => {
     expect(taskSeqs.every((lineSeq) => runScope.some((line) => line.seq === lineSeq))).toBe(true);
   });
 
-  test("a task with an empty repo yields only its id scope", () => {
+  test("a task with an empty repo yields only its id scope, and every task's scope is its id", () => {
     const solo: ScopeTask = { id: "solo", repo: "" };
     const lines = [activity(1, "solo", "task", "solo line")];
     expect(taskScopeFor(solo)).toEqual([{ kind: "task", taskId: "solo" }]);
@@ -172,6 +202,9 @@ describe("activity scope", () => {
       { kind: "task", taskId: "solo" },
     ]);
     expect(texts(detailFor([solo], lines, "solo"))).toEqual(["solo line"]);
+    for (const task of APP_TASKS) {
+      expect(taskScopeFor(task), task.id).toEqual([{ kind: "task", taskId: task.id }]);
+    }
   });
 
   test("no line is ever assigned zero scopes", () => {
@@ -316,20 +349,8 @@ describe("the run view derives the task detail", () => {
     ];
     const detail = buildViewModel(runInput(run, events)).run;
 
-    expect(steps(detail?.detail?.activity ?? [])).toEqual([
-      "first",
-      "review:app",
-      "app",
-      "second",
-      "second",
-    ]);
-    expect(texts(detail?.detail?.activity ?? [])).toEqual([
-      "started (attempt 1)",
-      "review app",
-      "test pass in 10ms",
-      "started (attempt 1)",
-      "second line",
-    ]);
+    expect(steps(detail?.detail?.activity ?? [])).toEqual(["first"]);
+    expect(texts(detail?.detail?.activity ?? [])).toEqual(["started (attempt 1)"]);
     expect(texts(detail?.activity ?? [])).toContain("run-level progress");
     expect(texts(detail?.activity ?? [])).toContain("api line");
   });
