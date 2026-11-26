@@ -77,16 +77,17 @@ export async function changeDiff(
     if (options.repo !== undefined && repo.name !== options.repo) continue;
     const dir = join(root, repo.path);
     const target = await baseBranch(root, repo);
+    const result = { repo: repo.name, path: repo.path, target, branch };
+    // A repo without the change branch is `missing`, and its base may not exist either.
+    if (!(await refExists(dir, refs.local(branch)))) {
+      repos.push({ ...result, status: "missing", files: [], patch: "" });
+      continue;
+    }
     const base = await targetRef(dir, target);
     if (base === undefined)
       throw new PreconditionError(`base branch ${target} not found in ${dir}`, [
         "fetch it, or set defaultBranch on the repo in factory.config.jsonc",
       ]);
-    const result = { repo: repo.name, path: repo.path, target, branch };
-    if (!(await refExists(dir, refs.local(branch)))) {
-      repos.push({ ...result, status: "missing", files: [], patch: "" });
-      continue;
-    }
     // Three dots: against the merge base, so commits that landed on the base after branching
     // do not show up as part of the change.
     const range = `${base}...${branch}`;
