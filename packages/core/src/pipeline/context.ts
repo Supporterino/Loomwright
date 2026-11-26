@@ -5,6 +5,7 @@ import { JsonlSink } from "../events/jsonl.ts";
 import type { EventType } from "../events/protocol.ts";
 import type { EventSink } from "../events/sink.ts";
 import { TerminalSink } from "../events/terminal.ts";
+import type { InstallStep } from "../gates/install.ts";
 import type { Handoff } from "../handoff/schema.ts";
 import { appendLog } from "../logs/log.ts";
 import type { AgentRole } from "../policy/permissions.ts";
@@ -38,6 +39,8 @@ export interface PipelineDeps {
   readonly now?: () => number;
   /** Asks the user free text; undefined when nobody can answer (no TTY). */
   readonly ask?: Ask;
+  /** Tests: the dependency installer; defaults to `installDeps`. */
+  readonly install?: (root: string, dir: string, repo: RepoConfig) => Promise<InstallStep[]>;
   /** Whether agent-raised questions may be asked; false records them and continues. */
   readonly clarify?: boolean;
   /** Tests: an extra sink (a `MemorySink`) receives the same events as the terminal. */

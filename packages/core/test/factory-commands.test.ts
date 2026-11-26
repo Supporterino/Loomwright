@@ -19,13 +19,14 @@ import {
 import { cli } from "../../../test/helpers.ts";
 import { readApproval, specHash } from "../src/approval/approval.ts";
 import { PreconditionError, UsageError } from "../src/errors.ts";
+import { writeCommand } from "../src/events/inbox.ts";
 import { reduce } from "../src/events/protocol.ts";
 import { readEvents } from "../src/events/reader.ts";
 import { git } from "../src/exec.ts";
 import { type Factory, open, type RunOutcome } from "../src/factory.ts";
 import type { AgentRuntime } from "../src/runtime/types.ts";
 import { claimActive, readActive, readQueue } from "../src/state/active.ts";
-import { factoryDir } from "../src/state/files.ts";
+import { factoryDir, withFileLock } from "../src/state/files.ts";
 import { loadRun, newRun, saveRun, TaskState, updateRun } from "../src/state/run.ts";
 
 const ID = "add-health";
@@ -131,6 +132,42 @@ async function designed(team: Script): Promise<Harness> {
   await h.factory.approve(ID, { continue: false });
   return h;
 }
+
+/** A designed run paused on the design question a reader would answer. */
+async function pausedOnQuestion(team: Script): Promise<Harness> {
+  const h = await harness(team);
+  await h.factory.run(RUN_REQUEST);
+  await updateRun(fx.root, ID, (draft) => {
+    draft.phase = "paused";
+    draft.pausedReason = "needs an answer";
+  });
+  return h;
+}
+
+/** A run awaiting approval with one unanswered question and no event log yet. */
+function seedQuestion(options: { draft?: string } = {}): void {
+  const run = newRun(ID, RUN_REQUEST, "awaiting-approval");
+  run.clarifications = [
+    { step: "design", question: "Ship it?", status: "unanswered", at: "2026-01-01T00:00:00.000Z" },
+  ];
+  if (options.draft !== undefined) run.draft = options.draft;
+  // The change folder exists before an answer; the writer only adds questions.md to it.
+  const specDir = options.draft === undefined ? fx.root : join(fx.root, options.draft);
+  mkdirSync(join(specDir, "openspec", "changes", ID), { recursive: true });
+  saveRun(fx.root, run);
+}
+
+/** A stale answer with a fixed name that sorts before the `Date.now()` names `writeCommand` makes. */
+function writeStaleAnswer(answer: string): void {
+  mkdirSync(inboxOf(), { recursive: true });
+  writeFileSync(
+    join(inboxOf(), "answer-0.json"),
+    JSON.stringify({ command: "answer", runId: ID, question: "Ship it?", answer }),
+  );
+}
+
+const questionEvents = () =>
+  readEvents(fx.root, ID).events.filter((event) => event.type === "question.answered");
 
 /** Starts `resume` and pauses while the first implementer turn is in flight. */
 async function pauseDuringImplement(h: Harness): Promise<RunOutcome> {
@@ -283,16 +320,16 @@ describe("Factory commands", () => {
   });
 
   test("an answer is delivered and consumed", async () => {
-    const h = await harness(script({ questions: ["Ship it?"] }));
-    await h.factory.run(RUN_REQUEST);
+    const h = await pausedOnQuestion(script({ questions: ["Ship it?"] }));
     const designedRun = loadRun(fx.root, ID);
     expect(designedRun?.clarifications.some((c) => c.status === "unanswered")).toBe(true);
-    await updateRun(fx.root, ID, (draft) => {
-      draft.phase = "paused";
-      draft.pausedReason = "needs an answer";
-    });
 
-    await h.factory.answer(ID, "yes", "Ship it?");
+    writeCommand(fx.root, {
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "yes",
+    });
     expect(readdirSync(inboxOf())).toHaveLength(1);
     const outcome = await h.factory.resume(ID);
     expect(outcome.phase).toBe("awaiting-approval");
@@ -303,9 +340,7 @@ describe("Factory commands", () => {
     expect(record?.answer).toBe("yes");
     expect(readdirSync(inboxOf())).toHaveLength(0);
 
-    const answered = readEvents(fx.root, ID).events.filter(
-      (event) => event.type === "question.answered",
-    );
+    const answered = questionEvents();
     expect(answered).toHaveLength(1);
     expect(answered[0]?.data).toMatchObject({
       question: "Ship it?",
@@ -314,20 +349,278 @@ describe("Factory commands", () => {
     });
   });
 
-  test("an answer with no recorded question is appended", async () => {
+  test("a live driver owns the answer", async () => {
+    const h = await pausedOnQuestion(script({ questions: ["Ship it?"] }));
+    // A live pid makes `driverAlive` accept this process as the driver.
+    await claimActive(fx.root, ID);
+    const before = loadRun(fx.root, ID);
+
+    await h.factory.answer(ID, "yes", "Ship it?");
+
+    expect(readdirSync(inboxOf())).toHaveLength(1);
+    expect(loadRun(fx.root, ID)).toEqual(before);
+    expect(questionEvents()).toHaveLength(0);
+
+    const outcome = await h.factory.resume(ID);
+    expect(outcome.phase).toBe("awaiting-approval");
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?"),
+    ).toMatchObject({ status: "answered", answer: "yes" });
+    expect(readdirSync(inboxOf())).toHaveLength(0);
+    expect(questionEvents()).toHaveLength(1);
+    expect(readFileSync(join(fx.root, ".factory", "clarifications", `${ID}.md`), "utf8")).toContain(
+      "**Answer:** yes",
+    );
+    expect(
+      readFileSync(join(fx.root, "openspec", "changes", ID, "questions.md"), "utf8"),
+    ).toContain("**Answer:** yes");
+  });
+
+  test("an answer with no driver is persisted immediately", async () => {
+    seedQuestion();
+    const before = loadRun(fx.root, ID);
+    const factory = await open(fx.root);
+
+    await factory.answer(ID, "yes", "Ship it?");
+
+    const after = loadRun(fx.root, ID);
+    expect(after?.clarifications).toEqual([
+      {
+        step: "design",
+        question: "Ship it?",
+        status: "answered",
+        answer: "yes",
+        at: expect.any(String),
+      },
+    ]);
+    expect(after?.phase).toBe(before?.phase);
+    expect(after?.tasks).toEqual(before?.tasks);
+    expect(existsSync(join(fx.root, ".factory", "approvals", `${ID}.json`))).toBe(false);
+
+    const answered = questionEvents();
+    expect(answered).toHaveLength(1);
+    expect(answered[0]?.data).toMatchObject({
+      step: "design",
+      question: "Ship it?",
+      status: "answered",
+      answer: "yes",
+    });
+
+    expect(readFileSync(join(fx.root, ".factory", "clarifications", `${ID}.md`), "utf8")).toContain(
+      "**Answer:** yes",
+    );
+    expect(
+      readFileSync(join(fx.root, "openspec", "changes", ID, "questions.md"), "utf8"),
+    ).toContain("**Answer:** yes");
+    expect(existsSync(inboxOf())).toBe(false);
+  });
+
+  test("the draft's questions file is the one rewritten", async () => {
+    const draft = join(".factory", "worktrees", ID, "app", "draft");
+    seedQuestion({ draft });
+    const factory = await open(fx.root);
+
+    await factory.answer(ID, "yes", "Ship it?");
+
+    expect(
+      readFileSync(join(fx.root, draft, "openspec", "changes", ID, "questions.md"), "utf8"),
+    ).toContain("**Answer:** yes");
+    expect(existsSync(join(fx.root, "openspec", "changes", ID, "questions.md"))).toBe(false);
+  });
+
+  test("a direct apply removes a stale answer file", async () => {
+    seedQuestion();
+    writeCommand(fx.root, {
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "stale",
+    });
+    const factory = await open(fx.root);
+
+    await factory.answer(ID, "fresh", "Ship it?");
+
+    expect(readdirSync(inboxOf())).toHaveLength(0);
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?")?.answer,
+    ).toBe("fresh");
+    expect(questionEvents()).toHaveLength(1);
+  });
+
+  test("a deferred answer removes a stale answer file", async () => {
+    seedQuestion();
+    writeStaleAnswer("stale");
+    const factory = await open(fx.root);
+    const lock = join(factoryDir(fx.root, "runs"), `${ID}.json.lock`);
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const locked = withFileLock(lock, () => held);
+
+    const answering = factory.answer(ID, "fresh", "Ship it?");
+    // A driver claims the run while the answer waits for the lock, so it is deferred to the inbox.
+    await claimActive(fx.root, ID);
+    release();
+    await locked;
+    await answering;
+
+    const files = readdirSync(inboxOf());
+    expect(files).toHaveLength(1);
+    const fileName = files[0];
+    if (fileName === undefined) throw new Error("the deferred answer did not write an inbox file");
+    expect(JSON.parse(readFileSync(join(inboxOf(), fileName), "utf8"))).toMatchObject({
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "fresh",
+    });
+  });
+
+  test("a live driver answer replaces a stale answer file", async () => {
+    const h = await pausedOnQuestion(script({ questions: ["Ship it?"] }));
+    await claimActive(fx.root, ID);
+    writeStaleAnswer("stale");
+
+    await h.factory.answer(ID, "fresh", "Ship it?");
+
+    const files = readdirSync(inboxOf());
+    expect(files).toHaveLength(1);
+    const fileName = files[0];
+    if (fileName === undefined) throw new Error("the live answer did not write an inbox file");
+    expect(JSON.parse(readFileSync(join(inboxOf(), fileName), "utf8"))).toMatchObject({
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "fresh",
+    });
+    expect(questionEvents()).toHaveLength(0);
+  });
+
+  test("an answer for a missing run keeps the inbox file", async () => {
+    const factory = await open(fx.root);
+
+    await factory.answer(ID, "yes", "Ship it?");
+
+    // The run file does not exist, so the writer keeps the inbox write for a later process.
+    expect(loadRun(fx.root, ID)).toBeUndefined();
+    const files = readdirSync(inboxOf());
+    expect(files).toHaveLength(1);
+    const fileName = files[0];
+    if (fileName === undefined) throw new Error("the answer did not write an inbox file");
+    expect(JSON.parse(readFileSync(join(inboxOf(), fileName), "utf8"))).toMatchObject({
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "yes",
+    });
+    expect(existsSync(join(fx.root, ".factory", "clarifications", `${ID}.md`))).toBe(false);
+    expect(existsSync(join(fx.root, ".factory", "events", `${ID}.jsonl`))).toBe(false);
+  });
+
+  test("a missing-run answer removes a stale answer file", async () => {
+    writeStaleAnswer("stale");
+    const missing = await open(fx.root);
+
+    await missing.answer(ID, "fresh", "Ship it?");
+
+    // Only the fresh file remains, so a later driver cannot apply the older one first.
+    const files = readdirSync(inboxOf()).sort();
+    const fileName = files[0];
+    if (fileName === undefined) throw new Error("the answer did not write an inbox file");
+    expect(files).not.toContain("answer-0.json");
+    expect(JSON.parse(readFileSync(join(inboxOf(), fileName), "utf8"))).toMatchObject({
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "fresh",
+    });
+
+    // A later driver that now owns the run applies the fresh answer, not the stale one.
+    seedQuestion();
+    const h = await harness(script());
+    const outcome = await h.factory.resume(ID);
+    expect(outcome.phase).toBe("awaiting-approval");
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?")?.answer,
+    ).toBe("fresh");
+  });
+
+  test("a re-delivered answer is a no-op", async () => {
+    seedQuestion();
+    const factory = await open(fx.root);
+    await factory.answer(ID, "first", "Ship it?");
+    expect(questionEvents()).toHaveLength(1);
+    writeCommand(fx.root, {
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "stale",
+    });
+
+    await factory.answer(ID, "second", "Ship it?");
+
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?")?.answer,
+    ).toBe("first");
+    expect(questionEvents()).toHaveLength(1);
+    expect(readdirSync(inboxOf())).toHaveLength(0);
+    // Idempotency still repairs the clarification files.
+    expect(readFileSync(join(fx.root, ".factory", "clarifications", `${ID}.md`), "utf8")).toContain(
+      "**Answer:** first",
+    );
+    expect(
+      readFileSync(join(fx.root, "openspec", "changes", ID, "questions.md"), "utf8"),
+    ).toContain("**Answer:** first");
+  });
+
+  test("a re-delivered answer is a no-op when the driver consumes the inbox", async () => {
+    seedQuestion();
+    const h = await harness(script());
+    await h.factory.answer(ID, "first", "Ship it?");
+    expect(questionEvents()).toHaveLength(1);
+    writeCommand(fx.root, {
+      command: "answer",
+      runId: ID,
+      question: "Ship it?",
+      answer: "stale",
+    });
+
+    const outcome = await h.factory.resume(ID);
+
+    expect(outcome.phase).toBe("awaiting-approval");
+    expect(
+      loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Ship it?")?.answer,
+    ).toBe("first");
+    // The driver's unchanged branch emits nothing and still removes the stale file.
+    expect(questionEvents()).toHaveLength(1);
+    expect(readdirSync(inboxOf())).toHaveLength(0);
+    expect(readFileSync(join(fx.root, ".factory", "clarifications", `${ID}.md`), "utf8")).toContain(
+      "**Answer:** first",
+    );
+  });
+
+  test("an unrecorded question keeps the fallback", async () => {
     saveRun(fx.root, newRun(ID, RUN_REQUEST, "awaiting-approval"));
     const h = await harness(script());
 
     await h.factory.answer(ID, "late answer", "Unrecorded?");
-    const outcome = await h.factory.resume(ID);
-    expect(outcome.phase).toBe("awaiting-approval");
+
     const record = loadRun(fx.root, ID)?.clarifications.find((c) => c.question === "Unrecorded?");
     expect(record).toMatchObject({
       step: "answer",
       status: "answered",
       answer: "late answer",
     });
-    expect(readdirSync(inboxOf())).toHaveLength(0);
+    const answered = questionEvents();
+    expect(answered).toHaveLength(1);
+    expect(answered[0]?.data).toMatchObject({
+      step: "answer",
+      question: "Unrecorded?",
+      status: "answered",
+      answer: "late answer",
+    });
+    expect(existsSync(inboxOf())).toBe(false);
   });
 
   test("a pause is requested and consumed", async () => {
@@ -479,7 +772,8 @@ describe("Factory commands", () => {
     await factory.pause(ID);
     await factory.answer(ID, "yes");
     expect(opens).toBe(0);
-    expect(readdirSync(inboxOf()).sort()).toHaveLength(2);
+    // The direct answer left no inbox file; only the pause request remains.
+    expect(readdirSync(inboxOf())).toEqual([expect.stringContaining("pause")]);
   });
 
   test("retry keeps its usage errors", async () => {

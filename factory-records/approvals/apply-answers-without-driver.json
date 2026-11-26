@@ -1,0 +1,21 @@
+{
+  "changeId": "apply-answers-without-driver",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "a7791e7ee550accebb1424d9423bbdb0d80c78c6",
+  "hash": "06ccc77ce63eaf25916a2cf3f1e7c8e391e8202b6de3e289deecef34d9b34265",
+  "approvedAt": "2026-11-25T15:39:03.174Z",
+  "history": [
+    {
+      "hash": "71f74e3d9891aba630afac35294c3a0e81beb111da1546641df84010397f5cb0",
+      "specCommit": "0ed6d738bac5be8e050bdb59129db5bee731b87f",
+      "at": "2026-11-25T13:13:42.769Z",
+      "reason": "reword: review findings applied"
+    },
+    {
+      "hash": "a95acaf1e64a249696eda4f6ea27ae1dd19b2b891f70755dcd0523298cebc3a6",
+      "specCommit": "61a199056a5ac18a73cb80b235742843b053f574",
+      "at": "2026-11-25T14:13:26.058Z",
+      "reason": "reword: review findings applied"
+    }
+  ]
+}

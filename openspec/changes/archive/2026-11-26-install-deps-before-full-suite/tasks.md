@@ -1,0 +1,26 @@
+## 1. loomwright
+
+- [x] 1.1 Share the install-with-progress path between task worktrees and the full suite
+  - repo: loomwright
+  - deps: none
+  - touches: packages/core/src/pipeline/install.ts, packages/core/src/pipeline/context.ts, packages/core/src/pipeline/implement.ts, packages/core/test/pipeline-install.test.ts
+- [x] 1.2 Install in the gated checkout before the full-suite gates
+  - repo: loomwright
+  - deps: 1.1
+  - touches: packages/core/src/pipeline/finish.ts, packages/core/src/pipeline/drive.ts, packages/core/test/full-suite.test.ts
+- [x] 1.3 Write the pause report for full-suite pauses, with the failing output, and name it in the stop detail
+  - repo: loomwright
+  - deps: 1.2
+  - touches: packages/core/src/pipeline/finish.ts, packages/core/src/pipeline/drive.ts, packages/core/test/pause-report.test.ts
+- [x] 1.4 Cover the stale-checkout loop end to end
+  - repo: loomwright
+  - deps: 1.2, 1.3
+  - touches: packages/cli/test/full-suite.test.ts
+- [x] 1.5 Record the ADR, the architecture note and the `gate --full` clarification
+  - repo: loomwright
+  - deps: none
+  - touches: docs/decisions/0053-full-suite-installs.md, docs/decisions/README.md, ARCHITECTURE.md, docs/cli.md
+- [x] 1.6 Add the changeset
+  - repo: loomwright
+  - deps: 1.1, 1.2, 1.3
+  - touches: .changeset/install-deps-before-full-suite.md

@@ -44,27 +44,15 @@ open the run list.
 
 ### Requirement: The TUI reads the stream and the read API only
 
-The TUI SHALL build a run's state from `reduce` over `readEvents` followed by `tailEvents` from
-the last complete sequence number, and SHALL take run existence, phase, summary, draft, active
-lock, driver liveness, queue position and usage from `Factory.status()` and
-`Factory.listRuns()`. It MUST NOT read run-state or event files under `.factory/` (the event log,
-run state, the lock and the driver files), MUST NOT import `@loomwright/cli`, and MUST NOT
-value-import a pipeline, scheduler, gate, lock or state module; type-only imports from
-`@loomwright/core` are allowed. The reads it MAY make under `.factory/` are limited to two: its own
-spawn log, `.factory/logs/tui-spawn-<timestamp>.log`, which the launcher tails so a failed child's
-last lines can be shown; and, for the intake dialog only, the `.factory/requests/*.md` files it
-ranks, validates and previews, including the chosen request file. It MUST NOT infer that a run
-exists because an event log exists. A
-run without an event log SHALL still appear in the list from run state. Gate results, agent roles,
-retries and the activity tail SHALL come from events; token and cost totals SHALL come from the
-status document.
+The TUI SHALL build a run's state from `reduce` over `readEvents` followed by `tailEvents` from the last complete sequence number, and SHALL take run existence, phase, summary, draft, active lock, driver liveness, queue position and usage from `Factory.status()` and `Factory.listRuns()`. It MUST NOT read run-state or event files under `.factory/` (the event log, run state, the lock and the driver files), MUST NOT import `@loomwright/cli`, and MUST NOT value-import a pipeline, scheduler, gate, lock or state module; type-only imports from `@loomwright/core` are allowed. The one exception is the pre-land diff: `entry.tsx` MAY value-import the read-only `changeDiff` from `@loomwright/core/pipeline/diff`, which runs only git reads (`git diff`, `git rev-parse` and `.gitmodules` lookups) and starts no engine, but resolves the touched repos by reading the selected change's `.factory/runs/<id>.json`. The TUI MUST call that reader only from the `d` intent on a `done` run in a live session, and MUST NOT read a diff on open, for any other phase, or in replay. The reads it MAY make under `.factory/` are limited to three: its own spawn log, `.factory/logs/tui-spawn-<timestamp>.log`, which the launcher tails so a failed child's last lines can be shown; for the intake dialog only, the `.factory/requests/*.md` files it ranks, validates and previews, including the chosen request file; and, for that diff only, the selected run's `.factory/runs/<id>.json`. It MUST NOT infer that a run exists because an event log exists. A run without an event log SHALL still appear in the list from run state. Gate results, agent roles, retries and the activity tail SHALL come from events; token and cost totals SHALL come from the status document.
 
 #### Scenario: no engine imports
 
 - **WHEN** every file under `packages/tui/src` is scanned for imports
 - **THEN** none imports `@loomwright/cli` or a relative path outside the package
-- **AND** none value-imports a pipeline, scheduler, gate, lock or state module
-- **AND** none references a run-state or event path under `.factory/` for reading, the only permitted exceptions being the launcher's own `.factory/logs/tui-spawn-<timestamp>.log` and the intake dialog's `.factory/requests/*.md` listing and preview (including the chosen request file)
+- **AND** none value-imports a pipeline, scheduler, gate, lock or state module, except the one `changeDiff` import from `@loomwright/core/pipeline/diff` in `entry.tsx`
+- **AND** no file under `packages/tui/src` reads a run-state or event file under `.factory/`, the only permitted exceptions being the launcher's own `.factory/logs/tui-spawn-<timestamp>.log`, the intake dialog's `.factory/requests/*.md` listing and preview (including the chosen request file), and the selected run's `.factory/runs/<id>.json` read by the one `changeDiff` call
+- **AND** that diff reader is reached only from the `d` intent on a `done` run, never on open, for another phase or in replay
 
 #### Scenario: a run exists because run state says so
 
@@ -165,35 +153,13 @@ and is never quoted.
 
 ### Requirement: The run list and run view show the whole run
 
-The TUI SHALL show a run list ordered newest first with each run's id, summary, phase, role (active,
-queued at its position, or idle), token and cost totals, elapsed time and the number of recorded spec
-findings when there are any. Opening a run SHALL show a header with the run id, phase, elapsed time,
-token and cost totals and lock status; a task list in the order the run state carries (the
-`tasks.md` plan order, not re-sorted by `deps`) with each task's status, repo, attempt and title; a
-task detail pane with the agent role, model, retries, gate results per step, duration and the
-activity scoped to that task; and a footer listing the keys that are valid in the current state. The
-rendered frame SHALL never be taller than the terminal's rows.
+The TUI SHALL show a run list ordered newest first with each run's id, summary, phase, role (active, queued at its position, or idle), token and cost totals, elapsed time and the number of recorded spec findings when there are any. Opening a run SHALL show a header with the run id, phase, elapsed time, token and cost totals and lock status; a task list in the order the run state carries (the `tasks.md` plan order, not re-sorted by `deps`) with each task's status, repo, attempt and title; a task detail pane with the agent role, model, retries, gate results per step, duration and the activity scoped to that task; and a footer listing the keys that are valid in the current state. The rendered frame SHALL never be taller than the terminal's rows.
 
-The activity tail SHALL be built from every run event, whatever the phase and whether or not a task
-is running. Every event type the protocol defines SHALL fold into an activity line, except that
-repeated `heartbeat` events update the newest heartbeat line in place instead of adding a line each,
-so the tail carries at most one heartbeat line between bursts of work. Each line SHALL carry a source
-label — the task id, the install repo or the step when the event names one, and `run` otherwise — a
-kind label naming the event family — except `agent.activity`, whose kind is the activity kind it
-carries (`tool`, `step-done`, …) — and readable text. A line whose event carries a truncation
-reference (`ref`, or `gate.finished.outputRef`) SHALL name that `.factory/logs/` path. `run.*`,
-`phase.changed`, `task.*`, `gate.*`, `agent.*`, `install.*`, `question.*`, `approval.*`,
-`usage.delta`, `progress.line` and `heartbeat` SHALL therefore be visible in the run view, not only
-the agent activity of a task phase.
+The activity tail SHALL be built from every run event, whatever the phase and whether or not a task is running. Every event type the protocol defines SHALL fold into an activity line, except that repeated `heartbeat` events update the newest heartbeat line in place instead of adding a line each, so the tail carries at most one heartbeat line between bursts of work. Each line SHALL carry a source label — the task id, the install repo or the step when the event names one, and `run` otherwise — a kind label naming the event family — except `agent.activity`, whose kind is the activity kind it carries (`tool`, `step-done`, …) — and readable text. A line whose event carries a truncation reference (`ref`, or `gate.finished.outputRef`) SHALL name that `.factory/logs/` path. `run.*`, `phase.changed`, `task.*`, `gate.*`, `agent.*`, `install.*`, `question.*`, `approval.*`, `usage.delta`, `progress.line` and `heartbeat` SHALL therefore be visible in the run view, not only the agent activity of a task phase.
 
-The task detail's activity SHALL be derived from the run's task table and the emitted step, as
-defined by "Activity is scoped to the task it belongs to"; it SHALL NOT filter by task id alone. The
-overview's compact tail SHALL keep a floor of four rows; when the terminal is too short, the task
-graph SHALL scroll instead of taking the tail's floor away.
+The task detail's activity SHALL be derived from the run's task table and the emitted step, as defined by "Activity is scoped to the task it belongs to"; it SHALL list only the lines whose step is that task's id. The overview's compact tail SHALL keep a floor of four rows; when the terminal is too short, the task graph SHALL scroll instead of taking the tail's floor away.
 
-At 100 columns and wider the run view SHALL show the run-level tail beside the task graph when no task
-is selected. Below 100 columns it SHALL show the task graph followed by the run-level tail, sized to
-the rows left; a selected task's detail SHALL replace both.
+At 100 columns and wider the run view SHALL show the run-level tail beside the task graph when no task is selected. Below 100 columns it SHALL show the task graph followed by the run-level tail, sized to the rows left; a selected task's detail SHALL replace both.
 
 #### Scenario: design and install activity is visible
 
@@ -221,10 +187,10 @@ the rows left; a selected task's detail SHALL replace both.
 - **WHEN** a run has a task `first` in repo `app`, a reviewer step `review:app`, a full-suite gate
   whose step is `app`, a second task `second` in repo `app`, another task in repo `api` and
   run-level lines
-- **THEN** the detail for `first` lists the `first` lines, the `review:app` lines, the `app` gate
-  lines and the `second` lines, each still labelled with its own step
-- **AND** the `api` lines and the run-level lines stay out of that detail
-- **AND** the run-level tail still carries the run lines and every repo's lines
+- **THEN** the detail for `first` lists only the `first` lines
+- **AND** the `review:app`, `app` gate and `second` lines stay out of that detail
+- **AND** the run-level tail still carries the run lines, the review and gate lines, the `second`
+  lines and the `api` lines
 
 #### Scenario: a task detail shows the evidence
 
@@ -238,6 +204,12 @@ the rows left; a selected task's detail SHALL replace both.
 - **WHEN** the run view renders at 80 columns with no task selected
 - **THEN** the task graph is followed by the run-level tail of at least four rows
 - **AND** selecting a task replaces both with that task's detail
+
+#### Scenario: the unfocused tail carries everything
+
+- **WHEN** no task is selected and the run has lines from several tasks, a `review:` step and the run
+- **THEN** the `Activity` section lists every retained line
+- **AND** selecting a task narrows that section to the task's own lines
 
 #### Scenario: the list is ordered and labelled
 
@@ -389,34 +361,30 @@ and the footer SHALL say why. `q` SHALL still quit from every state.
 
 ### Requirement: Questions are recorded and answered later
 
-The TUI SHALL list the `question.raised` records of the selected run from the snapshot. Opening the
-questions pane SHALL select the first unanswered record, or the first record when none is unanswered,
-and SHALL send an answer through `Factory.answer`, which drops a command file the driving process
-applies at its next safe point. Because a run started from the TUI has no TTY, the UI SHALL label the
-answer "recorded — applies at the next step" and MAY say "answered" only after `question.answered`
-arrives, and SHALL point at the run's `questions.md`. The UI MUST NOT wait for the answer to be
-applied and MUST NOT block the run.
+The TUI SHALL list the `question.raised` records of the selected run from the snapshot. Opening the questions pane SHALL select the first unanswered record, or the first record when none is unanswered, and SHALL send an answer through `Factory.answer`, which persists the answer immediately when no live driver owns the run and otherwise drops a command file the driving process applies at its next safe point. The UI SHALL read `answered — <answer>` from the refreshed run state once the answer is persisted, including after a restart; the label `recorded — applies at the next step` SHALL describe only the live-driver window and SHALL NOT be the settled state of an answer the core persisted. The UI MAY say "answered" after `question.answered` arrives, and SHALL point at the run's `questions.md`. The UI MUST NOT wait for the answer to be applied and MUST NOT block the run.
 
-`Enter` on a selected unanswered record SHALL open a composer. In the composer, printable keys
-(including `j` and `k`) SHALL append text, `Ctrl-J` SHALL insert a newline, backspace SHALL delete the
-last character, `Enter` SHALL record the answer, and `Esc` SHALL discard the composer and keep the
-pane open. `j`/`k` and the arrow keys SHALL navigate the records whenever no composer is open, and a
-second `Esc` SHALL close the pane. While a composer is open, navigation keys SHALL leave the composer
-alone and the footer SHALL say `Esc leaves the composer to navigate`, so no key is silently dead. An
-empty or whitespace-only answer SHALL be refused in place with the existing notice. Only one answer
-SHALL be in flight at a time.
+`Enter` on a selected unanswered record SHALL open a composer. In the composer, printable keys (including `j` and `k`) SHALL append text, `Ctrl-J` SHALL insert a newline, backspace SHALL delete the last character, `Enter` SHALL record the answer, and `Esc` SHALL discard the composer and keep the pane open. `j`/`k` and the arrow keys SHALL navigate the records whenever no composer is open, and a second `Esc` SHALL close the pane. While a composer is open, navigation keys SHALL leave the composer alone and the footer SHALL say `Esc leaves the composer to navigate`, so no key is silently dead. An empty or whitespace-only answer SHALL be refused in place with the existing notice. Only one answer SHALL be in flight at a time.
 
-After a successful record the pane SHALL stay open, SHALL keep the recorded row reading
-`recorded — applies at the next step` until `question.answered` arrives, and SHALL advance the
-selection to the next unanswered record. When no unanswered record remains the selection SHALL stay
-on the recorded record. Many records SHALL scroll inside the pane and the selected record SHALL
-always be visible.
+After a successful record the pane SHALL stay open, SHALL keep the row reading `recorded — applies at the next step` until the answer is persisted or `question.answered` arrives, and SHALL advance the selection to the next unanswered record. When no unanswered record remains the selection SHALL stay on the recorded record. Many records SHALL scroll inside the pane and the selected record SHALL always be visible.
 
 #### Scenario: an answer is recorded, then confirmed
 
 - **WHEN** the user answers an `unanswered` question
 - **THEN** `Factory.answer` is called with the answer and the question
 - **AND** the row says `recorded — applies at the next step` until `question.answered` arrives
+- **AND** the row then says `answered` with the recorded answer
+
+#### Scenario: an idle answer is persisted and shown answered
+
+- **WHEN** the user answers an `unanswered` question on a run with no live driver
+- **THEN** `Factory.answer` is called with the answer and the question
+- **AND** after the refresh the row reads `answered — <answer>` from the run state
+- **AND** reopening the pane in a fresh TUI reads the same row and offers no composer
+
+#### Scenario: a driven answer stays recorded until the driver applies it
+
+- **WHEN** a live driver owns the run and the user answers an `unanswered` question
+- **THEN** the row says `recorded — applies at the next step` until `question.answered` arrives
 - **AND** the row then says `answered` with the recorded answer
 
 #### Scenario: the run is not asked
@@ -432,10 +400,9 @@ always be visible.
 
 #### Scenario: answer then advance keeps the pane open
 
-- **WHEN** the pane holds three records and the first two are unanswered and the user answers the
-  first
+- **WHEN** the pane holds three records and the first two are unanswered and the user answers the first
 - **THEN** the second record is selected and the pane is still open
-- **AND** the first record still reads `recorded — applies at the next step`
+- **AND** the first record reads `recorded — applies at the next step` until the answer is persisted, then `answered`
 - **AND** the footer lists `j`/`k` navigate, `Enter` answer and `Esc` close
 
 #### Scenario: Ctrl-J inserts a newline
@@ -700,25 +667,7 @@ e2e logs and a stream that ends at the approval gate so the overlay can be repla
 
 ### Requirement: Tests pin the behaviour
 
-The suite SHALL contain unit tests for the pure view-model layer with no Ink import, folding tests
-that feed one event of every protocol type through the facts and assert the resulting activity lines,
-scope tests for the task/repo/run derivation, viewport tests for every offset at 80×24 and 120×40
-(clamp at both ends, resize, selection after a data change, follow on and off), frame snapshots at
-80×24 and 120×40 for no runs, running graph, failing task, awaiting approval, question open,
-finished, new run (text), new run (file), approve-and-run confirm, approve-only confirm and queued
-after approval plus a design-phase activity state, a land confirmation state, a long run list at the
-top, middle and bottom, a paused run with three findings, the findings panel, the reword panel with
-findings and a typed prompt, the reword confirm naming `--prompt`, a 12-task run with a non-zero
-tail, a task detail with 20 gates and a scrolling tail, questions with 8 records and a composer open
-(single and multiline), the approval overlay collapsed to the banner and reopened, and the log pane
-following and scrolled in all three scopes. Launcher tests SHALL assert argv, flags, `detached`,
-`stdio`, `cwd`, `-C`, the reword prompt as one argv element and the absence of a signal on quit,
-SIGINT and crash; dialog tests, keybinding tests (approve confirm, abort confirm, land confirm, quit
-restores the terminal, `Esc` collapsing only at `idle`/`failed`, answers advancing, `Ctrl-J`
-inserting a newline, `w` from a paused run, `L` scrolling in replay) and `approval.pending` reduction
-stay. A regression test SHALL assert that no rendered frame exceeds `rows` for a 60-run list and a
-12-task run, and the existing accessibility and colour tests SHALL keep passing with updated
-fixtures.
+The suite SHALL contain unit tests for the pure view-model layer with no Ink import, folding tests that feed one event of every protocol type through the facts and assert the resulting activity lines, scope tests for the task/repo/run derivation, viewport tests for every offset at 80×24 and 120×40 (clamp at both ends, resize, selection after a data change, follow on and off), frame snapshots at 80×24 and 120×40 for no runs, running graph, failing task, awaiting approval, question open, finished, new run (text), new run (file), approve-and-run confirm, approve-only confirm and queued after approval plus a design-phase activity state, a land confirmation state, a long run list at the top, middle and bottom, a paused run with three findings, the findings panel, the reword panel with findings and a typed prompt, the reword confirm naming `--prompt`, a 12-task run with a non-zero tail, a task detail with 20 gates and a scrolling tail, questions with 8 records and a composer open (single and multiline), the approval overlay collapsed to the banner and reopened, and the log pane following and scrolled in all three scopes. Launcher tests SHALL assert argv, flags, `detached`, `stdio`, `cwd`, `-C`, the reword prompt as one argv element and the absence of a signal on quit, SIGINT and crash; dialog tests, keybinding tests (approve confirm, abort confirm, land confirm, quit restores the terminal, `Esc` collapsing only at `idle`/`failed`, answers advancing, `Ctrl-J` inserting a newline, `w` from a paused run, `L` scrolling in replay) and `approval.pending` reduction stay. A regression test SHALL assert that no rendered frame exceeds `rows` for a 60-run list and a 12-task run, and the existing accessibility and colour tests SHALL keep passing with updated fixtures.
 
 #### Scenario: the view-model is tested without Ink
 
@@ -747,7 +696,8 @@ fixtures.
 - **WHEN** the fold tests run
 - **THEN** one event of every `EVENT_TYPES` member produces its activity line (or the coalesced
   heartbeat line)
-- **AND** a task detail still derives its lines from the task's id and repo
+- **AND** a task detail derives its lines from the task's id only, and the repo scope still carries
+  the repo's other task, reviewer, explorer and full-suite lines
 
 #### Scenario: the frame budget is pinned
 
@@ -755,8 +705,7 @@ fixtures.
 - **THEN** a 60-run list and a 12-task run at 80×24 each render at most 24 lines
 - **AND** each frame's last line is the footer
 
-The replay fixture SHALL stay valid without a re-record unless the new layout genuinely changes what
-it asserts; where it does, the change SHALL re-record it and say why in the final report.
+The replay fixture SHALL stay valid without a re-record unless the new layout genuinely changes what it asserts; where it does, the change SHALL re-record it and say why in the final report.
 
 ### Requirement: Documentation and the ADR record the UI
 
@@ -920,34 +869,34 @@ code and the log tail. Replay SHALL refuse the key with the read-only notice and
 
 ### Requirement: Activity is scoped to the task it belongs to
 
-One pure function SHALL map an activity line to the scopes it belongs to, using the run state's
-task-to-repo table and the step the event named. A line whose step is a task id SHALL belong to that
-task and to that task's repo; a line whose step is `review:<repo>` or `explore:<repo>` SHALL belong
-to that repo; a line whose step is a repo named by a task SHALL belong to that repo; every other
-step SHALL belong only to the run. A task's activity SHALL be the union of its own lines and its
-repo's lines, so the reviewer, the tester task, the contract-fix task, the full-suite gates and the
-install work for that repo all appear in the task's detail, each keeping its step label. Another
-repo's lines MUST NOT appear. The run scope SHALL carry every retained line. The mapping SHALL live
-in one module with tests and MUST NOT be re-implemented in a view.
+One pure function SHALL map an activity line to the scopes it belongs to, using the run state's task-to-repo table and the step the event named. A line whose step is a task id SHALL belong to that task; a line whose step is `review:<repo>` or `explore:<repo>` SHALL belong to that repo; a line whose step is a repo named by a task SHALL belong to that repo; every other step SHALL belong only to the run. A task's activity SHALL be the lines whose step is that task's id; the reviewer, explorer, install and full-suite gate work for its repo MUST NOT appear in the task's detail. The repo scope SHALL carry that repo's lines, and the run scope SHALL carry every retained line. The mapping SHALL live in one module with tests and MUST NOT be re-implemented in a view.
 
 #### Scenario: reviewer and full-suite lines join the task
 
-- **WHEN** a task `first` in repo `app` has lines, and the run also has `review:app` lines and
-  `gate.finished` lines whose step is `app`
-- **THEN** the detail for `first` lists both sets
-- **AND** the reviewer lines still read `review:app`
+- **WHEN** a task `first` in repo `app` has `task.started`, `agent.activity` and `gate.finished` lines whose step is `first`, and the run also has `review:app` lines and `gate.finished` lines whose step is `app`
+- **THEN** the detail for `first` lists only the three `first` lines
+- **AND** the `review:app` and `app` gate lines are absent from that detail
+- **AND** the `app` repo scope still carries them
+
+#### Scenario: the repo scope keeps the reviewer and full-suite lines
+
+- **WHEN** the pane is in the `app` repo scope for a run with `first` lines, `review:app` lines and `app` gate lines
+- **THEN** the repo scope lists all three sets
+- **AND** every line keeps its own step label
 
 #### Scenario: the tester task's activity joins its repo
 
-- **WHEN** the run has a tester task `test-first` in repo `app` with `agent.activity` lines
-- **THEN** the detail for `first` lists those lines labelled `test-first`
-- **AND** the detail for `test-first` lists them too
+- **WHEN** the run has a tester task `test-first` in repo `app` with `agent.activity` lines and a task `first` in the same repo
+- **THEN** the detail for `first` does not list the `test-first` lines
+- **AND** the detail for `test-first` lists them
+- **AND** the `app` repo scope lists both sets
 
 #### Scenario: another repo's lines stay out
 
 - **WHEN** the run has a task `second` in repo `api` with lines and a `review:api` step
 - **THEN** the detail for `first` in repo `app` lists neither
-- **AND** the detail for `second` lists both
+- **AND** the detail for `second` lists the `second` lines
+- **AND** the `api` repo scope lists both sets
 
 #### Scenario: the task's own lines stay
 
@@ -956,15 +905,15 @@ in one module with tests and MUST NOT be re-implemented in a view.
 
 #### Scenario: the contract review stays run-scoped
 
-- **WHEN** the run emits `agent.activity` for step `contract-review` and contract-fix task lines for
-  repo `app`
+- **WHEN** the run emits `agent.activity` for step `contract-review` and contract-fix task lines for repo `app`
 - **THEN** the `contract-review` lines appear in the run scope
-- **AND** the contract-fix task's lines appear in the `app` task detail labelled with that task id
+- **AND** the contract-fix task's lines appear in that task's detail and in the `app` repo scope
+- **AND** the `first` task's detail does not list the contract-fix lines
 
 #### Scenario: the run scope carries everything
 
 - **WHEN** the log pane is in the run scope
-- **THEN** it lists every retained line, including the ones a task scope includes
+- **THEN** it lists every retained line, including the ones a task or repo scope includes
 
 ### Requirement: The activity log is a scoped, scrollable destination
 
@@ -1124,3 +1073,40 @@ entry module SHALL be at most 1,600 lines.
 - **WHEN** the existing controls, replay, approval and view suites run
 - **THEN** they pass with their existing assertions
 - **AND** no key, argv, notice or frame changes
+
+### Requirement: A done run offers a pre-land diff
+
+A `done` run SHALL offer `d` in its footer, before `l land`, and `d` SHALL open a full-height, read-only diff pane titled `Diff — <change-id>`. The pane SHALL show the change's patch against each touched repo's land base with one header per repo, and SHALL scroll with `j`/`k`, `PgUp`/`PgDn` and `g`/`G`; `Esc` SHALL close it and return to the run view. The footer MUST NOT offer `d` for any other phase or in replay: in any other phase pressing `d` MUST do nothing, while in replay it SHALL show the read-only notice and open no pane. The pane MUST NOT write, merge, fetch or read a log file. A read failure SHALL show its message as a notice and leave the run view open. The rendered frame, including the pane, SHALL never be taller than the terminal's rows.
+
+#### Scenario: a done run opens the diff
+
+- **WHEN** the selected run is `done` and the footer shows `d diff` before `l land`
+- **THEN** pressing `d` reads the change diff and opens a pane titled `Diff — <change-id>`
+- **AND** the pane lists each repo's header and patch lines
+- **AND** no write, merge or fetch is performed
+
+#### Scenario: other phases do not offer a diff
+
+- **WHEN** the selected run is `implementing`, `paused` or `awaiting-approval`
+- **THEN** the footer does not show `d diff`
+- **AND** pressing `d` opens no pane
+
+#### Scenario: the diff pane scrolls and closes
+
+- **WHEN** the diff pane holds more lines than the body and the user presses `PgDn`, `G`, `g` and `Esc`
+- **THEN** the offset moves by a page, to the end and to the start
+- **AND** `Esc` closes the pane and returns to the run view
+- **AND** the frame stays within the terminal rows
+
+#### Scenario: replay does not read a diff
+
+- **WHEN** `tui --replay` shows a done run and the user presses `d`
+- **THEN** the footer does not advertise `d diff`
+- **AND** the read-only notice is shown
+- **AND** no pane opens and no diff is read
+
+#### Scenario: a diff read failure is shown as a notice
+
+- **WHEN** `d` is pressed and the diff reader rejects
+- **THEN** the run view shows the reader's message as a notice
+- **AND** no diff pane opens

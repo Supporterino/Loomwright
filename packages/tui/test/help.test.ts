@@ -40,6 +40,14 @@ describe("help", () => {
     expect(line).toContain("land");
   });
 
+  test("the help panel names d as the diff key before l land", () => {
+    const lines = helpPanel().lines;
+    const diff = lines.indexOf("d diff a done run");
+    const land = lines.indexOf("l land a done run");
+    expect(diff).toBeGreaterThan(-1);
+    expect(land).toBeGreaterThan(diff);
+  });
+
   test("Esc closes help and q quits while it is open", () => {
     expect(helpKeys("", key({ escape: true }))).toBe("close");
     expect(helpKeys("q", key())).toBe("quit");

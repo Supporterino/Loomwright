@@ -263,6 +263,18 @@ describe("documentation", () => {
     expect(read("docs/decisions/README.md")).toContain("| [0046](0046-typed-event-stream.md)");
   });
 
+  test("ADR-0050 records the immediate answer path", () => {
+    const adr = read("docs/decisions/0050-answer-without-driver.md");
+    expect(adr.startsWith("# 0050 — ")).toBe(true);
+    expect(adr).toContain("## Context");
+    expect(adr).toContain("## Decision");
+    expect(adr).toContain("## Consequences");
+    expect(adr).toContain("ADR-0046");
+    expect(adr).toContain("a live follower drops the late duplicate");
+    expect(adr).not.toContain("Loomwright");
+    expect(read("docs/decisions/README.md")).toContain("| [0050](0050-answer-without-driver.md)");
+  });
+
   test("the ADR exists and is indexed (ADR-0049)", () => {
     const adr = read("docs/decisions/0049-package-runner-aliases.md");
     expect(adr.startsWith("# 0049 — ")).toBe(true);
@@ -296,13 +308,23 @@ describe("documentation", () => {
     expect(events).toContain("status --watch");
     expect(events).toContain("8 KiB");
     expect(events).toContain("additive");
+    expect(events).toContain("live driver");
+    expect(events).toContain("persisted immediately");
+    expect(events).toContain("drops the late duplicate");
+    // `answer` uses the inbox only for a live driver and is persisted immediately otherwise.
+    expect(events).toContain("uses the inbox only while a live driver");
+    // The missing-run exception: an answer for a run id with no run file keeps the inbox write.
+    expect(events).toContain("the one exception: that missing-run case keeps the inbox write");
+    expect(events).toContain("leaves the file");
     expect(read("docs/cli.md")).toContain("docs/events.md");
   });
 
   test("the architecture and README mention the event stream", () => {
     const architecture = read("ARCHITECTURE.md");
     expect(architecture).toContain(".factory/events/");
+    expect(architecture).toContain(".factory/events/<id>.jsonl");
     expect(architecture).toContain(".factory/commands/");
+    expect(architecture).toContain("live-driver");
     expect(architecture).toContain("packages/core/src/events/");
     expect(read("README.md")).toContain("loomwright events");
   });
@@ -623,6 +645,7 @@ describe("terminal UI documentation", () => {
       ["r", "resume"],
       ["x", "abort"],
       ["t", "retry task"],
+      ["d", "diff"],
       ["l", "land"],
       ["Q", "questions"],
       ["PgUp/PgDn", "page"],
@@ -657,6 +680,16 @@ describe("terminal UI documentation", () => {
     // The honest answer wording is shared with the questions pane.
     expect(read("packages/tui/src/strings.ts")).toContain("recorded — applies at the next step");
     expect(tui).toContain("never claims the answer was applied");
+  });
+
+  test("the docs describe the task-scoped log and the done diff", () => {
+    const tui = read("docs/tui.md");
+    expect(tui).toContain("A task's scope is its own step lines only");
+    expect(tui).toContain("`Tab` moves to the repo scope");
+    expect(tui).toContain("`d diff`");
+    expect(tui).toContain("before `l land`");
+    expect(tui).toContain("Diff — <id>");
+    expect(tui).toContain("answer, diff\nand land are disabled");
   });
 
   test("the report lists the follow-ups", () => {

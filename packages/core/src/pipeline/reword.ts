@@ -395,7 +395,13 @@ export async function reword(
       `pass an instruction: \`loomwright reword ${id} --prompt "..."\``,
     ]);
   }
-  const dirty = (await git(["status", "--porcelain", "--", specPath(id)], { cwd: dir })).stdout;
+  // `questions.md` is machine-written by the answer paths and is outside the approval hash.
+  const dirty = (
+    await git(
+      ["status", "--porcelain", "--", specPath(id), `:(exclude)${specPath(id)}/questions.md`],
+      { cwd: dir },
+    )
+  ).stdout;
   if (dirty.trim() !== "") {
     throw new PreconditionError(`the spec of ${id} has uncommitted edits`, [
       `commit them, or run \`loomwright reapprove ${id}\` to accept them`,

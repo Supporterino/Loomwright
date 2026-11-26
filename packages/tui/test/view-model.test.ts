@@ -528,6 +528,37 @@ describe("buildViewModel", () => {
     expect(questions[0]?.questionsFile).toBe("openspec/changes/add-health/questions.md");
   });
 
+  test("an answered run-state record beats a stale unanswered snapshot row", () => {
+    // The status poll persisted the idle answer; the event tail has not folded question.answered.
+    const run = runState({
+      clarifications: [
+        { step: "intake", question: "Which repo?", status: "answered", answer: "app", at: ISO },
+      ],
+    });
+    resetSeq();
+    const events = [
+      event("question.raised", {
+        step: "intake",
+        question: "Which repo?",
+        status: "unanswered",
+      }),
+    ];
+    const questions = buildViewModel(runInput(run, events)).run?.questions ?? [];
+    expect(questions).toHaveLength(1);
+    expect(questions[0]?.status).toBe("answered");
+    expect(questions[0]?.answer).toBe("app");
+  });
+
+  test("a record only the event tail knows yet still renders", () => {
+    const run = runState();
+    resetSeq();
+    const events = [
+      event("question.raised", { step: "intake", question: "Which repo?", status: "unanswered" }),
+    ];
+    const questions = buildViewModel(runInput(run, events)).run?.questions ?? [];
+    expect(questions[0]?.status).toBe("unanswered");
+  });
+
   test("approval: pending gives hash and change dir, granted adds commit and approver", () => {
     const run = runState({ phase: "awaiting-approval" });
     resetSeq();
@@ -1204,7 +1235,10 @@ describe("no engine imports", () => {
         const typeOnly = /^\s*type\b/.test(clause);
         if (specifier === "@loomwright/cli" || specifier.startsWith("@loomwright/cli/"))
           violations.push(`${name}: imports the CLI`);
-        if (!typeOnly && engine.test(specifier))
+        // 1.7: the diff pane's read seam is the one pipeline read the entry may call; `changeDiff`
+        // only shells out to `git diff`/`rev-parse` and starts no engine.
+        const readOnlyDiff = name === "entry.tsx" && specifier === "@loomwright/core/pipeline/diff";
+        if (!typeOnly && engine.test(specifier) && !readOnlyDiff)
           violations.push(`${name}: value-imports ${specifier}`);
         if (specifier.startsWith(".")) {
           const target = resolve(dirname(file), specifier);

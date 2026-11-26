@@ -99,6 +99,21 @@ esac
     }
   }
 
+  /** Point the openspec tool at a stub for `version`; doctor only asks it for `--version`. */
+  async function asOpenspec(version: string, run: () => Promise<void>): Promise<void> {
+    const script = join(fx.base, `openspec-${version}`);
+    writeFileSync(script, `#!/bin/sh\necho "openspec ${version}"\n`);
+    chmodSync(script, 0o755);
+    const saved = process.env.AI_FACTORY_OPENSPEC_BIN;
+    process.env.AI_FACTORY_OPENSPEC_BIN = script;
+    try {
+      await run();
+    } finally {
+      if (saved === undefined) delete process.env.AI_FACTORY_OPENSPEC_BIN;
+      else process.env.AI_FACTORY_OPENSPEC_BIN = saved;
+    }
+  }
+
   /**
    * Point opencode at a stub that exports one anthropic credential and fails `auth import`
    * without reading stdin.
@@ -428,6 +443,35 @@ esac
       expect(find(json, "opencode")?.detail).toContain("mcp.roles");
       expect(find(json, "opencode")?.fix).toContain("@opencode/cli@2.2.0");
       expect((await cli(root, "doctor")).code).toBe(ExitCode.Precondition);
+    });
+  });
+
+  test("a 2.x install is accepted: doctor reports openspec 2.2.0 as ok", async () => {
+    const root = await installed(createSingleRepoFixture, { app: passAll });
+    await asOpenspec("2.2.0", async () => {
+      const check = find(await report(root), "openspec");
+      expect(check).toMatchObject({ status: "ok" });
+      expect(check?.detail).toContain("2.2.0");
+      expect(check?.detail).toContain(">= 1.10.0");
+      expect(check?.detail).toContain("< 3.0.0");
+      expect(check?.detail).toContain("tested 2.2.0");
+    });
+  });
+
+  test("3.0.0 is the next breaking gate: doctor fails openspec 3.0.0", async () => {
+    const root = await installed(createSingleRepoFixture, { app: passAll });
+    await asOpenspec("3.0.0", async () => {
+      const check = find(await report(root), "openspec");
+      expect(check).toMatchObject({ status: "fail" });
+      expect(check?.detail).toContain("newer than supported");
+      expect(check?.detail).toContain("< 3.0.0");
+    });
+  });
+
+  test("a 1.x install still passes: doctor reports openspec 1.14.3 as ok", async () => {
+    const root = await installed(createSingleRepoFixture, { app: passAll });
+    await asOpenspec("1.14.3", async () => {
+      expect(find(await report(root), "openspec")).toMatchObject({ status: "ok" });
     });
   });
 

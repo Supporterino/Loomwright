@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Factory, StatusDocument } from "@loomwright/core/factory";
+import type { ChangeDiff } from "@loomwright/core/pipeline/diff";
 import type { ActiveLock } from "@loomwright/core/state/active";
 import { RunState, TaskState } from "@loomwright/core/state/run";
 import type { UsageSummary } from "@loomwright/core/usage/usage";
@@ -14,7 +15,8 @@ import {
   RunEvent as RunEventSchema,
   reduce,
 } from "@loomwright/protocol";
-import { REPLAY_READ_ONLY, runTui } from "../src/entry.tsx";
+import { openDiffPane } from "../src/controls/diff-pane.ts";
+import { REPLAY_READ_ONLY, runTui, type UiData, viewOf } from "../src/entry.tsx";
 import type { LaunchAction, Launcher } from "../src/launch/launcher.ts";
 import { collectFacts } from "../src/model/facts.ts";
 import { applyKey } from "../src/model/keys.ts";
@@ -26,6 +28,7 @@ import {
 } from "../src/model/view-model.ts";
 import { createTerminalSession, type TerminalSession } from "../src/session.ts";
 import { emptyWorkspace } from "../src/strings.ts";
+import { ASCII_GLYPHS } from "../src/theme/glyphs.ts";
 import { renderFrame } from "../src/views/frame.tsx";
 import { singlePaneTailRows, taskDetailTailRows, twoPaneTailRows } from "../src/views/run-view.tsx";
 
@@ -153,6 +156,59 @@ function runInput(
     facts: collectFacts(events),
     ...overrides,
   });
+}
+
+const DIFF: ChangeDiff = {
+  id: RUN,
+  repos: [
+    {
+      repo: "app",
+      path: "app",
+      target: "main",
+      branch: `change/${RUN}`,
+      status: "diff",
+      files: [{ path: "src/health.ts", added: 10, deleted: 1 }],
+      patch: ["+++ b/src/health.ts", "@@ -1 +1,2 @@", "+ok", ""].join("\n"),
+    },
+    {
+      repo: "api",
+      path: "api",
+      target: "main",
+      branch: `change/${RUN}`,
+      status: "missing",
+      files: [],
+      patch: "",
+    },
+  ],
+};
+
+function uiData(overrides: Partial<UiData> = {}): UiData {
+  return {
+    screen: "run",
+    selectedRunId: RUN,
+    selectedTaskId: null,
+    columns: 80,
+    rows: 24,
+    status: statusDoc([]),
+    runs: [],
+    snapshot: null,
+    facts: collectFacts([]),
+    notice: null,
+    listOffset: 0,
+    taskOffset: 0,
+    intake: null,
+    approval: null,
+    approvalCollapsed: false,
+    questions: null,
+    activity: null,
+    diff: null,
+    reword: null,
+    confirmation: null,
+    help: false,
+    identity: null,
+    pendingLand: null,
+    ...overrides,
+  };
 }
 
 async function frame(view: ViewModel, columns = 120, rows = 40, ascii = false): Promise<string> {
@@ -608,6 +664,47 @@ describe("run view layout", () => {
     expect(drilled).not.toContain("Tasks");
     expect(drilled).not.toContain("run-level line");
     expect(drilled).toContain("first - Health endpoint");
+  });
+
+  test("the unfocused tail carries everything: every task, review and run line, then a task narrows it", async () => {
+    const run = runState({
+      tasks: [
+        taskState({ id: "first", title: "Health endpoint", repo: "app" }),
+        taskState({ id: "second", title: "Client", repo: "api" }),
+      ],
+    });
+    resetSeq();
+    const events = [
+      event("progress.line", { level: "normal", text: "run-level line" }),
+      event("task.started", { task: { id: "first", repo: "app" }, attempt: 1 }),
+      event("agent.activity", { step: "first", detail: "first tool line", kind: "tool" }),
+      event("agent.activity", { step: "review:app", detail: "review app line", kind: "tool" }),
+      event("task.started", { task: { id: "second", repo: "api" }, attempt: 1 }),
+      event("agent.activity", { step: "second", detail: "second tool line", kind: "tool" }),
+    ];
+
+    const unfocused = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: null })),
+      120,
+      40,
+      true,
+    );
+    expect(unfocused).toContain("Activity");
+    expect(unfocused).toContain("run-level line");
+    expect(unfocused).toContain("first tool line");
+    expect(unfocused).toContain("review app line");
+    expect(unfocused).toContain("second tool line");
+
+    const focused = await frame(
+      buildViewModel(runInput(run, events, { selectedTaskId: "first" })),
+      120,
+      40,
+      true,
+    );
+    expect(focused).toContain("first tool line");
+    expect(focused).not.toContain("run-level line");
+    expect(focused).not.toContain("review app line");
+    expect(focused).not.toContain("second tool line");
   });
 
   test("a long narrow run keeps its run-level tail instead of claiming no activity", async () => {
@@ -1069,6 +1166,21 @@ describe("footer", () => {
     expect(finishedText).toContain("q quit");
   });
 
+  test("a done run offers d diff just before l land", () => {
+    const view = buildViewModel(runInput(runState({ phase: "done" })));
+    const keys = view.footer.map((hint) => hint.key);
+    expect(keys.indexOf("d")).toBeGreaterThan(-1);
+    expect(keys.indexOf("l")).toBe(keys.indexOf("d") + 1);
+    expect(view.footer[keys.indexOf("d")]).toMatchObject({ label: "diff", enabled: true });
+  });
+
+  test("other phases do not offer a diff", () => {
+    for (const phase of ["implementing", "paused", "awaiting-approval"] as const) {
+      const view = buildViewModel(runInput(runState({ phase })));
+      expect(view.footer.map((hint) => hint.key)).not.toContain("d");
+    }
+  });
+
   test("an overflowing paused run with a failed task and questions keeps q quit and ? help", async () => {
     const run = runState({
       phase: "paused",
@@ -1488,6 +1600,8 @@ async function driveTui(
   launcher?: Launcher,
   frames = false,
   replay?: string,
+  readDiff?: (id: string) => Promise<ChangeDiff>,
+  workspace = "/workspace",
 ): Promise<DrivenRun> {
   const input = new FakeInput();
   const output = new FakeOutput();
@@ -1510,7 +1624,7 @@ async function driveTui(
     Object.defineProperty(process, "stdin", { value: input, configurable: true });
     Object.defineProperty(process, "stdout", { value: output, configurable: true });
     const code = runTui({
-      workspace: replay === undefined ? "/workspace" : null,
+      workspace: replay === undefined ? workspace : null,
       ...(replay === undefined ? {} : { replay }),
       once: false,
       ascii: true,
@@ -1526,6 +1640,7 @@ async function driveTui(
           throw new Error("the help panel must not launch");
         },
       },
+      ...(readDiff === undefined ? {} : { readDiff }),
       session,
     });
     // A failed drive must not also surface as an unhandled rejection from the TUI.
@@ -2121,5 +2236,300 @@ describe("the interactive entry", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("the done run's diff", () => {
+  test("the diff pane renders its title inside the frame and stays within the rows", async () => {
+    const run = runState({ phase: "done" });
+    const data = uiData({
+      status: statusDoc([{ run, tokens: 0, cost: 0 }]),
+      runs: [run],
+      diff: openDiffPane(DIFF),
+    });
+    const view = viewOf(data, ASCII_GLYPHS);
+    expect(view.panel?.kind).toBe("diff");
+    const text = await frame(view, 80, 24, true);
+    expect(text).toContain("Diff - add-health");
+    expect(text).toContain("app: main <- change/add-health (diff)");
+    expect(text).toContain("+++ b/src/health.ts");
+    expect(text.split("\n").length).toBeLessThanOrEqual(24);
+  });
+
+  test("a done run opens the diff", async () => {
+    const run = runState({ phase: "done" });
+    const reads: string[] = [];
+    let launches = 0;
+    const launcher: Launcher = {
+      launch: async () => {
+        launches += 1;
+        throw new Error("a diff read must not launch");
+      },
+    };
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the done run view", () => output.text().includes("d diff"));
+        await pressUntil(input, "d", "the diff pane", () =>
+          output.text().includes(`Diff - ${run.id}`),
+        );
+        expect(output.text()).toContain(`app: main <- change/${run.id} (diff)`);
+        expect(output.text()).toContain("+++ b/src/health.ts");
+        input.press("q");
+      },
+      launcher,
+      true,
+      undefined,
+      async (id) => {
+        reads.push(id);
+        return DIFF;
+      },
+    );
+
+    expect(result.code).toBe(0);
+    expect(reads).toEqual([run.id]);
+    expect(launches).toBe(0);
+  });
+
+  test("other phases do not offer a diff: d opens no pane", async () => {
+    const run = runState({ phase: "implementing" });
+    let reads = 0;
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the implementing run view", () =>
+          output.text().includes("L log"),
+        );
+        const mark = output.writes.length;
+        input.press("d");
+        await pause();
+        expect(output.writes.slice(mark).join("")).not.toContain("Diff -");
+        input.press("q");
+      },
+      undefined,
+      true,
+      undefined,
+      async () => {
+        reads += 1;
+        return DIFF;
+      },
+    );
+
+    expect(result.code).toBe(0);
+    expect(reads).toBe(0);
+  });
+
+  test("a diff read failure is shown as a notice", async () => {
+    const run = runState({ phase: "done" });
+    const message = `no change ${run.id} in this workspace`;
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the done run view", () => output.text().includes("d diff"));
+        await pressUntil(input, "d", "the failure notice", () => output.text().includes(message));
+        expect(output.text()).not.toContain(`Diff - ${run.id}`);
+        expect(output.text()).not.toContain("j/k scroll");
+        input.press("q");
+      },
+      undefined,
+      true,
+      undefined,
+      async () => {
+        throw new Error(message);
+      },
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.writes.join("")).toContain(message);
+  });
+
+  test("a broken config is shown as a notice when d is pressed", async () => {
+    const run = runState({ phase: "done" });
+    const dir = mkdtempSync(join(tmpdir(), "loomwright-config-"));
+    writeFileSync(join(dir, "factory.config.jsonc"), "{ not jsonc\n");
+    try {
+      const result = await driveTui(
+        listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+        async (input, output) => {
+          await until(() => output.text().includes(run.id), "the run row");
+          await pressUntil(input, "\r", "the done run view", () =>
+            output.text().includes("d diff"),
+          );
+          await pressUntil(input, "d", "the config notice", () =>
+            output.text().includes("is not valid JSONC"),
+          );
+          // The run view stays open: no diff pane, and the footer is still there.
+          expect(output.writes.at(-1) ?? "").toContain("d diff");
+          expect(output.text()).not.toContain(`Diff - ${run.id}`);
+          input.press("q");
+        },
+        undefined,
+        true,
+        undefined,
+        undefined,
+        dir,
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.writes.join("")).toContain("is not valid JSONC");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a diff read that resolves after the selection moved opens no pane", async () => {
+    const first = runState({ id: "first", phase: "done", createdAt: "2026-11-17T10:00:00.000Z" });
+    const second = runState({ id: "second", phase: "done", createdAt: "2026-11-17T09:00:00.000Z" });
+    let resolveDiff: ((diff: ChangeDiff) => void) | undefined;
+    const pending = new Promise<ChangeDiff>((resolve) => {
+      resolveDiff = resolve;
+    });
+
+    const result = await driveTui(
+      listFactory(
+        statusDoc([
+          { run: first, tokens: 0, cost: 0 },
+          { run: second, tokens: 0, cost: 0 },
+        ]),
+        [first, second],
+      ),
+      async (input, output) => {
+        await until(() => output.text().includes(first.id), "the run row");
+        await pressUntil(input, "\r", "the first done run view", () =>
+          output.text().includes("d diff"),
+        );
+        input.press("d");
+        await until(
+          () => output.text().includes(`reading the diff of ${first.id}`),
+          "the diff notice",
+        );
+        // Leave the run and open the other one before the read resolves. Frames accumulate in
+        // `output.text()`, so the list and the second run are matched on the newest frame.
+        input.press("\u001b");
+        await until(() => (output.writes.at(-1) ?? "").includes("n new change"), "the run list");
+        input.press("j");
+        await pause();
+        input.press("\r");
+        await until(
+          () => (output.writes.at(-1) ?? "").includes(`${second.id} done`),
+          "the second run view",
+        );
+        resolveDiff?.({ ...DIFF, id: first.id });
+        await pause();
+        await pause();
+        expect(output.text()).not.toContain(`Diff - ${first.id}`);
+        input.press("q");
+      },
+      undefined,
+      true,
+      undefined,
+      () => pending,
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.writes.join("")).not.toContain(`Diff - ${first.id}`);
+  });
+
+  test("a diff read that resolves while a panel is open opens no pane and clears its notice", async () => {
+    const run = runState({ phase: "done" });
+    let resolveDiff: ((diff: ChangeDiff) => void) | undefined;
+    const pending = new Promise<ChangeDiff>((resolve) => {
+      resolveDiff = resolve;
+    });
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the done run view", () => output.text().includes("d diff"));
+        input.press("d");
+        await until(
+          () => output.text().includes(`reading the diff of ${run.id}`),
+          "the diff notice",
+        );
+        // Intake takes the screen and the keys while the read is still pending.
+        await pressUntil(input, "n", "the intake dialog", () =>
+          output.text().includes("New change"),
+        );
+        resolveDiff?.({ ...DIFF, id: run.id });
+        await pause();
+        await pause();
+        // The resolved read must not open behind the dialog; closing it leaves a clean run view.
+        input.press("\u001b");
+        await until(
+          () => (output.writes.at(-1) ?? "").includes("d diff"),
+          "the run view after the dialog",
+        );
+        const latest = output.writes.at(-1) ?? "";
+        expect(latest).not.toContain(`Diff - ${run.id}`);
+        expect(latest).not.toContain(`reading the diff of ${run.id}`);
+        input.press("q");
+      },
+      undefined,
+      true,
+      undefined,
+      () => pending,
+    );
+
+    expect(result.code).toBe(0);
+  });
+
+  test("a diff read failure that resolves after the selection moved posts no notice", async () => {
+    const first = runState({ id: "first", phase: "done", createdAt: "2026-11-17T10:00:00.000Z" });
+    const second = runState({ id: "second", phase: "done", createdAt: "2026-11-17T09:00:00.000Z" });
+    const message = `no change ${first.id} in this workspace`;
+    let rejectDiff: ((err: Error) => void) | undefined;
+    const pending = new Promise<ChangeDiff>((_, reject) => {
+      rejectDiff = reject;
+    });
+
+    const result = await driveTui(
+      listFactory(
+        statusDoc([
+          { run: first, tokens: 0, cost: 0 },
+          { run: second, tokens: 0, cost: 0 },
+        ]),
+        [first, second],
+      ),
+      async (input, output) => {
+        await until(() => output.text().includes(first.id), "the run row");
+        await pressUntil(input, "\r", "the first done run view", () =>
+          output.text().includes("d diff"),
+        );
+        input.press("d");
+        await until(
+          () => output.text().includes(`reading the diff of ${first.id}`),
+          "the diff notice",
+        );
+        // Move to the other run before the read fails; its notice belongs to the first run.
+        input.press("\u001b");
+        await until(() => (output.writes.at(-1) ?? "").includes("n new change"), "the run list");
+        input.press("j");
+        await pause();
+        input.press("\r");
+        await until(
+          () => (output.writes.at(-1) ?? "").includes(`${second.id} done`),
+          "the second run view",
+        );
+        rejectDiff?.(new Error(message));
+        await pause();
+        await pause();
+        expect(output.writes.at(-1) ?? "").not.toContain(message);
+        input.press("q");
+      },
+      undefined,
+      true,
+      undefined,
+      () => pending,
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.writes.join("")).not.toContain(message);
   });
 });

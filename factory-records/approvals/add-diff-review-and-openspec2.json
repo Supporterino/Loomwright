@@ -1,0 +1,21 @@
+{
+  "changeId": "add-diff-review-and-openspec2",
+  "approver": "lars@roth-kl.de",
+  "specCommit": "b9cb436b2e322eab182fe89e4bdcfaa92cdd3340",
+  "hash": "31a34864fb0c294e23a72a58f2fc56f3c327cbed0a8a6f311e66ce4f33c6e7e5",
+  "approvedAt": "2026-11-26T12:21:23.878Z",
+  "history": [
+    {
+      "hash": "063129e228d02dd684fe85a7a1c099e9c36976a6d1b812aa49a75cb8316e9884",
+      "specCommit": "1e3a47f795ee77a7301087d84a988874d436ddcb",
+      "at": "2026-11-26T08:29:03.564Z",
+      "reason": "reword: review findings applied"
+    },
+    {
+      "hash": "15d64169540098f43d3ad2134dfa7a72110c39937b2aa4347a52a55f1e2acdca",
+      "specCommit": "1213720b3e63bf9dde734f335674e9a1fdf9dd95",
+      "at": "2026-11-26T09:50:47.197Z",
+      "reason": "reword: review findings applied"
+    }
+  ]
+}

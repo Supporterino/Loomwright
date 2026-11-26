@@ -10,6 +10,7 @@ import { artifactsCommand } from "./commands/artifacts.ts";
 import { benchCommand } from "./commands/bench.ts";
 import { completeCommand, completionCommand } from "./commands/completion.ts";
 import { detectCommand } from "./commands/detect.ts";
+import { diffCommand } from "./commands/diff.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { eventsCommand } from "./commands/events.ts";
 import { gateCommand } from "./commands/gate.ts";
@@ -51,6 +52,7 @@ export const COMMANDS: readonly Command[] = [
   retryCommand,
   abortCommand,
   repointCommand,
+  diffCommand,
   landCommand,
   artifactsCommand,
   benchCommand((argv, io) => runCli(argv, io)),

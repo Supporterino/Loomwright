@@ -24,12 +24,12 @@ How it works inside: [ARCHITECTURE.md](ARCHITECTURE.md). Every command: [docs/cl
 
 Requirements: macOS or Linux, Node ≥ 20 or Bun ≥ 1.3, and these tools on `PATH`:
 
-| Tool     | Version                              | Install                                            |
-| -------- | ------------------------------------ | -------------------------------------------------- |
-| git      | ≥ 2.31                               | Xcode CLT or your package manager                  |
-| opencode | 2.x (≥ 2.1.2, < 3.0.0; tested 2.2.0) | `npm install --global @opencode/cli@2.2.0`         |
-| OpenSpec | 1.x (≥ 1.10)                         | `npm install --global @fission-ai/openspec@1.14.3` |
-| Graphify | 0.9.x (≥ 0.9.93)                     | `uv tool install graphifyy==0.9.93`                |
+| Tool     | Version                                   | Install                                           |
+| -------- | ----------------------------------------- | ------------------------------------------------- |
+| git      | ≥ 2.31                                    | Xcode CLT or your package manager                 |
+| opencode | 2.x (≥ 2.1.2, < 3.0.0; tested 2.2.0)      | `npm install --global @opencode/cli@2.2.0`        |
+| OpenSpec | 1.x-2.x (≥ 1.10.0, < 3.0.0; tested 2.2.0) | `npm install --global @fission-ai/openspec@2.2.0` |
+| Graphify | 0.9.x (≥ 0.9.93)                          | `uv tool install graphifyy==0.9.93`               |
 
 Plus credentials for the model providers you configure, either exported (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) or stored with `opencode auth login`. The factory copies the configured providers' stored credentials into its private runtime database at startup, so they never enter your config or git.
 

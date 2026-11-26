@@ -27,11 +27,14 @@ export const OPENCODE: VersionRange & { readonly npmCli: string } = {
   npmCli: "@opencode/cli",
 };
 
-/** OpenSpec CLI. Behaviour checked on 1.10.0 (installed) and 1.14.3 (latest). */
+/**
+ * OpenSpec CLI. Supports 1.x and 2.x; 2.2.0 is the tested and recommended version, and 3.0.0 is
+ * the next breaking gate.
+ */
 export const OPENSPEC: VersionRange & { readonly npm: string } = {
   min: "1.10.0",
-  maxExclusive: "2.0.0",
-  tested: "1.14.3",
+  maxExclusive: "3.0.0",
+  tested: "2.2.0",
   npm: "@fission-ai/openspec",
 };
 

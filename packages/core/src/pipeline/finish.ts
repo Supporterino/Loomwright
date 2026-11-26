@@ -7,7 +7,8 @@ import { sessionInstructionPaths } from "../config/instructions.ts";
 import { repoLanguages } from "../config/schema.ts";
 import { PreconditionError } from "../errors.ts";
 import { gitOk } from "../exec.ts";
-import { runGates } from "../gates/run.ts";
+import type { InstallStep } from "../gates/install.ts";
+import { type GateReport, runGates } from "../gates/run.ts";
 import { commitPaths } from "../git/commit.ts";
 import { bumpPointers } from "../git/pointers.ts";
 import { changeBranch } from "../git/repo.ts";
@@ -32,6 +33,7 @@ import {
   packPath,
   progressLine,
 } from "./implement.ts";
+import { installFor } from "./install.ts";
 import { findingPack, findingTaskTitle, reviewPrompt } from "./prompts.ts";
 
 const MAX_SUITE_ROUNDS = 2;
@@ -199,19 +201,35 @@ export async function review(
   return { added, incomplete };
 }
 
+export interface FullSuiteResult {
+  /** Repos whose gates still fail after this pass. */
+  readonly failing: readonly string[];
+  /** Repos whose dependency install failed; their gates did not run. */
+  readonly installFailures: readonly { readonly repo: string; readonly detail: string }[];
+}
+
 /**
- * §7 step 10: every touched repo runs its full gate set on `change/<id>`. A failure becomes a
- * fix task (at most two rounds). Returns the repos still failing.
+ * §7 step 10: every touched repo installs its lockfile in the checkout it gates, then runs its
+ * full gate set on `change/<id>`. A failure becomes a fix task (at most two rounds). An install
+ * failure is infrastructure: no gates, no fix task, no round spent. Returns both outcomes.
  */
-export async function fullSuite(p: Pipeline, id: string): Promise<string[]> {
+export async function fullSuite(p: Pipeline, id: string): Promise<FullSuiteResult> {
   const run = p.run(id);
   const repos = touchedRepos(run);
   p.out(`▶ full suite: ${repos.join(", ")}`);
   const failing: string[] = [];
+  const installFailures: { repo: string; detail: string }[] = [];
   await Promise.all(
     repos.map(async (name) => {
       const repo = p.repo(name);
-      const report = await p.gates.run(async () => {
+      // Install inside the gate slot: layered before `runGates`, so install writes land before
+      // the guard's "before" snapshot and gate concurrency also bounds installs.
+      type RepoPass =
+        | { readonly report: GateReport; readonly installFailure?: undefined }
+        | { readonly installFailure: InstallStep; readonly report?: undefined };
+      const outcome: RepoPass = await p.gates.run(async () => {
+        const installed = await installFor(p, name, repo, p.repoDir(repo));
+        if (installed.failure !== undefined) return { installFailure: installed.failure };
         const started = p.progress.now();
         const gated = await runGates({
           root: p.root,
@@ -228,8 +246,16 @@ export async function fullSuite(p: Pipeline, id: string): Promise<string[]> {
         });
         if (p.bound) emitGateReport(p, name, gated, p.progress.now() - started);
         else p.progress.gatesDone(name, gated, p.progress.now() - started);
-        return gated;
+        return { report: gated };
       });
+      if (outcome.installFailure !== undefined) {
+        installFailures.push({
+          repo: name,
+          detail: outcome.installFailure.detail ?? outcome.installFailure.dir,
+        });
+        return;
+      }
+      const report = outcome.report;
       appendLog(p.root, id, {
         kind: "gates",
         repo: name,
@@ -251,9 +277,10 @@ export async function fullSuite(p: Pipeline, id: string): Promise<string[]> {
       if (!report.passed) failing.push(name);
     }),
   );
-  if (failing.length === 0) return [];
+  if (installFailures.length > 0) return { failing: [], installFailures };
+  if (failing.length === 0) return { failing: [], installFailures: [] };
   const rounds = p.run(id).suiteRounds;
-  if (rounds >= MAX_SUITE_ROUNDS) return failing;
+  if (rounds >= MAX_SUITE_ROUNDS) return { failing, installFailures: [] };
   await p.update(id, (d) => {
     d.suiteRounds += 1;
     for (const name of failing) {
@@ -270,7 +297,7 @@ export async function fullSuite(p: Pipeline, id: string): Promise<string[]> {
       if (t) t.lastGateOutput = d.fullSuite[name]?.output ?? "";
     }
   });
-  return [];
+  return { failing: [], installFailures: [] };
 }
 
 function harvest(run: RunState): { risks: string[]; questions: string[]; findings: string[] } {
@@ -293,18 +320,41 @@ const reportFile = (root: string, id: string, kind: "final" | "paused"): string 
   join(root, ".factory", "reports", kind === "final" ? `${id}.md` : `${id}-paused.md`);
 
 /** The pause report (§7 failure semantics): what completed, failed, was cancelled, and what next. */
-export function writePauseReport(p: Pipeline, id: string, summary: RunSummary): string {
+export function writePauseReport(p: Pipeline, id: string, summary?: RunSummary): string {
   const run = p.run(id);
   const failed = run.tasks.filter((t) => t.status === "failed");
+  // A full-suite pause has no scheduler summary: the run state carries the same tallies.
+  const ids = (status: TaskState["status"]): string[] =>
+    run.tasks.filter((t) => t.status === status).map((t) => t.id);
+  const derived: RunSummary = {
+    status: run.tasks.every((t) => t.status === "merged") ? "complete" : "paused",
+    merged: ids("merged"),
+    failed: ids("failed"),
+    cancelled: ids("cancelled"),
+    pending: ids("pending"),
+  };
+  const counts = summary ?? derived;
+  const suiteFailing = Object.entries(run.fullSuite).filter(([, result]) => !result.passed);
+  const nextSteps =
+    failed.length > 0
+      ? [
+          "1. Inspect the failed task's worktree and fix the cause (or change the spec and approve again).",
+          `2. \`loomwright retry ${id} --task <task>\` resets the task's retry budget.`,
+          `3. \`loomwright resume ${id}\` continues the change.`,
+        ]
+      : [
+          "1. Inspect the output above and fix the cause (or change the spec and approve again).",
+          `2. \`loomwright resume ${id}\` continues the change.`,
+        ];
   const lines = [
     `# ${id}: paused`,
     "",
     `Reason: ${run.pausedReason ?? "unknown"}`,
     "",
-    `- Completed: ${summary.merged.join(", ") || "none"}`,
-    `- Failed: ${summary.failed.join(", ") || "none"}`,
-    `- Cancelled (depend on a failed task): ${summary.cancelled.join(", ") || "none"}`,
-    `- Not started: ${summary.pending.join(", ") || "none"}`,
+    `- Completed: ${counts.merged.join(", ") || "none"}`,
+    `- Failed: ${counts.failed.join(", ") || "none"}`,
+    `- Cancelled (depend on a failed task): ${counts.cancelled.join(", ") || "none"}`,
+    `- Not started: ${counts.pending.join(", ") || "none"}`,
     "",
     ...failed.flatMap((t) => [
       `## Task ${t.id}: ${t.title} (${t.repo})`,
@@ -312,6 +362,12 @@ export function writePauseReport(p: Pipeline, id: string, summary: RunSummary): 
       `Error: ${t.lastError ?? ""}`,
       ...(t.worktree ? [`Worktree (kept): ${t.worktree}`] : []),
       ...(t.lastGateOutput ? ["", "Last gate output:", fence(t.lastGateOutput)] : []),
+      "",
+    ]),
+    ...suiteFailing.flatMap(([repo, result]) => [
+      `## Full suite: ${repo}`,
+      "",
+      fence(result.output),
       "",
     ]),
     ...(run.specFindings.length > 0
@@ -328,9 +384,7 @@ export function writePauseReport(p: Pipeline, id: string, summary: RunSummary): 
       : []),
     "## Next steps",
     "",
-    "1. Inspect the failed task's worktree and fix the cause (or change the spec and approve again).",
-    `2. \`loomwright retry ${id} --task <task>\` resets the task's retry budget.`,
-    `3. \`loomwright resume ${id}\` continues the change.`,
+    ...nextSteps,
     "",
     ...usageReport(summarizeUsage(p.root, id)),
   ];

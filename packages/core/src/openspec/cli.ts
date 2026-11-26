@@ -14,7 +14,7 @@ import { exec } from "../exec.ts";
 import type { ManagedFile } from "../render/workspace.ts";
 import { type ContractRef, contractOrderIssues, type DagTask, validateDag } from "../tasks/dag.ts";
 import { parseTasks } from "../tasks/parse.ts";
-import { toolBin, toolEnv } from "../tools.ts";
+import { checkTool, compareVersions, toolBin, toolEnv } from "../tools.ts";
 
 /**
  * Typed wrappers over the OpenSpec CLI (tooling.md §2). Every call runs quietly with a
@@ -134,6 +134,13 @@ export const OPENSPEC_TOOLS_TEMPLATE = "openspec-tools";
 export async function renderOpenspecTools(root: string): Promise<ManagedFile[]> {
   const scratch = mkdtempSync(join(tmpdir(), "ai-factory-openspec-"));
   try {
+    // 2.1.0 moved the generated skills under `.agents` and added `--scope`; older versions
+    // reject the flag. If the version cannot be read, use the 1.x invocation so the real
+    // `init` failure surfaces instead of a version error.
+    const status = await checkTool("openspec", root);
+    // Base the flag on the readable version, not `ok`: an installed 3.x is rejected by
+    // `checkTool` but still needs project scoping so `update --tools` cannot install globally.
+    const scoped = status.version !== undefined && compareVersions(status.version, "2.1.0") >= 0;
     const res = await exec(
       [
         toolBin("openspec"),
@@ -143,13 +150,12 @@ export async function renderOpenspecTools(root: string): Promise<ManagedFile[]> 
         "--profile",
         "core",
         "--no-animation",
+        ...(scoped ? ["--scope", "project"] : []),
         scratch,
       ],
       { cwd: scratch, env: env(root), timeoutMs: 120_000 },
     );
     if (res.code !== 0) throw new ExecError("openspec init failed", res);
-    const base = join(scratch, ".opencode");
-    if (!existsSync(base)) return [];
     const files: ManagedFile[] = [];
     const walk = (dir: string): void => {
       for (const name of readdirSync(dir).sort()) {
@@ -164,8 +170,14 @@ export async function renderOpenspecTools(root: string): Promise<ManagedFile[]> 
           });
       }
     };
-    walk(base);
-    return files;
+    let found = false;
+    for (const dir of [".opencode", ".agents"]) {
+      const base = join(scratch, dir);
+      if (!existsSync(base)) continue;
+      found = true;
+      walk(base);
+    }
+    return found ? files : [];
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

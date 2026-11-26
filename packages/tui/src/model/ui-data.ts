@@ -13,6 +13,7 @@ import {
 } from "../approval/overlay.ts";
 import type { ControlAction } from "../controls/actions.ts";
 import type { ActivityPaneState } from "../controls/activity-pane.ts";
+import type { DiffPaneState } from "../controls/diff-pane.ts";
 import type { QuestionsState } from "../controls/questions.tsx";
 import type { RewordState } from "../controls/reword.ts";
 import type { IntakeState } from "../intake/dialog.tsx";
@@ -50,6 +51,11 @@ export interface UiData {
    * tasks stay valid; every reader normalises it with `?? null`.
    */
   readonly activity?: ActivityPaneState | null;
+  /**
+   * The diff pane, or null when it is closed. Optional so `UiData` literals owned by other tasks
+   * stay valid; every reader normalises it with `?? null`.
+   */
+  readonly diff?: DiffPaneState | null;
   /**
    * The reword panel, or null when it is closed. Optional so `UiData` literals owned by other
    * tasks stay valid; every reader normalises it with `?? null`.
@@ -93,8 +99,21 @@ export function panelOpen(data: UiData): boolean {
     (data.reword ?? null) !== null ||
     data.confirmation !== null ||
     data.help ||
-    (data.activity ?? null) !== null
+    (data.activity ?? null) !== null ||
+    (data.diff ?? null) !== null
   );
+}
+
+/**
+ * A diff read is stale once the selection, screen or an owning panel moved on: it must open no
+ * pane and drop its optimistic notice. Returns the corrected state, or null when it still owns the
+ * screen.
+ */
+export function stale(data: UiData, id: string, message: string, blocked = false): UiData | null {
+  if (data.selectedRunId !== id || data.screen !== "run" || blocked) {
+    return data.notice === message ? { ...data, notice: null } : data;
+  }
+  return null;
 }
 
 /**

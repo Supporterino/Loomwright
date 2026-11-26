@@ -100,12 +100,14 @@ implement: 2/2 merged in <duration>
 implement: 3/3 merged in <duration>
 ▶ contracts: none touched
 ▶ full suite: app
+  ⚙ [app] installing dependencies in app
   ⚙ [app] gates: format, lint, types, test
   ✓ [app] gates passed in <duration>
 ▶ close
   ⚙ archiving the spec
 ✓ add-health done — report: <root>/.factory/reports/add-health.md
 add-health: done
+review the diff first: `loomwright diff add-health`
 next: `loomwright land add-health` merges the finished change into its base branches
 ===== status <id> --json (exit 0) =====
 {

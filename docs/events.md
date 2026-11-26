@@ -26,7 +26,8 @@ Every line is one JSON object with the same six-field envelope:
 
 - `v` is `PROTOCOL_VERSION`, currently `1`.
 - `runId` is the change id, e.g. `add-health`.
-- `seq` starts at `1` for each run and increases by exactly one per event.
+- `seq` starts at `1` for each run and increases by exactly one per event, except in the
+  two-writer race described under [the sequence rule](#the-sequence-rule).
 - `ts` is an ISO-8601 UTC timestamp ending in `Z` (`Date.prototype.toISOString`).
 - `type` names the event; `data` is that type's payload.
 
@@ -42,10 +43,12 @@ optional field without breaking an older reader.
 
 ## The sequence rule
 
-`seq` is allocated in the driving process, by the single event emitter. The stream is
-append-only, so per run there is no duplicate and no gap: a resume seeds the counter from the
-last complete line (`lastCompleteSeq`) and continues at the next number. It never restarts at
-`1`, and a resumed run does not emit a second `run.started`.
+`seq` is allocated per writer: the emitter counts and seeds itself from the last complete line
+(`lastCompleteSeq`), then continues at the next number. It never restarts at `1`, and a resumed
+run does not emit a second `run.started`. While one writer owns the run the stream is
+append-only, so per run there is no duplicate and no gap. Two writers can allocate the same
+`seq` in the direct-answer race described below: a stored read keeps both lines and reports no
+gap, while a live follower drops the late duplicate and emits no gap marker.
 
 A crash can leave at most one partial last line, because every write is one flushed
 `appendFileSync` of a complete line. The next `bind` truncates that tail before appending, and
@@ -221,9 +224,10 @@ following a `ref` does not expose what redaction removed.
 
 ## The single writer
 
-Only the process driving the run appends events. The plugin, readers, `status --watch`,
-`events` and the `Factory` read methods never write. There is no daemon, socket or message bus:
-the JSONL file is the stream, and the emitter is the only allocator of `seq`.
+Only the process driving the run, or the direct answer path when no driver owns it, appends
+events. The plugin, readers, `status --watch`, `events` and the `Factory` read methods never
+write. There is no daemon, socket or message bus: the JSONL file is the stream, and each writer's
+emitter seeds `seq` from the last complete line.
 
 ## Reader semantics
 
@@ -251,11 +255,36 @@ it is applied. Only `answer` and `pause` are applied here: `approve`, `abort`, `
 `resume` keep their existing files and state paths, and the inbox rejects them with a pointer to
 the command that does own them.
 
+An `answer` uses the inbox only while a live driver owns the run: the active lock names that run
+and `driverAlive` is true. With no live driver, the answer is persisted immediately by the writing
+process instead of leaving a file for a later reader. It takes the run's state lock,
+re-checks liveness there, marks the matching clarification answered (or appends the
+unrecorded-question fallback at step `answer`), appends exactly one `question.answered`, and
+rewrites both `.factory/clarifications/<id>.md` and the change's `questions.md` (the draft's copy
+when the run has a `draft`). It leaves no `answer` file behind and removes a stale file for the
+same question, so a later driver cannot apply an outdated answer. A run id whose run file does
+not exist is the one exception: that missing-run case keeps the inbox write and leaves the file
+for a later process. When the log was empty, that
+first write also appends `run.started`. The state change, the fallback and the file rewrite are
+one shared function, so the driver and the direct path apply an answer the same way. The direct
+path does not load the install config or the install marker, and an already-answered record is a
+no-op: it appends no second `question.answered` and keeps the recorded text.
+
+`pause` stays an inbox request consumed at a safe point.
+
 The inbox is consumed at a safe point: the top of each pipeline step, before the next phase work
 starts. A writer creates a temp file and renames it into place, so a reader never sees a partial
 file; a reader only applies complete `*.json` files. A consumed file is removed only after its
 effect is persisted, so a crash before that point re-delivers the command. A file that does not
 parse, or names another run, is reported and left unapplied.
+
+The direct path re-checks liveness under the run lock, but a driver can still claim the lock
+between that re-check and the event append. The answer stays correct in the run file and the
+clarification files. Each writer seeds its counter from the last complete line, so in the worst
+case the two writers allocate the same `seq`: the state is still correct, a stored read keeps
+both lines and reports no gap, and a live follower (`events --follow`, `status --watch`) drops
+the late duplicate instead of emitting a gap marker. That residual is the price of writing
+without a daemon.
 
 ## The two consumers
 

@@ -7,6 +7,9 @@
 const PROTECTED: readonly RegExp[] = [
   /^openspec\/specs(\/|$)/i,
   /^\.opencode(\/|$)/i,
+  // Only the generated skills tree is factory-owned; custom skills elsewhere in `.agents` are
+  // not (design D3).
+  /^\.agents\/skills(\/|$)/i,
   /^\.factory(\/|$)/i,
   /^factory-records(\/|$)/i,
   /^factory\.config\.jsonc$/i,

@@ -4,12 +4,19 @@ import type { Approval } from "./approval/approval.ts";
 import { findWorkspaceRoot, loadConfig } from "./config/load.ts";
 import type { FactoryConfig } from "./config/schema.ts";
 import { PreconditionError, UsageError } from "./errors.ts";
-import { setCommandErrorReporter, writeCommand } from "./events/inbox.ts";
+import {
+  readCommands,
+  removeCommand,
+  setCommandErrorReporter,
+  writeCommand,
+} from "./events/inbox.ts";
 import { assertRunId, Command, type RunEvent } from "./events/protocol.ts";
 import { readEventLines, type SkipReason } from "./events/reader.ts";
+import { openStandaloneEvents } from "./events/standalone.ts";
 import { tailEvents } from "./events/tailer.ts";
 import { LOCK_FILE } from "./lock/lock.ts";
 import { pruneLogs } from "./logs/log.ts";
+import { applyAnswerCommand } from "./pipeline/answer.ts";
 import { approve as approvePipeline } from "./pipeline/approve.ts";
 import type { Ask } from "./pipeline/clarify.ts";
 import { Pipeline } from "./pipeline/context.ts";
@@ -131,10 +138,12 @@ function requireRun(root: string, id: string): RunState {
 
 function report(out: (line: string) => void, outcome: RunOutcome): void {
   out(`${outcome.id}: ${outcome.phase}${outcome.detail ? ` — ${outcome.detail}` : ""}`);
-  if (outcome.phase === "done")
+  if (outcome.phase === "done") {
+    out(`review the diff first: \`loomwright diff ${outcome.id}\``);
     out(
       `next: \`loomwright land ${outcome.id}\` merges the finished change into its base branches`,
     );
+  }
 }
 
 /** Worktrees a change kept (`status`/`abort` show them; the CLI owns the same list). */
@@ -214,6 +223,19 @@ async function withPipeline<T>(
     const driven = p.runId ?? changeId;
     if (active?.pid === process.pid && active.changeId === driven)
       await releaseDriver(root, driven);
+  }
+}
+
+/**
+ * Removes inbox `answer` files for the question just applied, so a later driver cannot replay an
+ * outdated answer. Unreadable or invalid files are left for the driver to report.
+ */
+function removeStaleAnswers(root: string, runId: string, question: string | undefined): void {
+  for (const entry of readCommands(root, runId)) {
+    const command = entry.command;
+    if (command === undefined || command.command !== "answer") continue;
+    if (command.question !== question) continue;
+    removeCommand(entry.file);
   }
 }
 
@@ -396,12 +418,76 @@ function createFactory(
     },
 
     async answer(changeId: string, answer: string, question?: string): Promise<void> {
-      writeCommand(root, {
+      const command = Command.parse({
         command: "answer",
         runId: changeId,
         answer,
         ...(question === undefined ? {} : { question }),
       });
+      if (command.command !== "answer")
+        throw new Error(`not an answer command: ${command.command}`);
+      const runId = command.runId;
+      // Sweep before the liveness check: a driver that starts during the lock wait or a later
+      // run consuming the inbox must never see an outdated answer for this question.
+      removeStaleAnswers(root, runId, command.question);
+      const live = (): boolean => {
+        const active = readOrCorrupt(() => readActive(root)).value;
+        return active !== undefined && active.changeId === runId && driverAlive(active);
+      };
+      if (live()) {
+        removeStaleAnswers(root, runId, command.question);
+        writeCommand(root, command);
+        return;
+      }
+      let phase: Phase | undefined;
+      const result = await applyAnswerCommand(
+        root,
+        runId,
+        {
+          answer: command.answer,
+          ...(command.question === undefined ? {} : { question: command.question }),
+        },
+        {
+          whenLocked: (run) => {
+            phase = run.phase;
+            return !live();
+          },
+          onApplied: (record) => {
+            if (phase === undefined) throw new Error(`no phase for ${runId}`);
+            const events = openStandaloneEvents(root, runId, phase);
+            try {
+              events.emit("question.answered", {
+                step: record.step,
+                question: record.question,
+                status: "answered",
+                answer: record.answer ?? command.answer,
+              });
+            } finally {
+              events.close();
+            }
+          },
+        },
+      );
+      switch (result) {
+        case "applied":
+        case "unchanged":
+          removeStaleAnswers(root, runId, command.question);
+          return;
+        case "deferred":
+          // A driver appeared while we waited for the lock: drop an older answer for the same
+          // question so the driver cannot apply it before the fresh one.
+          removeStaleAnswers(root, runId, command.question);
+          writeCommand(root, command);
+          return;
+        case "missing-run":
+          // The run does not exist: keep the inbox write so a later `run` can consume it.
+          writeCommand(root, command);
+          return;
+        default: {
+          const unhandled: never = result;
+          throw new Error(`unhandled answer result: ${String(unhandled)}`);
+        }
+      }
     },
 
     async pause(changeId: string): Promise<void> {

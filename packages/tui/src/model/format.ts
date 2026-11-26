@@ -1,5 +1,8 @@
 /** Plain text formatting for the view-model: no colour, no terminal access. */
+import { stripControls } from "@loomwright/core/util/controls";
 import type { GlyphSet } from "../theme/glyphs.ts";
+
+export { stripControls };
 
 /** `1h02m`, `3m12s`, `8s`; negative or invalid spans read as zero. */
 export function formatElapsed(ms: number): string {
@@ -24,14 +27,6 @@ export function formatTokensShort(n: number): string {
 export function formatPercent(part: number, whole: number): string {
   if (!(whole > 0)) return "0%";
   return `${Math.round((part / whole) * 100)}%`;
-}
-
-/**
- * `text` without the C0/C1 controls that drive a terminal; tab and newline survive because they
- * only lay text out (an `ESC[2J` or `OSC 52` would clear the screen or write the clipboard).
- */
-export function stripControls(text: string): string {
-  return text.replace(/[^\P{Cc}\t\n]/gu, "");
 }
 
 /**

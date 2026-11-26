@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Factory, StatusDocument } from "@loomwright/core/factory";
+import type { ChangeDiff } from "@loomwright/core/pipeline/diff";
 import { RunState, TaskState } from "@loomwright/core/state/run";
 import type { UsageSummary } from "@loomwright/core/usage/usage";
 import { approvalStarted } from "../src/approval/overlay.ts";
@@ -42,6 +43,7 @@ import {
   resumeStarted,
   rewordFailed,
   settleLanding,
+  startDiff,
   startLand,
   startResume,
   startReword,
@@ -464,6 +466,92 @@ describe("an answer is recorded, then confirmed", () => {
     const second = questionsKeys(run, recorded, "Enter", key({ return: true }));
     expect(second.answer).toBeUndefined();
     expect(second.state).toEqual(recorded);
+  });
+});
+
+describe("an idle answer is persisted and shown answered", () => {
+  test("after the refresh the row reads answered — <answer> from run state, not recorded", async () => {
+    const question = "Which endpoints should be public?";
+    const before = askRun([{ step: "design", question, status: "unanswered" }]);
+    const opened = openQuestions(before);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(before, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(before, composing, "public /health");
+    const outcome = questionsKeys(before, typed, "Enter", key({ return: true }));
+    if (outcome.answer === undefined) throw new Error("the typed answer did not emit");
+
+    const fake = fakeFactory();
+    await recordAnswer(fake.factory, before.id, outcome.answer.answer, outcome.answer.question);
+    expect(fake.answers).toEqual([{ id: RUN, answer: "public /health", question }]);
+
+    const after = askRun([
+      { step: "design", question, status: "answered", answer: "public /health" },
+    ]);
+    const reopened = openQuestions(after);
+    if (reopened === null) throw new Error("the pane did not reopen");
+    const panel = panelText(after, reopened);
+    expect(panel).toContain("answered — public /health");
+    expect(panel).not.toContain(answerRecorded);
+    expect(
+      questionsPanel({ run: after, state: reopened, glyphs: UNICODE_GLYPHS }).keys.map(
+        (hint) => `${hint.key} ${hint.label}`,
+      ),
+    ).toEqual(["j/k navigate", "Esc close"]);
+  });
+
+  test("reopening in a fresh TUI reads the same row and offers no composer", () => {
+    const answered = askRun([
+      {
+        step: "design",
+        question: "Which endpoints should be public?",
+        status: "answered",
+        answer: "public /health",
+      },
+    ]);
+    // A fresh TUI starts with an empty `recorded` set; only run state can settle the row.
+    const state = openQuestions(answered);
+    if (state === null) throw new Error("the pane did not open");
+    // No unanswered record remains, so opening selects the first record.
+    expect(state.selected).toBe(0);
+    expect(state.recorded.size).toBe(0);
+    expect(panelText(answered, state)).toContain("answered — public /health");
+    expect(panelText(answered, state)).not.toContain(answerRecorded);
+    const hints = questionsPanel({ run: answered, state, glyphs: UNICODE_GLYPHS }).keys.map(
+      (hint) => `${hint.key} ${hint.label}`,
+    );
+    expect(hints).not.toContain("Enter answer");
+
+    const enter = questionsKeys(answered, state, "Enter", key({ return: true }));
+    expect(enter.answer).toBeUndefined();
+    expect(enter.state).toEqual(state);
+    expect(enter.state.focus).toBe("record");
+  });
+});
+
+describe("a driven answer stays recorded until the driver applies it", () => {
+  test("the row reads recorded until question.answered arrives, then answered", () => {
+    const question = "Which endpoints should be public?";
+    const driven = askRun([{ step: "design", question, status: "unanswered" }]);
+    const opened = openQuestions(driven);
+    if (opened === null) throw new Error("the pane did not open");
+    const composing = questionsKeys(driven, opened, "Enter", key({ return: true })).state;
+    const typed = typeText(driven, composing, "public /health");
+    const emitted = questionsKeys(driven, typed, "Enter", key({ return: true }));
+    if (emitted.answer === undefined) throw new Error("the typed answer did not emit");
+
+    const recorded = recordAnswerInState(driven, emitted.state, "design", emitted.answer.question);
+    const pending = panelText(driven, recorded);
+    expect(pending).toContain(answerRecorded);
+    expect(pending).not.toContain("answered —");
+
+    const applied = askRun([
+      { step: "design", question, status: "answered", answer: "public /health" },
+    ]);
+    const settled = openQuestions(applied);
+    if (settled === null) throw new Error("the pane did not open");
+    const text = panelText(applied, settled);
+    expect(text).toContain("answered — public /health");
+    expect(text).not.toContain(answerRecorded);
   });
 });
 
@@ -1247,6 +1335,46 @@ describe("a landed run leaves the screen", () => {
     expect(stopped).toBe(1);
   });
 
+  test("a land that settles while the diff pane is open clears it and shows the landed notice", async () => {
+    const empty: StatusDocument = {
+      active: null,
+      driverAlive: false,
+      queue: [],
+      corrupt: [],
+      runs: [],
+    };
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher();
+    let state = uiData({
+      diff: { id: RUN, lines: [`app: main <- change/${RUN} (diff)`], offset: 0 },
+    });
+    const states: UiData[] = [];
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createLandGuard(),
+        update: (change) => {
+          state = change(state);
+          states.push(state);
+        },
+        refresh: async () => ({ status: empty, runs: [] }),
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    exit(0);
+    await Bun.sleep(0);
+
+    // The pane opened while the land child ran must not cover the list and its landed notice.
+    const last = states.at(-1);
+    expect(last?.diff).toBeNull();
+    expect(viewOf(last ?? state, ASCII_GLYPHS).panel).toBeNull();
+    expect(last?.screen).toBe("list");
+    expect(last?.notice).toContain(`landed ${RUN}`);
+  });
+
   test("a still-listed run stays selected after a zero exit", () => {
     const run = runState({ phase: "done" });
     const next = landSettled(uiData(), RUN, { status: statusDoc(run), runs: [run] });
@@ -1565,6 +1693,83 @@ function typeReword(run: RunDetail, state: RewordState, text: string): RewordSta
   }
   return current;
 }
+
+describe("a diff read is guarded", () => {
+  function deferred(): {
+    readonly promise: Promise<ChangeDiff>;
+    readonly settle: (diff: ChangeDiff) => void;
+  } {
+    let settle: (diff: ChangeDiff) => void = () => {};
+    const promise = new Promise<ChangeDiff>((resolve) => {
+      settle = resolve;
+    });
+    return { promise, settle };
+  }
+
+  test("a read that still owns the screen opens the diff pane and clears the notice", async () => {
+    let state = uiData();
+    const read = deferred();
+    startDiff(
+      {
+        read: { current: 0 },
+        update: (change) => {
+          state = change(state);
+        },
+      },
+      RUN,
+      () => read.promise,
+    );
+    expect(state.notice).toContain(`reading the diff of ${RUN}`);
+
+    read.settle({ id: RUN, repos: [] });
+    await Bun.sleep(0);
+    expect(state.diff?.id).toBe(RUN);
+    expect(state.notice).toBeNull();
+  });
+
+  test("a read that lands after the selection moved opens no pane and drops its notice", async () => {
+    let state = uiData();
+    const read = deferred();
+    startDiff(
+      {
+        read: { current: 0 },
+        update: (change) => {
+          state = change(state);
+        },
+      },
+      RUN,
+      () => read.promise,
+    );
+
+    state = { ...state, selectedRunId: "other-run" };
+    read.settle({ id: RUN, repos: [] });
+    await Bun.sleep(0);
+    expect(state.diff ?? null).toBeNull();
+    expect(state.notice).toBeNull();
+  });
+
+  test("a pane opened while the read is pending keeps the screen and clears the notice", async () => {
+    let state = uiData();
+    const read = deferred();
+    startDiff(
+      {
+        read: { current: 0 },
+        update: (change) => {
+          state = change(state);
+        },
+      },
+      RUN,
+      () => read.promise,
+    );
+
+    state = { ...state, help: true };
+    read.settle({ id: RUN, repos: [] });
+    await Bun.sleep(0);
+    expect(state.diff ?? null).toBeNull();
+    expect(state.help).toBe(true);
+    expect(state.notice).toBeNull();
+  });
+});
 
 describe("the reword panel is a detached child", () => {
   test("an open reword state renders the panel through viewOf", () => {

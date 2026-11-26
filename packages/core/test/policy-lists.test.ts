@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isProtectedPath, isSecretPath } from "../src/policy/paths.ts";
 import { alwaysDeny, ruleEffect } from "../src/policy/permissions.ts";
+import { protectedInWorktree } from "../src/policy/sandbox.ts";
 import { fence } from "../src/util/fence.ts";
 
 /** Secret files as the plugin's parser sees them and as opencode's permission rules see them. */
@@ -54,7 +55,7 @@ describe("the secret lists agree (audit S11)", () => {
   });
 });
 
-describe("committed records are protected", () => {
+describe("committed records and generated skills are protected", () => {
   test.each([
     "factory-records",
     "factory-records/reports/add-x.md",
@@ -69,12 +70,29 @@ describe("committed records are protected", () => {
     expect(isProtectedPath("factory-records.md")).toBe(false);
   });
 
-  test("the plugin template carries the same rule", () => {
+  test.each([
+    ".agents/skills/openspec-propose/SKILL.md",
+    ".agents/skills/openspec/references/status.md",
+  ])("generated skills are protected: %s", (path) => {
+    expect(isProtectedPath(path)).toBe(true);
+    expect(ruleEffect(alwaysDeny(), "edit", path)).toBe("deny");
+  });
+
+  test("generated skills are protected: the rest of .agents is not", () => {
+    expect(isProtectedPath(".agents/notes.md")).toBe(false);
+  });
+
+  test("generated skills are protected: a worktree mounts them read-only", () => {
+    expect(protectedInWorktree("/wt")).toContain(join("/wt", ".agents/skills"));
+  });
+
+  test("the plugin template carries the same rules", () => {
     const plugin = readFileSync(
       join(import.meta.dir, "../../../templates/plugin/factory-plugin.txt"),
       "utf8",
     );
     expect(plugin).toContain("/^factory-records(\\/|$)/i");
+    expect(plugin).toContain("/^\\.agents\\/skills(\\/|$)/i");
   });
 });
 

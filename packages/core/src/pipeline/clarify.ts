@@ -119,6 +119,11 @@ export function mergeQuestionsBlock(existing: string, block: string): string {
   return `${parts.join("\n\n")}\n`;
 }
 
+/** The checkout holding the change: its draft worktree, or the workspace root. */
+export function specDirFor(root: string, draft: string | undefined): string {
+  return draft === undefined ? root : join(root, draft);
+}
+
 /**
  * Writes the Q&A twice: under `.factory/clarifications/` (gitignored, for resume and reports)
  * and, once the change folder exists, into `openspec/changes/<id>/questions.md`.
@@ -135,8 +140,10 @@ export function writeClarifications(input: {
   mkdirSync(dirname(local), { recursive: true });
   writeFileSync(local, `# Clarifications: ${input.id}\n\n${block}`);
   if (input.specDir === undefined) return;
-  const file = join(input.specDir, "openspec", "changes", input.id, "questions.md");
-  mkdirSync(dirname(file), { recursive: true });
+  const change = join(input.specDir, "openspec", "changes", input.id);
+  // A done run's spec is archived; answering it must not recreate the change folder.
+  if (!existsSync(change)) return;
+  const file = join(change, "questions.md");
   const existing = existsSync(file) ? readFileSync(file, "utf8") : "";
   writeFileSync(file, mergeQuestionsBlock(existing, block));
 }
