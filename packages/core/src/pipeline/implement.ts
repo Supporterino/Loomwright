@@ -18,7 +18,6 @@ import { readEventLines } from "../events/reader.ts";
 import { git, gitOk } from "../exec.ts";
 import { changedFiles } from "../gates/affected.ts";
 import { changedGateDefinitions } from "../gates/definitions.ts";
-import { installDeps } from "../gates/install.ts";
 import { resolveGates } from "../gates/resolve.ts";
 import { type GateEvent, type GateInfo, type GateReport, runGates } from "../gates/run.ts";
 import { worktreeFiles } from "../gates/targets.ts";
@@ -51,6 +50,7 @@ import { capText } from "../util/cap.ts";
 import { fence } from "../util/fence.ts";
 import { verifyApproval } from "./approve.ts";
 import type { Pipeline } from "./context.ts";
+import { installFor } from "./install.ts";
 import type { TaskCounts } from "./progress.ts";
 import { conflictPrompt, packsPrompt, taskPrompt, testerPrompt } from "./prompts.ts";
 
@@ -600,40 +600,14 @@ export class PipelineTaskRunner implements TaskRunner {
     else if (!task.installed) {
       // Until it succeeds, also in a kept worktree. A failure (registry down) is not the
       // task's: no budget is spent, and repeats pause the change (audit P12).
-      if (this.p.bound) this.p.events.emit("install.started", { step: task.id, repo: task.repo });
-      else this.p.progress.install(task.id, task.repo, "start");
-      const started = this.p.progress.now();
-      const steps = await installDeps(this.p.root, dir, this.p.repo(task.repo));
-      const failed = steps.find((s) => s.status === "failed");
-      if (failed) {
-        const detail = failed.detail ?? failed.dir;
-        if (this.p.bound)
-          this.p.events.emit("install.failed", {
-            step: task.id,
-            repo: task.repo,
-            durationMs: this.p.progress.now() - started,
-            detail,
-          });
-        else
-          this.p.progress.install(
-            task.id,
-            task.repo,
-            "failed",
-            this.p.progress.now() - started,
-            detail,
-          );
+      const installed = await installFor(this.p, task.id, this.p.repo(task.repo), dir);
+      if (installed.failure !== undefined) {
+        const failed = installed.failure;
         return {
           status: "transient",
           reason: `dependency install failed in ${failed.dir}: ${failed.detail ?? ""}`.trim(),
         };
       }
-      if (this.p.bound)
-        this.p.events.emit("install.finished", {
-          step: task.id,
-          repo: task.repo,
-          durationMs: this.p.progress.now() - started,
-        });
-      else this.p.progress.install(task.id, task.repo, "done", this.p.progress.now() - started);
       await this.p.update(this.id, (d) => {
         const t = d.tasks.find((x) => x.id === task.id);
         if (t) t.installed = true;

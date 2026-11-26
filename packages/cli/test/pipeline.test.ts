@@ -409,7 +409,8 @@ describe("pipeline: AI repo with submodules", () => {
     expect(again.out.indexOf(`loomwright diff ${ID}`)).toBeLessThan(
       again.out.indexOf(`next: \`loomwright land ${ID}\``),
     );
-  });
+    // Bun's preload default is lost for later files in a multi-file run; this test runs ~6s.
+  }, 120_000);
 });
 
 const SINGLE_TASKS: ScriptedTask[] = [
