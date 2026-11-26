@@ -232,6 +232,11 @@ describe("permission rules", () => {
     expect(ruleEffect(architect, "edit", ".factory/context/add-x/key.pem")).toBe("deny");
     expect(ruleEffect(architect, "edit", "openspec/specs/a/spec.md")).toBe("deny");
     expect(ruleEffect(architect, "edit", "src/a.ts")).toBe("deny");
+    const implementer = agentRules("implementer");
+    expect(ruleEffect(implementer, "edit", ".agents/skills/openspec/SKILL.md")).toBe("deny");
+    expect(ruleEffect(implementer, "edit", ".agents/skills/openspec-propose/SKILL.md")).toBe(
+      "deny",
+    );
     const tester = agentRules("tester", ["*.test.ts", "*_test.go"]);
     expect(ruleEffect(tester, "edit", "src/deep/a.test.ts")).toBe("allow");
     expect(ruleEffect(tester, "edit", "pkg/x_test.go")).toBe("allow");

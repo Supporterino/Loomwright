@@ -200,6 +200,7 @@ export function protectedInWorktree(worktree: string): string[] {
   return [
     ".git",
     ".opencode",
+    ".agents/skills",
     ".factory",
     "factory-records",
     "AGENTS.md",

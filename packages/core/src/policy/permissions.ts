@@ -33,6 +33,8 @@ export type Action = (typeof ACTIONS)[number];
 export const PROTECTED_PATHS = [
   "openspec/specs/*",
   ".opencode/*",
+  ".agents/skills",
+  ".agents/skills/*",
   ".factory/*",
   "factory-records",
   "factory-records/*",
