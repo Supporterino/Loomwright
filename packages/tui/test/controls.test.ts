@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Factory, StatusDocument } from "@loomwright/core/factory";
+import type { ChangeDiff } from "@loomwright/core/pipeline/diff";
 import { RunState, TaskState } from "@loomwright/core/state/run";
 import type { UsageSummary } from "@loomwright/core/usage/usage";
 import { approvalStarted } from "../src/approval/overlay.ts";
@@ -42,6 +43,7 @@ import {
   resumeStarted,
   rewordFailed,
   settleLanding,
+  startDiff,
   startLand,
   startResume,
   startReword,
@@ -1691,6 +1693,83 @@ function typeReword(run: RunDetail, state: RewordState, text: string): RewordSta
   }
   return current;
 }
+
+describe("a diff read is guarded", () => {
+  function deferred(): {
+    readonly promise: Promise<ChangeDiff>;
+    readonly settle: (diff: ChangeDiff) => void;
+  } {
+    let settle: (diff: ChangeDiff) => void = () => {};
+    const promise = new Promise<ChangeDiff>((resolve) => {
+      settle = resolve;
+    });
+    return { promise, settle };
+  }
+
+  test("a read that still owns the screen opens the diff pane and clears the notice", async () => {
+    let state = uiData();
+    const read = deferred();
+    startDiff(
+      {
+        read: { current: 0 },
+        update: (change) => {
+          state = change(state);
+        },
+      },
+      RUN,
+      () => read.promise,
+    );
+    expect(state.notice).toContain(`reading the diff of ${RUN}`);
+
+    read.settle({ id: RUN, repos: [] });
+    await Bun.sleep(0);
+    expect(state.diff?.id).toBe(RUN);
+    expect(state.notice).toBeNull();
+  });
+
+  test("a read that lands after the selection moved opens no pane and drops its notice", async () => {
+    let state = uiData();
+    const read = deferred();
+    startDiff(
+      {
+        read: { current: 0 },
+        update: (change) => {
+          state = change(state);
+        },
+      },
+      RUN,
+      () => read.promise,
+    );
+
+    state = { ...state, selectedRunId: "other-run" };
+    read.settle({ id: RUN, repos: [] });
+    await Bun.sleep(0);
+    expect(state.diff ?? null).toBeNull();
+    expect(state.notice).toBeNull();
+  });
+
+  test("a pane opened while the read is pending keeps the screen and clears the notice", async () => {
+    let state = uiData();
+    const read = deferred();
+    startDiff(
+      {
+        read: { current: 0 },
+        update: (change) => {
+          state = change(state);
+        },
+      },
+      RUN,
+      () => read.promise,
+    );
+
+    state = { ...state, help: true };
+    read.settle({ id: RUN, repos: [] });
+    await Bun.sleep(0);
+    expect(state.diff ?? null).toBeNull();
+    expect(state.help).toBe(true);
+    expect(state.notice).toBeNull();
+  });
+});
 
 describe("the reword panel is a detached child", () => {
   test("an open reword state renders the panel through viewOf", () => {

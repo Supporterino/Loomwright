@@ -37,12 +37,7 @@ import {
   activityPanePanel,
   openActivityPane,
 } from "./controls/activity-pane.ts";
-import {
-  diffPaneBodyRows,
-  diffPaneKeys,
-  diffPanePanel,
-  openDiffPane,
-} from "./controls/diff-pane.ts";
+import { diffPaneBodyRows, diffPaneKeys, diffPanePanel } from "./controls/diff-pane.ts";
 import {
   openQuestions,
   questionsKeys,
@@ -72,6 +67,7 @@ import {
   recordAnswer,
   type SessionRun,
   settleLanding,
+  startDiff,
   startLand,
   startResume,
   startReword,
@@ -83,7 +79,7 @@ import { createStatusPoller, type StatusPoller } from "./model/poll.ts";
 import { createFrameScheduler, type FrameScheduler } from "./model/render-loop.ts";
 import { createStatusSource } from "./model/status.ts";
 import type { UiData } from "./model/ui-data.ts";
-import { evidenceOf, panelOpen, selectedRunState, stale, syncApproval } from "./model/ui-data.ts";
+import { evidenceOf, panelOpen, selectedRunState, syncApproval } from "./model/ui-data.ts";
 import {
   buildViewModel,
   canLand,
@@ -121,6 +117,7 @@ export {
   rewordSucceeded,
   type SessionRun,
   settleLanding,
+  startDiff,
   startLand,
   startResume,
   startReword,
@@ -1155,23 +1152,7 @@ function Interactive({
       case "open-diff": {
         const run = current.run;
         if (run === null || !canLand(run.phase)) return;
-        const id = run.id;
-        const token = ++diffRead.current;
-        const message = `reading the diff of ${id} …`;
-        setData((state) => ({ ...state, notice: message }));
-        void readDiff(id)
-          .then((result) => {
-            if (token !== diffRead.current) return;
-            setData((state) => {
-              const settled = stale(state, id, message, panelOpen(state));
-              return settled ?? { ...state, diff: openDiffPane(result), notice: null };
-            });
-          })
-          .catch((err: unknown) => {
-            if (token !== diffRead.current) return;
-            const notice = err instanceof Error ? err.message : String(err);
-            setData((state) => stale(state, id, message) ?? { ...state, notice });
-          });
+        startDiff({ read: diffRead, update: setData }, run.id, readDiff);
         return;
       }
       case "abort": {

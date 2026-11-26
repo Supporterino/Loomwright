@@ -4,14 +4,16 @@
  * so the controls suites drive it with a fake launcher and factory.
  */
 import type { Factory, StatusDocument } from "@loomwright/core/factory";
+import type { ChangeDiff } from "@loomwright/core/pipeline/diff";
 import type { RunState } from "@loomwright/core/state/run";
 import { approvalExited } from "../approval/overlay.ts";
 import { type ControlAction, landFor } from "../controls/actions.ts";
+import { openDiffPane } from "../controls/diff-pane.ts";
 import { type Launcher, type LaunchResult, tailLog } from "../launch/launcher.ts";
 import type { TerminalSession } from "../session.ts";
 import { landedNotice } from "../strings.ts";
 import { collectFacts } from "./facts.ts";
-import type { UiData } from "./ui-data.ts";
+import { panelOpen, stale, type UiData } from "./ui-data.ts";
 import type { ViewModel } from "./view-model.ts";
 
 export interface ControlDeps {
@@ -236,6 +238,44 @@ export function startReword(deps: RewordRun, id: string, prompt?: string): void 
       deps.update((current) => rewordFailed(current, id, result, code));
     });
   })();
+}
+
+/** The monotonic token behind a diff read: a read that lands after the selection moved is dropped. */
+export interface DiffRead {
+  current: number;
+}
+
+export interface DiffRun {
+  readonly read: DiffRead;
+  /** The UI's `setData`. */
+  readonly update: (change: (data: UiData) => UiData) => void;
+}
+
+/**
+ * Reads one run's diff and opens the pane: the optimistic notice is ours, a read that settles after
+ * the token moved is dropped, and a pane opened meanwhile keeps the screen and clears the notice.
+ */
+export function startDiff(
+  deps: DiffRun,
+  id: string,
+  readDiff: (id: string) => Promise<ChangeDiff>,
+): void {
+  const token = ++deps.read.current;
+  const message = `reading the diff of ${id} …`;
+  deps.update((state) => ({ ...state, notice: message }));
+  void readDiff(id)
+    .then((result) => {
+      if (token !== deps.read.current) return;
+      deps.update((state) => {
+        const settled = stale(state, id, message, panelOpen(state));
+        return settled ?? { ...state, diff: openDiffPane(result), notice: null };
+      });
+    })
+    .catch((err: unknown) => {
+      if (token !== deps.read.current) return;
+      const notice = err instanceof Error ? err.message : String(err);
+      deps.update((state) => stale(state, id, message) ?? { ...state, notice });
+    });
 }
 
 export interface ResumeRun extends ControlDeps {
