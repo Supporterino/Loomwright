@@ -1168,4 +1168,23 @@ describe("next-step hint", () => {
     expect(diffAt).toBeGreaterThanOrEqual(0);
     expect(landAt).toBeGreaterThan(diffAt);
   });
+
+  test("a running change has no diff hint", async () => {
+    // A spec finding stops the paused run before any agent runs, so this needs no runtime.
+    saveRun(fx.root, {
+      ...newRun(ID, "Still running", "paused"),
+      specFindings: [
+        {
+          severity: "should",
+          what: "the spec names one repo",
+          problem: "the change touches two",
+          fix: "list both repos",
+          impact: "the second repo is never touched",
+        },
+      ],
+    });
+    const run = await cli(fx.root, "resume", ID);
+    expect(run.out).toContain(`${ID}: paused`);
+    expect(run.out).not.toContain("loomwright diff");
+  });
 });
