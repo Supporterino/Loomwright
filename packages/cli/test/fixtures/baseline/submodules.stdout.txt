@@ -121,6 +121,7 @@ implement: 4/4 merged in <duration>
   ▶ [contract-review] contract-reviewer (anthropic/claude-opus-5-5)
   ✓ [contract-review] session done in <duration> · <tokens>
 ▶ full suite: backend
+  ⚙ [backend] installing dependencies in backend
   ⚙ [backend] gates: format, lint, types, test
   ✓ [backend] gates passed in <duration>
 ▶ close

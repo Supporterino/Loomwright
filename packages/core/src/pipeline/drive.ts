@@ -344,9 +344,16 @@ async function step(p: Pipeline, id: string): Promise<Step> {
       return go(id);
     }
     case "full-suite": {
-      const failing = await fullSuite(p, id);
-      if (failing.length > 0) {
-        const reason = `full suite still failing in ${failing.join(", ")} after fix rounds`;
+      const result = await fullSuite(p, id);
+      if (result.installFailures.length > 0) {
+        const reason = `dependency install failed in ${result.installFailures
+          .map((f) => `${f.repo}: ${f.detail}`)
+          .join("; ")}; fix it and resume`;
+        await setPhase(p, id, "paused", reason);
+        return stop({ id, phase: "paused", detail: reason });
+      }
+      if (result.failing.length > 0) {
+        const reason = `full suite still failing in ${result.failing.join(", ")} after fix rounds`;
         await setPhase(p, id, "paused", reason);
         return stop({ id, phase: "paused", detail: reason });
       }

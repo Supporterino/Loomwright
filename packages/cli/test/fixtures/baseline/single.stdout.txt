@@ -100,6 +100,7 @@ implement: 2/2 merged in <duration>
 implement: 3/3 merged in <duration>
 ▶ contracts: none touched
 ▶ full suite: app
+  ⚙ [app] installing dependencies in app
   ⚙ [app] gates: format, lint, types, test
   ✓ [app] gates passed in <duration>
 ▶ close
