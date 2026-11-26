@@ -56,3 +56,4 @@ Short ADRs for every choice the build prompt did not lock. Format: Context / Dec
 | [0050](0050-answer-without-driver.md)           | Answer applied immediately when no live driver owns the run        |
 | [0051](0051-openspec-2-support.md)              | OpenSpec 2.x support                                               |
 | [0052](0052-pre-land-diff-review.md)            | Reviewing a change's diff before landing                           |
+| [0053](0053-full-suite-installs.md)             | Installing dependencies before the full suite                      |

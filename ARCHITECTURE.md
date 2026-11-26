@@ -216,7 +216,7 @@ git add repos/backend repos/frontend
 git commit -m "chore(submodules): bump for add-search [provisional]" -m "Change-Id: add-search"
 ```
 
-The worktree metadata lives in `.git/modules/repos/backend/worktrees/`. Dependency installs in a new worktree use the shared stores under `.factory/cache/` (`npm_config_cache`, `BUN_INSTALL_CACHE_DIR`, `UV_CACHE_DIR`, `GOMODCACHE`, `CARGO_TARGET_DIR`, …). Install time and install failures never count against the retry budget.
+The worktree metadata lives in `.git/modules/repos/backend/worktrees/`. Dependency installs in a new worktree use the shared stores under `.factory/cache/` (`npm_config_cache`, `BUN_INSTALL_CACHE_DIR`, `UV_CACHE_DIR`, `GOMODCACHE`, `CARGO_TARGET_DIR`, …). Install time and install failures never count against the retry budget. The full-suite phase also installs the checkout it is about to gate (`p.repoDir(repo)`), once per repo on every pass, through the same installer and caches, so a lockfile change merged by a suite-fix round is picked up. An install failure there pauses the change without running gates, adding a suite-fix task or spending a suite round. `loomwright gate --full` does not install: it gates a checkout you control and stays read-only about dependency state (ADR-0053).
 
 ## Agents and the runtime
 

@@ -175,6 +175,7 @@ loomwright gate <change-id> [--task <id>] [--repo <name>] [--full] [--json]
 Runs format, lint, types and tests.
 - `--task` gates a task worktree (`.factory/worktrees/<change>/<repo>/<task>`) against `change/<id>`, with file-scoped format/lint and affected tests only.
 - Without `--task` it gates every repo that has `change/<id>` checked out, against its default branch. `--full` runs whole-repo gates and the full suite.
+- `loomwright gate` never installs dependencies: it gates a checkout you control and stays read-only about dependency state. The pipeline's full-suite phase installs in its own checkouts before its gates (ADR-0053).
 - Gates resolve as `gates.overrides` → the repo's own script (`gates.scripts` names in package.json, Makefile, justfile or Taskfile) → profile defaults. An override replaces the script lookup, so the script is not read (or warned about) for that pair; `"skip"` also counts as an override entry. A gate with no command fails; set the override to `"skip"` to opt out explicitly.
 - A gate that modifies files fails as "not check-only", and the worktree is restored.
 - A change with a definitions snapshot (taken at `approve`) is gated with it, like the pipeline does, not with today's config.
