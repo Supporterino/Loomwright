@@ -2359,4 +2359,101 @@ describe("the done run's diff", () => {
     expect(result.code).toBe(0);
     expect(result.writes.join("")).not.toContain(`Diff - ${first.id}`);
   });
+
+  test("a diff read that resolves while a panel is open opens no pane and clears its notice", async () => {
+    const run = runState({ phase: "done" });
+    let resolveDiff: ((diff: ChangeDiff) => void) | undefined;
+    const pending = new Promise<ChangeDiff>((resolve) => {
+      resolveDiff = resolve;
+    });
+
+    const result = await driveTui(
+      listFactory(statusDoc([{ run, tokens: 0, cost: 0 }]), [run]),
+      async (input, output) => {
+        await until(() => output.text().includes(run.id), "the run row");
+        await pressUntil(input, "\r", "the done run view", () => output.text().includes("d diff"));
+        input.press("d");
+        await until(
+          () => output.text().includes(`reading the diff of ${run.id}`),
+          "the diff notice",
+        );
+        // Intake takes the screen and the keys while the read is still pending.
+        await pressUntil(input, "n", "the intake dialog", () =>
+          output.text().includes("New change"),
+        );
+        resolveDiff?.({ ...DIFF, id: run.id });
+        await pause();
+        await pause();
+        // The resolved read must not open behind the dialog; closing it leaves a clean run view.
+        input.press("\u001b");
+        await until(
+          () => (output.writes.at(-1) ?? "").includes("d diff"),
+          "the run view after the dialog",
+        );
+        const latest = output.writes.at(-1) ?? "";
+        expect(latest).not.toContain(`Diff - ${run.id}`);
+        expect(latest).not.toContain(`reading the diff of ${run.id}`);
+        input.press("q");
+      },
+      undefined,
+      true,
+      undefined,
+      () => pending,
+    );
+
+    expect(result.code).toBe(0);
+  });
+
+  test("a diff read failure that resolves after the selection moved posts no notice", async () => {
+    const first = runState({ id: "first", phase: "done", createdAt: "2026-11-17T10:00:00.000Z" });
+    const second = runState({ id: "second", phase: "done", createdAt: "2026-11-17T09:00:00.000Z" });
+    const message = `no change ${first.id} in this workspace`;
+    let rejectDiff: ((err: Error) => void) | undefined;
+    const pending = new Promise<ChangeDiff>((_, reject) => {
+      rejectDiff = reject;
+    });
+
+    const result = await driveTui(
+      listFactory(
+        statusDoc([
+          { run: first, tokens: 0, cost: 0 },
+          { run: second, tokens: 0, cost: 0 },
+        ]),
+        [first, second],
+      ),
+      async (input, output) => {
+        await until(() => output.text().includes(first.id), "the run row");
+        await pressUntil(input, "\r", "the first done run view", () =>
+          output.text().includes("d diff"),
+        );
+        input.press("d");
+        await until(
+          () => output.text().includes(`reading the diff of ${first.id}`),
+          "the diff notice",
+        );
+        // Move to the other run before the read fails; its notice belongs to the first run.
+        input.press("\u001b");
+        await until(() => (output.writes.at(-1) ?? "").includes("n new change"), "the run list");
+        input.press("j");
+        await pause();
+        input.press("\r");
+        await until(
+          () => (output.writes.at(-1) ?? "").includes(`${second.id} done`),
+          "the second run view",
+        );
+        rejectDiff?.(new Error(message));
+        await pause();
+        await pause();
+        expect(output.writes.at(-1) ?? "").not.toContain(message);
+        input.press("q");
+      },
+      undefined,
+      true,
+      undefined,
+      () => pending,
+    );
+
+    expect(result.code).toBe(0);
+    expect(result.writes.join("")).not.toContain(message);
+  });
 });

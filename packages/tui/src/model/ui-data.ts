@@ -105,6 +105,18 @@ export function panelOpen(data: UiData): boolean {
 }
 
 /**
+ * A diff read is stale once the selection, screen or an owning panel moved on: it must open no
+ * pane and drop its optimistic notice. Returns the corrected state, or null when it still owns the
+ * screen.
+ */
+export function stale(data: UiData, id: string, message: string, blocked = false): UiData | null {
+  if (data.selectedRunId !== id || data.screen !== "run" || blocked) {
+    return data.notice === message ? { ...data, notice: null } : data;
+  }
+  return null;
+}
+
+/**
  * Opens on the phase and advances a launch from the facts the stream now carries. Run state is
  * canonical: a tail snapshot can lag behind a phase another process already drove.
  */

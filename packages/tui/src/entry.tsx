@@ -83,7 +83,7 @@ import { createStatusPoller, type StatusPoller } from "./model/poll.ts";
 import { createFrameScheduler, type FrameScheduler } from "./model/render-loop.ts";
 import { createStatusSource } from "./model/status.ts";
 import type { UiData } from "./model/ui-data.ts";
-import { evidenceOf, panelOpen, selectedRunState, syncApproval } from "./model/ui-data.ts";
+import { evidenceOf, panelOpen, selectedRunState, stale, syncApproval } from "./model/ui-data.ts";
 import {
   buildViewModel,
   canLand,
@@ -1162,16 +1162,15 @@ function Interactive({
         void readDiff(id)
           .then((result) => {
             if (token !== diffRead.current) return;
-            setData((state) =>
-              state.selectedRunId === id && state.screen === "run"
-                ? { ...state, diff: openDiffPane(result), notice: null }
-                : state,
-            );
+            setData((state) => {
+              const settled = stale(state, id, message, panelOpen(state));
+              return settled ?? { ...state, diff: openDiffPane(result), notice: null };
+            });
           })
           .catch((err: unknown) => {
             if (token !== diffRead.current) return;
             const notice = err instanceof Error ? err.message : String(err);
-            setData((state) => ({ ...state, notice }));
+            setData((state) => stale(state, id, message) ?? { ...state, notice });
           });
         return;
       }
