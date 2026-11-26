@@ -316,6 +316,8 @@ export function landSettled(data: UiData, id: string, refreshed: LandRefresh): U
     snapshot: null,
     facts: collectFacts([]),
     notice: landedNotice(id),
+    // A diff opened while the land child ran must not sit over the list and hide the notice.
+    diff: null,
     intake: null,
     approval: null,
     approvalCollapsed: false,

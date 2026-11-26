@@ -1333,6 +1333,46 @@ describe("a landed run leaves the screen", () => {
     expect(stopped).toBe(1);
   });
 
+  test("a land that settles while the diff pane is open clears it and shows the landed notice", async () => {
+    const empty: StatusDocument = {
+      active: null,
+      driverAlive: false,
+      queue: [],
+      corrupt: [],
+      runs: [],
+    };
+    const fake = fakeFactory();
+    const { launcher, exit } = resumeLauncher();
+    let state = uiData({
+      diff: { id: RUN, lines: [`app: main <- change/${RUN} (diff)`], offset: 0 },
+    });
+    const states: UiData[] = [];
+    startLand(
+      {
+        factory: fake.factory,
+        launcher,
+        guard: createLandGuard(),
+        update: (change) => {
+          state = change(state);
+          states.push(state);
+        },
+        refresh: async () => ({ status: empty, runs: [] }),
+        stopTail: () => {},
+      },
+      RUN,
+    );
+    await Bun.sleep(0);
+    exit(0);
+    await Bun.sleep(0);
+
+    // The pane opened while the land child ran must not cover the list and its landed notice.
+    const last = states.at(-1);
+    expect(last?.diff).toBeNull();
+    expect(viewOf(last ?? state, ASCII_GLYPHS).panel).toBeNull();
+    expect(last?.screen).toBe("list");
+    expect(last?.notice).toContain(`landed ${RUN}`);
+  });
+
   test("a still-listed run stays selected after a zero exit", () => {
     const run = runState({ phase: "done" });
     const next = landSettled(uiData(), RUN, { status: statusDoc(run), runs: [run] });
