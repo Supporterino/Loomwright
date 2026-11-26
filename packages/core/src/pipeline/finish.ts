@@ -320,18 +320,41 @@ const reportFile = (root: string, id: string, kind: "final" | "paused"): string 
   join(root, ".factory", "reports", kind === "final" ? `${id}.md` : `${id}-paused.md`);
 
 /** The pause report (§7 failure semantics): what completed, failed, was cancelled, and what next. */
-export function writePauseReport(p: Pipeline, id: string, summary: RunSummary): string {
+export function writePauseReport(p: Pipeline, id: string, summary?: RunSummary): string {
   const run = p.run(id);
   const failed = run.tasks.filter((t) => t.status === "failed");
+  // A full-suite pause has no scheduler summary: the run state carries the same tallies.
+  const ids = (status: TaskState["status"]): string[] =>
+    run.tasks.filter((t) => t.status === status).map((t) => t.id);
+  const derived: RunSummary = {
+    status: run.tasks.every((t) => t.status === "merged") ? "complete" : "paused",
+    merged: ids("merged"),
+    failed: ids("failed"),
+    cancelled: ids("cancelled"),
+    pending: ids("pending"),
+  };
+  const counts = summary ?? derived;
+  const suiteFailing = Object.entries(run.fullSuite).filter(([, result]) => !result.passed);
+  const nextSteps =
+    failed.length > 0
+      ? [
+          "1. Inspect the failed task's worktree and fix the cause (or change the spec and approve again).",
+          `2. \`loomwright retry ${id} --task <task>\` resets the task's retry budget.`,
+          `3. \`loomwright resume ${id}\` continues the change.`,
+        ]
+      : [
+          "1. Inspect the output above and fix the cause (or change the spec and approve again).",
+          `2. \`loomwright resume ${id}\` continues the change.`,
+        ];
   const lines = [
     `# ${id}: paused`,
     "",
     `Reason: ${run.pausedReason ?? "unknown"}`,
     "",
-    `- Completed: ${summary.merged.join(", ") || "none"}`,
-    `- Failed: ${summary.failed.join(", ") || "none"}`,
-    `- Cancelled (depend on a failed task): ${summary.cancelled.join(", ") || "none"}`,
-    `- Not started: ${summary.pending.join(", ") || "none"}`,
+    `- Completed: ${counts.merged.join(", ") || "none"}`,
+    `- Failed: ${counts.failed.join(", ") || "none"}`,
+    `- Cancelled (depend on a failed task): ${counts.cancelled.join(", ") || "none"}`,
+    `- Not started: ${counts.pending.join(", ") || "none"}`,
     "",
     ...failed.flatMap((t) => [
       `## Task ${t.id}: ${t.title} (${t.repo})`,
@@ -339,6 +362,12 @@ export function writePauseReport(p: Pipeline, id: string, summary: RunSummary): 
       `Error: ${t.lastError ?? ""}`,
       ...(t.worktree ? [`Worktree (kept): ${t.worktree}`] : []),
       ...(t.lastGateOutput ? ["", "Last gate output:", fence(t.lastGateOutput)] : []),
+      "",
+    ]),
+    ...suiteFailing.flatMap(([repo, result]) => [
+      `## Full suite: ${repo}`,
+      "",
+      fence(result.output),
       "",
     ]),
     ...(run.specFindings.length > 0
@@ -355,9 +384,7 @@ export function writePauseReport(p: Pipeline, id: string, summary: RunSummary): 
       : []),
     "## Next steps",
     "",
-    "1. Inspect the failed task's worktree and fix the cause (or change the spec and approve again).",
-    `2. \`loomwright retry ${id} --task <task>\` resets the task's retry budget.`,
-    `3. \`loomwright resume ${id}\` continues the change.`,
+    ...nextSteps,
     "",
     ...usageReport(summarizeUsage(p.root, id)),
   ];

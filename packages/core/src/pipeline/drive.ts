@@ -350,12 +350,14 @@ async function step(p: Pipeline, id: string): Promise<Step> {
           .map((f) => `${f.repo}: ${f.detail}`)
           .join("; ")}; fix it and resume`;
         await setPhase(p, id, "paused", reason);
-        return stop({ id, phase: "paused", detail: reason });
+        const report = writePauseReport(p, id);
+        return stop({ id, phase: "paused", detail: `${reason}; report: ${report}` });
       }
       if (result.failing.length > 0) {
         const reason = `full suite still failing in ${result.failing.join(", ")} after fix rounds`;
         await setPhase(p, id, "paused", reason);
-        return stop({ id, phase: "paused", detail: reason });
+        const report = writePauseReport(p, id);
+        return stop({ id, phase: "paused", detail: `${reason}; report: ${report}` });
       }
       const pending = p.run(id).tasks.some((t) => t.status === "pending");
       await setPhase(p, id, pending ? "implementing" : "closing");
